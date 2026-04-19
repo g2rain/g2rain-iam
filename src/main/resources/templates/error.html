@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>错误</title>
+    <link rel="stylesheet" th:href="@{/auth/css/common.css}">
+</head>
+<body class="landing-body">
+<main class="landing-shell">
+    <header class="landing-header">
+        <a th:href="@{/auth/index.html}" class="landing-brand">
+            <span class="landing-brand-mark">⚡</span>
+            <span>G2Rain IAM</span>
+        </a>
+        <div class="landing-header-links">
+            <a th:href="@{/auth/authorize}" class="link-muted">立即登录</a>
+        </div>
+    </header>
+
+    <section class="landing-grid">
+        <div class="landing-panel feature-panel">
+            <h2 class="title">错误处理</h2>
+            <p class="desc">系统检测到异常后将提示信息，并在短时间后自动跳转到合适的页面。</p>
+            <div class="feature-list">
+                <div class="feature-card">
+                    <div class="feature-title">自动引导</div>
+                    <div class="feature-desc">根据 `redirectUri` 决定跳转目标，减少操作成本。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">可重试</div>
+                    <div class="feature-desc">返回首页后可重新发起登录或授权流程。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">更清晰</div>
+                    <div class="feature-desc">错误提示集中展示，便于定位与排查。</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="landing-panel action-panel landing-op-links">
+            <div class="error-icon icon-medium">⚠️</div>
+            <h2 class="title">发生错误</h2>
+            <div class="error-message large" th:text="${error}">错误信息</div>
+            <div class="countdown">
+                <span id="countdown"><span class="pulse">3</span></span> 秒后自动跳转...
+            </div>
+            <div class="redirect-hint" id="redirectHint" th:if="${redirectUri != null and redirectUri != ''}">
+                将跳转到: <span th:text="${redirectUri}"></span>
+            </div>
+            <div class="redirect-hint" id="indexHint" th:if="${redirectUri == null or redirectUri == ''}">
+                将跳转到首页
+            </div>
+
+            <div style="margin-top: 18px;">
+                <a th:href="@{/main/home}" class="btn btn-primary btn-lg">跳转到控制台</a>
+            </div>
+        </div>
+    </section>
+
+    <footer class="landing-footer">
+        G2Rain IAM
+    </footer>
+</main>
+
+<script>
+    (function() {
+        let countdown = 3;
+        const redirectUri = /*[[${redirectUri}]]*/ '';
+        const countdownElement = document.getElementById('countdown');
+
+        const timer = setInterval(function() {
+            countdown--;
+            if (countdownElement) {
+                countdownElement.innerHTML = '<span class="pulse">' + countdown + '</span>';
+            }
+
+            if (countdown <= 0) {
+                clearInterval(timer);
+                // 如果 redirectUri 为空，跳转到 index.html，否则跳转到 redirectUri
+                if (!redirectUri || redirectUri === '') {
+                    window.location.href = '/auth/index.html';
+                } else {
+                    window.location.href = redirectUri;
+                }
+            }
+        }, 1000);
+    })();
+</script>
+</body>
+</html>

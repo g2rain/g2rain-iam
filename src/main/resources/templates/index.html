@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>欢迎</title>
+    <link rel="stylesheet" th:href="@{/auth/css/common.css}">
+</head>
+<body class="landing-body">
+<main class="landing-shell">
+    <header class="landing-header">
+        <a th:href="@{/auth/index.html}" class="landing-brand">
+            <span class="landing-brand-mark">⚡</span>
+            <span>G2Rain IAM</span>
+        </a>
+        <div class="landing-header-links">
+            <a th:if="${loginViaRedirectUri}" th:href="${loginRedirectUri}" class="link-muted">立即登录</a>
+            <a th:unless="${loginViaRedirectUri}" th:href="@{/main/home}" class="link-muted">立即登录</a>
+        </div>
+    </header>
+
+    <section class="landing-grid">
+        <div class="landing-panel feature-panel">
+            <h1 class="title">G2Rain IAM</h1>
+            <p class="desc">
+                面向企业场景的统一身份认证入口，提供安全、稳定、可扩展的认证能力，
+                让业务系统更快接入、更易维护。
+            </p>
+            <div class="feature-list">
+                <div class="feature-card">
+                    <div class="feature-title">安全认证</div>
+                    <div class="feature-desc">支持标准认证流程，保障登录链路与账号安全。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">高性能稳定</div>
+                    <div class="feature-desc">响应快速、服务稳定，适配高并发访问场景。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">易于集成</div>
+                    <div class="feature-desc">界面简洁、接入路径清晰，降低系统对接复杂度。</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="landing-panel action-panel landing-op-links">
+            <h2 class="title">快速开始</h2>
+            <p class="desc">选择一个操作继续：登录系统、注册账号，或退出当前登录状态。</p>
+            <div class="action-links">
+                <a th:if="${loginViaRedirectUri}" th:href="${loginRedirectUri}" class="btn btn-primary btn-lg">立即登录</a>
+                <a th:unless="${loginViaRedirectUri}" th:href="@{/main/home}" class="btn btn-primary btn-lg">立即登录</a>
+                <a th:href="@{/auth/register.html}" class="btn btn-outline btn-lg">注册账号</a>
+                <a th:href="@{/auth/logout}" class="link-muted">退出当前登录</a>
+            </div>
+        </div>
+    </section>
+
+    <footer class="landing-footer">
+        G2Rain IAM
+    </footer>
+</main>
+</body>
+</html>

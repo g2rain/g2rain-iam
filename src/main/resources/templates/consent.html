@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>选择用户</title>
+    <link rel="stylesheet" th:href="@{/auth/css/common.css}">
+</head>
+<body class="landing-body">
+<main class="landing-shell">
+    <header class="landing-header">
+        <a th:href="@{/auth/index.html}" class="landing-brand">
+            <span class="landing-brand-mark">⚡</span>
+            <span>G2Rain IAM</span>
+        </a>
+        <div class="landing-header-links">
+            <a th:href="@{/auth/authorize}" class="link-muted">立即登录</a>
+        </div>
+    </header>
+
+    <section class="landing-grid">
+        <div class="landing-panel feature-panel">
+            <h2 class="title">授权选择用户</h2>
+            <p class="desc">当应用请求授权时，需要在 IAM 中选择对应用户完成授权。</p>
+            <div class="feature-list">
+                <div class="feature-card">
+                    <div class="feature-title">清晰列表</div>
+                    <div class="feature-desc">按用户ID与用户名展示，便于快速定位目标用户。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">一键选择</div>
+                    <div class="feature-desc">点击行即可提交选择结果并继续授权流程。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">安全收敛</div>
+                    <div class="feature-desc">隐藏表单携带必要参数，避免页面直接暴露敏感信息。</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="landing-panel action-panel landing-op-table">
+            <h2 class="title">请选择用户</h2>
+
+            <form id="authorizeForm" method="post" action="/auth/authorize_selected" class="form-group hidden">
+                <input type="hidden" id="userId" name="userId">
+                <input type="hidden" id="clientId" name="clientId" th:value="${clientId} ?: ''">
+                <input type="hidden" id="redirectUri" name="redirectUri" th:value="${redirectUri} ?: ''">
+                <input type="hidden" id="state" name="state" th:value="${state} ?: ''">
+            </form>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>用户ID</th>
+                        <th>用户名</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:if="${users == null or users.isEmpty()}">
+                        <td colspan="2" class="empty-message">暂无用户数据</td>
+                    </tr>
+                    <tr th:each="user : ${users}" th:attr="onclick=|selectUser('${user.id}', '${user.username}')|">
+                        <td th:text="${user.id}">用户ID</td>
+                        <td th:text="${user.username}">用户名</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <footer class="landing-footer">
+        G2Rain IAM
+    </footer>
+</main>
+
+<script>
+    function selectUser(userId, username) {
+        // 设置用户ID并提交表单
+        document.getElementById('userId').value = userId;
+        document.getElementById('authorizeForm').submit();
+    }
+</script>
+</body>
+</html>
+

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录</title>
+    <link rel="stylesheet" th:href="@{/auth/css/common.css}">
+</head>
+<body class="landing-body">
+<main class="landing-shell">
+    <header class="landing-header">
+        <a th:href="@{/auth/index.html}" class="landing-brand">
+            <span class="landing-brand-mark">⚡</span>
+            <span>G2Rain IAM</span>
+        </a>
+        <div class="landing-header-links">
+            <a th:href="@{/auth/authorize}" class="link-muted">立即登录</a>
+        </div>
+    </header>
+
+    <section class="landing-grid">
+        <div class="landing-panel feature-panel">
+            <h2 class="title">IAM 平台介绍</h2>
+            <p class="desc">面向企业场景的统一身份认证入口，支持安全、稳定、可扩展的认证接入。</p>
+            <div class="feature-list">
+                <div class="feature-card">
+                    <div class="feature-title">安全可靠</div>
+                    <div class="feature-desc">保障登录链路安全，降低账号被滥用风险。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">高效接入</div>
+                    <div class="feature-desc">标准流程易对接，让业务系统更快落地。</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-title">可扩展</div>
+                    <div class="feature-desc">预留扩展能力，便于后续策略与能力升级。</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="landing-panel action-panel landing-op-form">
+            <h2 class="title">登录</h2>
+            <form method="POST" action="/auth/login">
+                <div class="form-group">
+                    <label for="username">用户名<span class="required-asterisk" aria-hidden="true">*</span></label>
+                    <input type="text" id="username" name="username" th:value="${username} ?: ''" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">密码<span class="required-asterisk" aria-hidden="true">*</span></label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+
+                <input type="hidden" id="clientId" name="clientId" th:value="${clientId} ?: ''">
+                <input type="hidden" id="redirectUri" name="redirectUri" th:value="${redirectUri} ?: ''">
+                <input type="hidden" id="state" name="state" th:value="${state} ?: ''">
+
+                <div class="form-actions landing-form-actions">
+                    <button type="submit" class="btn btn-primary btn-lg">登录</button>
+                    <a th:href="@{/auth/register.html(clientId=${clientId ?: ''}, redirectUri=${redirectUri ?: ''}, state=${state ?: ''})}"
+                       class="btn btn-outline btn-lg">注册账号</a>
+                </div>
+            </form>
+
+            <div class="error-message" th:if="${error != null and error != ''}" th:text="${error}"></div>
+        </div>
+    </section>
+
+    <footer class="landing-footer">
+        G2Rain IAM
+    </footer>
+</main>
+</body>
+</html>
+
