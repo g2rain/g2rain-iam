@@ -2,6 +2,7 @@ package com.g2rain.iam.service;
 
 
 import com.g2rain.basis.dto.ApplicationSelectDto;
+import com.g2rain.basis.dto.LoginTokenDto;
 import com.g2rain.basis.vo.ApplicationVo;
 import com.g2rain.basis.vo.PublicKeyDescriptorVo;
 import com.g2rain.common.enums.SessionType;
@@ -224,7 +225,7 @@ public class TokenService {
 
         payload.setClientId(clientId);
         payload.setClientPublicKey(publicKeyString);
-        return doGenerateToken(jsonCodec.obj2map(payload));
+        return doGenerateToken(applicationCode, payload);
     }
 
     /**
@@ -324,7 +325,7 @@ public class TokenService {
                 application.getRefreshTokenExpiresIn()
             )).getEpochSecond());
 
-            return doGenerateToken(jsonCodec.obj2map(body));
+            return doGenerateToken(applicationCode, body);
         } catch (JOSEException | ParseException e) {
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "token");
         }
@@ -419,7 +420,7 @@ public class TokenService {
             payload.setPassportId(body.getPassportId());
             payload.setClientId(clientId);
             payload.setClientPublicKey(publicKeyString);
-            return doGenerateToken(jsonCodec.obj2map(payload));
+            return doGenerateToken(applicationCode, payload);
         } catch (ParseException e) {
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof");
         } catch (JOSEException e) {
@@ -430,11 +431,13 @@ public class TokenService {
     /**
      * 使用当前激活的密钥生成 JWT，并进行签名。
      *
-     * @param payloadClaims JWT Payload 中的自定义声明，可以为 {@code null}
+     * @param applicationCode 应用编码
+     * @param payload         JWT Payload 中的自定义声明，可以为 {@code null}
      * @return {@link TokenVo} 生成并签名后的 Token
      * @throws BusinessException 当未找到有效密钥或生成 JWT 失败时抛出
      */
-    private TokenVo doGenerateToken(Map<String, Object> payloadClaims) {
+    private TokenVo doGenerateToken(String applicationCode, TokenJWTPayload payload) {
+        Map<String, Object> payloadClaims = jsonCodec.obj2map(payload);
         ECKey ecKey = tokenKeyManager.getActiveKey();
         if (Objects.isNull(ecKey)) {
             throw new BusinessException(SystemErrorCode.JWT_KEY_PAIR_NON_EXIST);
@@ -461,11 +464,37 @@ public class TokenService {
 
             // 签名
             signedJWT.sign(new ECDSASigner(ecKey.toECPrivateKey()));
+
+            // 生成 Token
+            TokenVo token = new TokenVo(signedJWT.serialize(), keyID);
+
+            // 保存生成 Token 的日志记录
+            saveLoginToken(applicationCode, payload);
             // 返回 Token
-            return new TokenVo(signedJWT.serialize(), keyID);
+            return token;
         } catch (Exception e) {
             throw new BusinessException(SystemErrorCode.GENERATE_JWT_ERROR);
         }
+    }
+
+    /**
+     * 保存登陆日志
+     *
+     * @param applicationCode 应用编码
+     * @param payload         token JWT 载荷
+     */
+    private void saveLoginToken(String applicationCode, TokenJWTPayload payload) {
+        LoginTokenDto loginToken = new LoginTokenDto();
+        loginToken.setClientId(payload.getClientId());
+        loginToken.setSessionType(payload.getSessionType().name());
+        loginToken.setOrganId(payload.getOrganId());
+        loginToken.setOrganType(payload.getOrganType().name());
+        loginToken.setAdminCompany(payload.isAdminCompany());
+        loginToken.setPassportId(payload.getPassportId());
+        loginToken.setUserId(payload.getUserId());
+        loginToken.setRealName(payload.getName());
+        loginToken.setAdminUser(payload.isAdminUser());
+        loginTokenClient.save(applicationCode, loginToken);
     }
 
     /**
