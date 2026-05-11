@@ -473,6 +473,7 @@ public class TokenService {
             // 返回 Token
             return token;
         } catch (Exception e) {
+            log.error(e.getMessage(), e);
             throw new BusinessException(SystemErrorCode.GENERATE_JWT_ERROR);
         }
     }
