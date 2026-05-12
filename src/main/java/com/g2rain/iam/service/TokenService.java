@@ -473,6 +473,7 @@ public class TokenService {
             // 返回 Token
             return token;
         } catch (Exception e) {
+            log.error(e.getMessage(), e);
             throw new BusinessException(SystemErrorCode.GENERATE_JWT_ERROR);
         }
     }
@@ -486,9 +487,15 @@ public class TokenService {
     private void saveLoginToken(String applicationCode, TokenJWTPayload payload) {
         LoginTokenDto loginToken = new LoginTokenDto();
         loginToken.setClientId(payload.getClientId());
-        loginToken.setSessionType(payload.getSessionType().name());
+        if (Objects.nonNull(payload.getSessionType())) {
+            loginToken.setSessionType(payload.getSessionType().name());
+        }
+
         loginToken.setOrganId(payload.getOrganId());
-        loginToken.setOrganType(payload.getOrganType().name());
+        if (Objects.nonNull(payload.getOrganType())) {
+            loginToken.setOrganType(payload.getOrganType().name());
+        }
+
         loginToken.setAdminCompany(payload.isAdminCompany());
         loginToken.setPassportId(payload.getPassportId());
         loginToken.setUserId(payload.getUserId());
