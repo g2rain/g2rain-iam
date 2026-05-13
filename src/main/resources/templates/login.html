@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>登录</title>
     <link rel="stylesheet" th:href="@{/auth/css/common.css}">
+    <style>
+        .form-divider { text-align: center; margin: 1rem 0 0.75rem; color: #64748b; font-size: 0.875rem; }
+        .form-divider span { padding: 0 0.5rem; }
+        .dingtalk-login-wrap .btn-block { display: block; width: 100%; text-align: center; box-sizing: border-box; }
+    </style>
 </head>
 <body class="landing-body">
 <main class="landing-shell">
@@ -59,6 +64,13 @@
                     <button type="submit" class="btn btn-primary btn-lg">登录</button>
                     <a th:href="@{/auth/register.html(clientId=${clientId ?: ''}, redirectUri=${redirectUri ?: ''}, state=${state ?: ''})}"
                        class="btn btn-outline btn-lg">注册账号</a>
+                </div>
+
+                <div class="dingtalk-login-wrap"
+                     th:if="${clientId != null and !#strings.isEmpty(clientId) and redirectUri != null and !#strings.isEmpty(redirectUri) and dingTalkBindMode != null and !#strings.isEmpty(dingTalkBindMode)}">
+                    <p class="form-divider"><span>或</span></p>
+                    <a class="btn btn-outline btn-lg btn-block"
+                       th:href="@{/auth/dingtalk/authorize(bindMode=${dingTalkBindMode},clientId=${clientId},redirectUri=${redirectUri},state=${state != null ? state : ''})}">钉钉登录</a>
                 </div>
             </form>
 

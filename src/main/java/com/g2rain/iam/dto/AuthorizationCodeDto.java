@@ -42,4 +42,25 @@ public class AuthorizationCodeDto {
      * 用户 ID，标识授权码授权请求中的用户。
      */
     private String userId;
+
+    /**
+     * 为 true 表示授权码由外部身份源（如钉钉）会话发码；换 token 时 Basis 在存在业务用户 ID 时校验
+     * {@code application_idp_provision} 与 {@code passport_idp_binding}（须携带 idp 上下文字段）。
+     */
+    private Boolean thirdPartyIdpLogin;
+
+    /**
+     * 发码时会话中的身份源类型，与 {@link com.g2rain.basis.enums.IdpType} 枚举名一致。
+     */
+    private String idpType;
+
+    /**
+     * 发码时会话中的 IdP 稳定主体（如钉钉 unionId）。
+     */
+    private String idpSubject;
+
+    /**
+     * 发码时会话中的三方应用标识（如钉钉 OAuth clientId）。
+     */
+    private String idpApplicationCode;
 }

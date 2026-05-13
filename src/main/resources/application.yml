@@ -87,3 +87,21 @@ g2rain:
     identity-param-injector-enabled: false
     global-exception-filter-use-custom-json: true
     enable-result-mixin-filter: true
+  iam:
+    # IAM 对外访问根地址（无尾斜杠），部署时通过环境变量注入，如 https://43.138.13.145
+    access-base-url: ${IAM_BASE_URL}
+    # 业务平台（控制台）对外根地址（无尾斜杠），用于首页「立即登录」在无 redirectUri 时跳转到 /main/home。
+    # 未配置时回退为 access-base-url（同机部署）；前后端分离时设为前端或网关地址，如 https://console.example.com
+    platform-base-url: ${PLATFORM_BASE_URL:}
+    dingtalk:
+      # 与钉钉开放平台「回调地址」一致：callback-base-url + callback-path；未单独配置时与 access-base-url 相同
+      callback-base-url: ${IAM_DINGTALK_CALLBACK_BASE_URL:${g2rain.iam.access-base-url}}
+      callback-path: /auth/dingtalk/callback
+      # 登录页「钉钉登录」的 bindMode（INTERNAL / THIRD_PARTY）；留空则不展示钉钉入口
+      login-page-bind-mode: ${IAM_DINGTALK_LOGIN_BIND_MODE:}
+      internal:
+        client-id: ${DINGTALK_INTERNAL_CLIENT_ID:}
+        client-secret: ${DINGTALK_INTERNAL_CLIENT_SECRET:}
+      third-party:
+        client-id: ${DINGTALK_THIRD_PARTY_CLIENT_ID:}
+        client-secret: ${DINGTALK_THIRD_PARTY_CLIENT_SECRET:}

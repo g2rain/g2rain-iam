@@ -2,18 +2,35 @@ package com.g2rain.iam.service;
 
 
 import com.g2rain.basis.dto.LoginDto;
+import com.g2rain.basis.dto.PassportDto;
+import com.g2rain.basis.dto.PassportIdpBindingDto;
+import com.g2rain.basis.dto.PassportIdpBindingSelectDto;
+import com.g2rain.basis.enums.IdpType;
+import com.g2rain.basis.vo.PassportIdpBindingVo;
 import com.g2rain.basis.vo.PassportVo;
+import com.g2rain.common.exception.BusinessException;
 import com.g2rain.common.exception.ExceptionConverter;
 import com.g2rain.common.model.Result;
+import com.g2rain.common.utils.Collections;
+import com.g2rain.common.utils.Strings;
 import com.g2rain.data.redis.GenericRedisHelper;
 import com.g2rain.iam.client.LoginClient;
+import com.g2rain.iam.client.PassportIdpBindingClient;
+import com.g2rain.iam.dingtalk.DingTalkPrincipal;
 import com.g2rain.iam.dto.SessionDto;
+import com.g2rain.iam.enums.IamErrorCode;
 import com.g2rain.iam.enums.RedisKeyRule;
 import com.g2rain.iam.utils.IamUtils;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.util.HexFormat;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -39,8 +56,14 @@ import java.util.Objects;
  * @author alpha
  * @since 2025/10/10
  */
+@Slf4j
 @Service
 public class AuthService {
+
+    /**
+     * 钉钉自动注册 passport 时使用的登录密码（Basis 新建必填；此类账号实际以钉钉 SSO 登录）。
+     */
+    private static final String DINGTALK_AUTO_REGISTER_PASSPORT_PASSWORD = "123456";
 
     /**
      * 通用 Redis 辅助类，用于存储会话信息。
@@ -53,6 +76,15 @@ public class AuthService {
      */
     @Resource
     private LoginClient loginClient;
+
+    /**
+     * Basis 身份源绑定查询（钉钉登录后解析 passportId）。
+     */
+    @Resource
+    private PassportIdpBindingClient passportIdpBindingClient;
+
+    @Resource
+    private PassportService passportService;
 
     /**
      * 用户认证方法，根据用户名和密码生成会话。
@@ -83,7 +115,7 @@ public class AuthService {
         session.setPassportId(Objects.toString(passport.getId(), null));
         session.setName(passport.getRealName());
 
-        // 4. 保存 session, 30 分钟过期
+        // 4. 保存 session，24 小时过期
         genericRedisHelper.set(
             RedisKeyRule.SESSION.format(sessionId),
             session,
@@ -91,6 +123,130 @@ public class AuthService {
         );
 
         return sessionId;
+    }
+
+    /**
+     * 钉钉换票成功后建立 IAM 会话：与 {@link #authenticateDingTalk(DingTalkPrincipal, boolean)} 等价，
+     * {@code autoProvisionMissingPassport=true}（浏览器 OAuth：无绑定时自动注册 passport 并写绑定）。
+     */
+    public String authenticateDingTalk(DingTalkPrincipal principal) {
+        return authenticateDingTalk(principal, true);
+    }
+
+    /**
+     * 钉钉换票成功后建立 IAM 会话：若 Basis 已存在 {@code passport_idp_binding} 则写入 {@link SessionDto#getPassportId()}。
+     * <p>当 {@code autoProvisionMissingPassport} 为 {@code true} 且查询成功但无绑定时，在 Basis 注册 passport 并初始化绑定；
+     * 为 {@code false} 时（Stream 发码）无绑定或查询失败则抛出 {@link IamErrorCode#DINGTALK_STREAM_USER_NOT_BOUND} 或 Basis 错误，不自动注册。</p>
+     *
+     * @param principal                    钉钉统一主体
+     * @param autoProvisionMissingPassport {@code true} 允许无绑定时自动建号；{@code false} 必须已绑定
+     * @return 新会话 ID
+     */
+    public String authenticateDingTalk(DingTalkPrincipal principal, boolean autoProvisionMissingPassport) {
+        String passportId = null;
+        String idpAppCode = principal.idpApplicationCode() == null ? "" : principal.idpApplicationCode().trim();
+        PassportIdpBindingSelectDto query = new PassportIdpBindingSelectDto();
+        query.setIdpType(IdpType.DINGTALK.name());
+        query.setIdpSubject(principal.unionId());
+        query.setIdpApplicationCode(idpAppCode);
+
+        Result<List<PassportIdpBindingVo>> result = null;
+        try {
+            result = passportIdpBindingClient.selectList(query);
+        } catch (Exception e) {
+            log.warn("passport_idp_binding lookup failed: {}", e.toString());
+        }
+
+        boolean hasBinding = result != null && result.isSuccess() && Collections.isNotEmpty(result.getData());
+        if (hasBinding) {
+            passportId = Objects.toString(result.getData().getFirst().getPassportId(), null);
+        } else if (!autoProvisionMissingPassport) {
+            if (result != null && !result.isSuccess()) {
+                throw ExceptionConverter.of(result);
+            }
+            throw new BusinessException(IamErrorCode.DINGTALK_STREAM_USER_NOT_BOUND);
+        } else if (result != null && result.isSuccess()) {
+            passportId = registerPassportAndDingTalkBinding(principal, idpAppCode, query);
+        }
+
+        String sessionId = IamUtils.generateSessionId();
+        SessionDto session = new SessionDto();
+        session.setSessionId(sessionId);
+        session.setPassportId(passportId);
+        session.setName(principal.nick());
+        session.setIdpType(IdpType.DINGTALK.name());
+        session.setIdpSubject(principal.unionId());
+        session.setIdpBindMode(principal.bindMode());
+        session.setIdpApplicationCode(principal.idpApplicationCode() == null ? "" : principal.idpApplicationCode().trim());
+
+        genericRedisHelper.set(
+            RedisKeyRule.SESSION.format(sessionId),
+            session,
+            Duration.ofHours(24)
+        );
+        return sessionId;
+    }
+
+    /**
+     * Basis 新建 passport（钉钉专用登录名）并写入 {@code passport_idp_binding}。
+     */
+    private String registerPassportAndDingTalkBinding(
+        DingTalkPrincipal principal,
+        String idpApplicationCode,
+        PassportIdpBindingSelectDto bindingQuery
+    ) {
+        String username = dingTalkPassportUsername(principal.unionId());
+        PassportDto passportDto = new PassportDto();
+        passportDto.setUsername(username);
+        passportDto.setPassword(DINGTALK_AUTO_REGISTER_PASSPORT_PASSWORD);
+        String realName = Strings.isBlank(principal.nick()) ? "钉钉用户" : principal.nick().trim();
+        if (realName.length() > 128) {
+            realName = realName.substring(0, 128);
+        }
+        passportDto.setRealName(realName);
+
+        Result<?> passportSave = passportService.register(passportDto);
+        if (!passportSave.isSuccess()) {
+            Result<List<PassportIdpBindingVo>> again = passportIdpBindingClient.selectList(bindingQuery);
+            if (again != null && again.isSuccess() && Collections.isNotEmpty(again.getData())) {
+                return Objects.toString(again.getData().getFirst().getPassportId(), null);
+            }
+            throw ExceptionConverter.of(passportSave);
+        }
+        Long newPassportId = (Long) passportSave.getData();
+
+        PassportIdpBindingDto bindingDto = new PassportIdpBindingDto();
+        bindingDto.setPassportId(newPassportId);
+        bindingDto.setIdpType(IdpType.DINGTALK.name());
+        bindingDto.setIdpSubject(principal.unionId());
+        bindingDto.setCorpId(Strings.isBlank(principal.corpId()) ? null : principal.corpId().trim());
+        bindingDto.setIdpUserId(Strings.isBlank(principal.openId()) ? null : principal.openId().trim());
+        bindingDto.setIdpApplicationCode(idpApplicationCode);
+        bindingDto.setBindMode(principal.bindMode());
+        String raw = principal.rawJson();
+        bindingDto.setRawProfile(Strings.isBlank(raw) ? "{}" : raw);
+
+        Result<Long> bindingSave = passportIdpBindingClient.save(bindingDto);
+        if (!bindingSave.isSuccess()) {
+            throw ExceptionConverter.of(bindingSave);
+        }
+        return Objects.toString(newPassportId, null);
+    }
+
+    /**
+     * 与 {@code passport.username}（varchar 64）对齐的稳定登录名：{@code dt_} + unionId；过长时对 unionId 做摘要缩短。
+     */
+    private static String dingTalkPassportUsername(String unionId) {
+        String prefix = "dt_";
+        if (prefix.length() + unionId.length() <= 64) {
+            return prefix + unionId;
+        }
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(unionId.getBytes(StandardCharsets.UTF_8));
+            return prefix + HexFormat.of().formatHex(digest, 0, 28);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /**

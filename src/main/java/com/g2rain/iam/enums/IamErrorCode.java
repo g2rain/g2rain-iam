@@ -9,7 +9,20 @@ import com.g2rain.common.exception.ErrorCode;
  */
 public enum IamErrorCode implements ErrorCode {
 
-    REFRESH_TOKEN_EXPIRED("iam.40102", "刷新 Token 过期");
+    REFRESH_TOKEN_EXPIRED("iam.40102", "刷新 Token 过期"),
+
+    DINGTALK_OAUTH_INVALID_STATE("iam.40011", "无效或已过期的 state"),
+
+    DINGTALK_TOKEN_EXCHANGE_FAILED("iam.50210", "钉钉换票失败"),
+
+    DINGTALK_USERINFO_FAILED("iam.50211", "钉钉用户信息获取失败"),
+
+    DINGTALK_STREAM_USER_NOT_BOUND("iam.40012", "钉钉账号未绑定系统通行证"),
+
+    /**
+     * 授权码换 token 时，DPoP kid 须与发码时写入的 OAuth 客户端 ID 一致。
+     */
+    OAUTH_AUTHORIZATION_CODE_CLIENT_MISMATCH("iam.40015", "授权码与当前客户端不匹配");
 
     private final String code;
 

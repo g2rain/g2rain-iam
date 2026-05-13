@@ -3,6 +3,7 @@ package com.g2rain.iam.controller;
 
 import com.g2rain.basis.dto.PassportDto;
 import com.g2rain.common.model.Result;
+import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.service.ModelAndViewService;
 import com.g2rain.iam.service.PassportService;
 import com.g2rain.iam.service.RegisterCaptchaService;
@@ -46,7 +47,7 @@ public class PassportController {
      * @param clientId    客户端 ID（从表单隐藏字段获取）
      * @param redirectUri 登录后重定向的 URI（从表单隐藏字段获取）
      * @param state       请求的状态参数（从表单隐藏字段获取）
-     * @return 注册成功后跳转到登录页视图（带参数），失败则回到注册页并显示错误信息
+     * @return 注册成功：无 {@code clientId} 时重定向至平台 {@code /main/home}；有 {@code clientId} 时进入登录页并携带 OAuth 参数。失败则回到注册页
      */
     @PostMapping("/passport_register")
     public ModelAndView register(@Valid @ModelAttribute PassportDto passportDto,
@@ -93,7 +94,10 @@ public class PassportController {
             return mv;
         }
 
-        // 注册成功后，跳转到登录页面并带上相关参数
+        // 注册成功：有 OAuth 上下文则进登录页；否则去平台控制台首页
+        if (Strings.isBlank(clientId)) {
+            return modelAndViewService.redirectPlatformMainHome();
+        }
         return modelAndViewService.redirectLogin(clientId, redirectUri, state);
     }
 }

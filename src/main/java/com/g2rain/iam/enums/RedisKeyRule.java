@@ -34,7 +34,12 @@ public enum RedisKeyRule {
     /**
      * 授权码相关的 Redis 键规则，格式为 "auth:authorization:{authorizationCode}"
      */
-    AUTHORIZATION_CODE("auth:authorization:%s");
+    AUTHORIZATION_CODE("auth:authorization:%s"),
+
+    /**
+     * 钉钉 OAuth 防 CSRF 的 state，格式为 "auth:dingtalk:oauth:state:{state}"
+     */
+    DINGTALK_OAUTH_STATE("auth:dingtalk:oauth:state:%s");
 
     /**
      * Redis 键的格式规则，使用占位符 %s。

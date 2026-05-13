@@ -55,4 +55,23 @@ public class UserService {
             "username", user.getRealName()
         )).toList();
     }
+
+    /**
+     * 当前通行证下的用户完整列表（与 {@link #listUsers(SessionDto)} 同源查询）。
+     */
+    public List<UserVo> listUserVos(SessionDto session) {
+        if (Strings.isBlank(session.getPassportId())) {
+            return List.of();
+        }
+
+        UserSelectDto selectDto = new UserSelectDto();
+        selectDto.setPassportId(Long.valueOf(session.getPassportId()));
+        Result<List<UserVo>> result = userClient.selectList(selectDto);
+        if (!result.isSuccess()) {
+            throw ExceptionConverter.of(result);
+        }
+
+        List<UserVo> data = result.getData();
+        return data != null ? data : List.of();
+    }
 }
