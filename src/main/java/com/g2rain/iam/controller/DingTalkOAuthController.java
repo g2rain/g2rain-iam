@@ -45,9 +45,11 @@ public class DingTalkOAuthController {
                                   @RequestParam(name = "state", required = false) String state) {
         try {
             String url = dingTalkOAuthService.buildDingTalkAuthorizeRedirectUrl(bindMode, clientId, redirectUri, state);
+            log.info("[dingtalk-oauth] authorize redirect prepared bindMode={} clientIdLen={}", bindMode,
+                clientId == null ? 0 : clientId.length());
             return new ModelAndView(Constants.REDIRECT + url);
         } catch (Exception e) {
-            log.error("钉钉授权跳转失败, message:{}", e.getMessage(), e);
+            log.error("钉钉授权跳转失败 bindMode={} message={}", bindMode, e.getMessage(), e);
             return modelAndViewService.redirectLogin(
                 clientId,
                 redirectUri,
@@ -65,6 +67,9 @@ public class DingTalkOAuthController {
     public ModelAndView callback(HttpServletResponse response,
                                  @RequestParam(name = "code") String code,
                                  @RequestParam(name = "state") String state) {
+        log.info("[dingtalk-oauth] callback GET codeLen={} stateLen={}",
+            code == null ? 0 : code.length(),
+            state == null ? 0 : state.length());
         try {
             DingTalkOAuthResult result = dingTalkOAuthService.finishLogin(code, state);
             Cookie cookie = new Cookie(Constants.SESSION_NAME, result.sessionId());
@@ -76,7 +81,14 @@ public class DingTalkOAuthController {
             return modelAndViewService.redirectConsent(
                 result.sessionId(), result.clientId(), result.redirectUri(), result.state());
         } catch (Exception e) {
-            log.error("钉钉登录回调处理失败, message:{}", e.getMessage(), e);
+            log.error(
+                "钉钉登录回调处理失败 codeLen={} stateLen={} exType={} message={}",
+                code == null ? 0 : code.length(),
+                state == null ? 0 : state.length(),
+                e.getClass().getName(),
+                e.getMessage(),
+                e
+            );
             ModelAndView mv = new ModelAndView("error");
             mv.addObject("error", "钉钉登录失败，请返回应用重新发起授权");
             mv.addObject("redirectUri", "");
