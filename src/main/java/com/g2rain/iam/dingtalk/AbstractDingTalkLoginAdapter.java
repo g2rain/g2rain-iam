@@ -72,7 +72,8 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
             .queryParam("state", state)
             .queryParam("redirect_uri", redirectUriForDingTalk)
             .queryParam("prompt", "consent")
-            .build(true)
+            // build(false)：生成 URI 时对 query 编码；build(true) 会拒绝 scope 中未编码的空格（如 openid Contact.User.Read）
+            .build(false)
             .toUriString();
     }
 
@@ -85,7 +86,7 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
             .queryParam("scope", OAUTH_SCOPE_SNS_EMBEDDED)
             .queryParam("state", state)
             .queryParam("redirect_uri", redirectUriForDingTalk)
-            .build(true)
+            .build(false)
             .toUriString();
     }
 
