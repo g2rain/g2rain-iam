@@ -7,7 +7,15 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.MediaType;
+import org.springframework.http.converter.ByteArrayHttpMessageConverter;
+import org.springframework.http.converter.ResourceHttpMessageConverter;
+import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.web.client.RestClient;
+
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 钉钉 IAM 相关 Bean。
@@ -72,8 +80,28 @@ public class DingTalkIamConfiguration {
         return new ObjectMapper();
     }
 
+    /**
+     * 钉钉 OpenAPI 响应为 {@code application/json} 对象体；使用全局 {@link RestClient.Builder} 时，
+     * Jackson 会参与 {@code String}/{@code byte[]} 反序列化导致非数组/非字符串根节点报错。
+     * 此处使用<strong>不含 Jackson</strong>的转换器列表，按字节流读写 JSON 文本。
+     */
     @Bean
-    public RestClient dingTalkRestClient(RestClient.Builder restClientBuilder) {
-        return restClientBuilder.build();
+    public RestClient dingTalkRestClient() {
+        StringHttpMessageConverter strings = new StringHttpMessageConverter(StandardCharsets.UTF_8);
+        List<MediaType> dingTalkReadableWritable = new ArrayList<>();
+        dingTalkReadableWritable.add(MediaType.TEXT_PLAIN);
+        dingTalkReadableWritable.add(MediaType.TEXT_HTML);
+        dingTalkReadableWritable.add(MediaType.APPLICATION_JSON);
+        dingTalkReadableWritable.add(MediaType.APPLICATION_FORM_URLENCODED);
+        strings.setSupportedMediaTypes(dingTalkReadableWritable);
+
+        return RestClient.builder()
+            .messageConverters(converters -> {
+                converters.clear();
+                converters.add(strings);
+                converters.add(new ByteArrayHttpMessageConverter());
+                converters.add(new ResourceHttpMessageConverter());
+            })
+            .build();
     }
 }

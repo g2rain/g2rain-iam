@@ -101,23 +101,26 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
     }
 
     /**
-     * 钉钉换票接口返回 {@code application/json} 且根为 JSON 对象；{@code .body(String.class)} 会走 Jackson
-     * 将根节点反序列化为 {@link String}，导致 {@code MismatchedInputException}。此处按 UTF-8 字节读取原始 JSON 字符串。
+     * 钉钉换票 / userMe 响应为 {@code application/json} 对象体。
+     * 须使用 {@link com.g2rain.iam.config.DingTalkIamConfiguration#dingTalkRestClient()} 专用 {@link RestClient}
+     * （无 Jackson HTTP 转换器），此处 {@code .body(String.class)} 为<strong>原始 UTF-8 文本</strong>，再由 {@link ObjectMapper} 解析业务字段。
      */
     private String postJson(String url, String json) {
         log.debug("[dingtalk-oauth] POST userAccessToken url={} bodyLen={}", url, json == null ? 0 : json.length());
         try {
-            byte[] bytes = restClient.post()
+            String body = restClient.post()
                 .uri(url)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(json)
                 .retrieve()
-                .body(byte[].class);
-            String body = utf8(bytes);
+                .body(String.class);
+            if (body == null) {
+                body = "";
+            }
             log.debug("[dingtalk-oauth] userAccessToken response len={} summary={}", body.length(), summarizeTokenJsonForLog(body));
             return body;
         } catch (RestClientResponseException e) {
-            String errBody = utf8(e.getResponseBodyAsByteArray());
+            String errBody = responseExceptionBodyUtf8(e);
             log.error(
                 "[dingtalk-oauth] userAccessToken HTTP {} url={} responseSnippet={}",
                 e.getStatusCode().value(),
@@ -160,16 +163,18 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
         String url = dingTalkIamProperties.getUserMeUrl();
         log.debug("[dingtalk-oauth] GET userMe url={} accessTokenLen={}", url, accessToken == null ? 0 : accessToken.length());
         try {
-            byte[] bytes = restClient.get()
+            String body = restClient.get()
                 .uri(url)
                 .header("x-acs-dingtalk-access-token", accessToken)
                 .retrieve()
-                .body(byte[].class);
-            String body = utf8(bytes);
+                .body(String.class);
+            if (body == null) {
+                body = "";
+            }
             log.debug("[dingtalk-oauth] userMe response len={}", body.length());
             return body;
         } catch (RestClientResponseException e) {
-            String errBody = utf8(e.getResponseBodyAsByteArray());
+            String errBody = responseExceptionBodyUtf8(e);
             log.error(
                 "[dingtalk-oauth] userMe HTTP {} url={} responseSnippet={}",
                 e.getStatusCode().value(),
@@ -218,11 +223,16 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
         return "";
     }
 
-    private static String utf8(byte[] bytes) {
-        if (bytes == null || bytes.length == 0) {
-            return "";
+    private static String responseExceptionBodyUtf8(RestClientResponseException e) {
+        try {
+            return e.getResponseBodyAsString(StandardCharsets.UTF_8);
+        } catch (Exception ignored) {
+            byte[] raw = e.getResponseBodyAsByteArray();
+            if (raw == null || raw.length == 0) {
+                return "";
+            }
+            return new String(raw, StandardCharsets.UTF_8);
         }
-        return new String(bytes, StandardCharsets.UTF_8);
     }
 
     private static String truncate(String s, int max) {
