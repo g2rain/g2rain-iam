@@ -45,7 +45,7 @@ public class DingTalkOAuthService {
     private final UserService userService;
 
     /**
-     * 内嵌扫码：写入 Redis state 后，返回钉钉 {@code DDLogin} 使用的 {@code goto} URL（钉钉 {@code oapi} {@code sns_authorize}，带 {@code appid}）。
+     * 内嵌扫码：写入 Redis state 后，返回钉钉 {@code DDLogin} 使用的 {@code goto} URL（与浏览器授权相同：{@code login.dingtalk.com/oauth2/auth}）。
      */
     public DingTalkQrBootstrapVo buildQrBootstrap(String bindMode, String clientId, String clientRedirectUri,
                                                   String clientState) {
@@ -66,7 +66,9 @@ public class DingTalkOAuthService {
     }
 
     /**
-     * @param qrEmbedded {@code true} 时使用 {@link DingTalkLoginAdapter#buildQrEmbeddedAuthorizeUrl}（内嵌扫码 goto）
+     * 写入 Redis state 并返回钉钉授权页完整 URL。
+     *
+     * @param qrEmbedded {@code true} 时走内嵌扫码（{@link DingTalkLoginAdapter#buildQrEmbeddedAuthorizeUrl}，与 {@link DingTalkLoginAdapter#buildAuthorizeUrl} 相同）
      */
     private String writeDingTalkOAuthStateAndAuthorizeUrl(String bindMode, String clientId, String clientRedirectUri,
                                                           String clientState, boolean qrEmbedded) {

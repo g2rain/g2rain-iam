@@ -25,21 +25,10 @@ import java.nio.charset.StandardCharsets;
 public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapter {
 
     /**
-     * 内嵌扫码 {@code DDLogin} 的 {@code goto}：须带 {@code appid}（与 {@link #clientId()} 相同），与浏览器跳转的 {@code login.dingtalk.com} + {@code client_id} 不同。
-     * 见钉钉开放平台「扫码登录第三方网站」。
-     */
-    private static final String DD_LOGIN_SNS_AUTHORIZE_URL = "https://oapi.dingtalk.com/connect/oauth2/sns_authorize";
-
-    /**
-     * 浏览器跳转 {@code login.dingtalk.com/oauth2/auth}：须包含 {@code Contact.User.Read}，否则换票后调用
-     * {@code /v1.0/contact/users/me} 会返回 403 {@code AccessTokenPermissionDenied}。
+     * 浏览器跳转与内嵌扫码 {@code DDLogin} 的 {@code goto} 均使用 {@code login.dingtalk.com/oauth2/auth}（{@code client_id}、新版 scope），
+     * 勿再使用 {@code oapi.../sns_authorize} + {@code snsapi_login} 与 {@code Contact.User.Read} 混写，否则钉钉会返回 {@code goto param is invalid}。
      */
     private static final String OAUTH_SCOPE_BROWSER = "openid Contact.User.Read";
-
-    /**
-     * 内嵌扫码 {@code oapi.../sns_authorize}：在 {@code snsapi_login} 基础上请求通讯录只读，与浏览器链路能力对齐。
-     */
-    private static final String OAUTH_SCOPE_SNS_EMBEDDED = "snsapi_login Contact.User.Read";
 
     private static final Logger log = LoggerFactory.getLogger(AbstractDingTalkLoginAdapter.class);
 
@@ -79,15 +68,7 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
 
     @Override
     public String buildQrEmbeddedAuthorizeUrl(String state, String redirectUriForDingTalk) {
-        requireCredentials();
-        return UriComponentsBuilder.fromUriString(DD_LOGIN_SNS_AUTHORIZE_URL)
-            .queryParam("appid", clientId())
-            .queryParam("response_type", "code")
-            .queryParam("scope", OAUTH_SCOPE_SNS_EMBEDDED)
-            .queryParam("state", state)
-            .queryParam("redirect_uri", redirectUriForDingTalk)
-            .build(false)
-            .toUriString();
+        return buildAuthorizeUrl(state, redirectUriForDingTalk);
     }
 
     @Override
