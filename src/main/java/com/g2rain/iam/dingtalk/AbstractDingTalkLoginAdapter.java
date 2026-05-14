@@ -30,7 +30,16 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
      */
     private static final String DD_LOGIN_SNS_AUTHORIZE_URL = "https://oapi.dingtalk.com/connect/oauth2/sns_authorize";
 
-    private static final String DD_LOGIN_SNS_SCOPE = "snsapi_login";
+    /**
+     * 浏览器跳转 {@code login.dingtalk.com/oauth2/auth}：须包含 {@code Contact.User.Read}，否则换票后调用
+     * {@code /v1.0/contact/users/me} 会返回 403 {@code AccessTokenPermissionDenied}。
+     */
+    private static final String OAUTH_SCOPE_BROWSER = "openid Contact.User.Read";
+
+    /**
+     * 内嵌扫码 {@code oapi.../sns_authorize}：在 {@code snsapi_login} 基础上请求通讯录只读，与浏览器链路能力对齐。
+     */
+    private static final String OAUTH_SCOPE_SNS_EMBEDDED = "snsapi_login Contact.User.Read";
 
     private static final Logger log = LoggerFactory.getLogger(AbstractDingTalkLoginAdapter.class);
 
@@ -59,7 +68,7 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
         return UriComponentsBuilder.fromUriString(dingTalkIamProperties.getAuthorizeUrl())
             .queryParam("response_type", "code")
             .queryParam("client_id", clientId())
-            .queryParam("scope", "openid")
+            .queryParam("scope", OAUTH_SCOPE_BROWSER)
             .queryParam("state", state)
             .queryParam("redirect_uri", redirectUriForDingTalk)
             .queryParam("prompt", "consent")
@@ -73,7 +82,7 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
         return UriComponentsBuilder.fromUriString(DD_LOGIN_SNS_AUTHORIZE_URL)
             .queryParam("appid", clientId())
             .queryParam("response_type", "code")
-            .queryParam("scope", DD_LOGIN_SNS_SCOPE)
+            .queryParam("scope", OAUTH_SCOPE_SNS_EMBEDDED)
             .queryParam("state", state)
             .queryParam("redirect_uri", redirectUriForDingTalk)
             .build(true)
