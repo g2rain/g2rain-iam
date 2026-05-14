@@ -8,8 +8,8 @@ import com.g2rain.common.utils.Collections;
 import com.g2rain.common.utils.Strings;
 import com.g2rain.data.redis.GenericRedisHelper;
 import com.g2rain.iam.config.DingTalkIamProperties;
-import com.g2rain.iam.dto.DingTalkOAuthStatePayload;
-import com.g2rain.iam.dto.DingTalkStreamAuthorizationRequest;
+import com.g2rain.iam.dto.DingTalkOAuthStateDto;
+import com.g2rain.iam.dto.DingTalkStreamAuthorizationDto;
 import com.g2rain.iam.dto.SessionDto;
 import com.g2rain.iam.dingtalk.DingTalkLoginAdapter;
 import com.g2rain.iam.dingtalk.DingTalkLoginAdapterRouter;
@@ -18,7 +18,8 @@ import com.g2rain.iam.dingtalk.DingTalkPrincipal;
 import com.g2rain.iam.enums.IamErrorCode;
 import com.g2rain.iam.enums.RedisKeyRule;
 import com.g2rain.iam.utils.IamUtils;
-import com.g2rain.iam.vo.DingTalkStreamAuthorizationResponse;
+import com.g2rain.iam.vo.DingTalkQrBootstrapVo;
+import com.g2rain.iam.vo.DingTalkStreamAuthorizationVo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -44,7 +45,20 @@ public class DingTalkOAuthService {
     private final UserService userService;
 
     /**
-     * 生成 opaque state 写入 Redis，返回钉钉授权页完整 URL。
+     * 内嵌扫码：生成与 {@link #buildDingTalkAuthorizeRedirectUrl} 相同的钉钉 {@code goto} URL（Redis state 已写入）。
+     *
+     * @param clientId            OAuth 客户端 ID（与跳转授权一致）
+     * @param clientRedirectUri   OAuth redirect_uri
+     * @param clientState         OAuth state（可选）
+     */
+    public DingTalkQrBootstrapVo buildQrBootstrap(String bindMode, String clientId, String clientRedirectUri,
+                                                  String clientState) {
+        String gotoUrl = buildDingTalkAuthorizeRedirectUrl(bindMode, clientId, clientRedirectUri, clientState);
+        return new DingTalkQrBootstrapVo(gotoUrl);
+    }
+
+    /**
+     * 生成 opaque state 写入 Redis，返回钉钉授权页完整 URL（跳转授权与内嵌扫码共用）。
      *
      * @param clientId            OAuth 客户端 ID（与后续 {@code /auth/authorize} 一致）
      * @param clientRedirectUri   OAuth redirect_uri（与后续 {@code /auth/authorize} 一致）
@@ -60,7 +74,7 @@ public class DingTalkOAuthService {
         }
         DingTalkLoginAdapter adapter = dingTalkLoginAdapterRouter.resolve(bindMode);
         String opaque = IamUtils.generateAuthorizationCode();
-        DingTalkOAuthStatePayload payload = new DingTalkOAuthStatePayload();
+        DingTalkOAuthStateDto payload = new DingTalkOAuthStateDto();
         payload.setBindMode(bindMode);
         payload.setClientId(clientId);
         payload.setClientRedirectUri(clientRedirectUri);
@@ -83,7 +97,7 @@ public class DingTalkOAuthService {
             dingTalkState == null ? 0 : dingTalkState.length()
         );
         String key = RedisKeyRule.DINGTALK_OAUTH_STATE.format(dingTalkState);
-        DingTalkOAuthStatePayload payload = genericRedisHelper.get(key, DingTalkOAuthStatePayload.class);
+        DingTalkOAuthStateDto payload = genericRedisHelper.get(key, DingTalkOAuthStateDto.class);
         if (payload == null) {
             log.warn("[dingtalk-oauth] finishLogin state not found or expired in Redis keySuffixLen={}",
                 dingTalkState == null ? 0 : dingTalkState.length());
@@ -122,7 +136,7 @@ public class DingTalkOAuthService {
     /**
      * Stream / 消息应用侧：须已存在 Basis 绑定（不自动注册）；建会话、发放 OAuth 授权码。
      */
-    public DingTalkStreamAuthorizationResponse issueStreamAuthorizationCode(DingTalkStreamAuthorizationRequest req) {
+    public DingTalkStreamAuthorizationVo issueStreamAuthorizationCode(DingTalkStreamAuthorizationDto req) {
         dingTalkLoginAdapterRouter.resolve(req.getBindMode());
 
         String unionId = req.getUnionId().trim();
@@ -148,7 +162,7 @@ public class DingTalkOAuthService {
 
         String userIdStr = resolveUserId(session);
         String code = authorizationService.generateAuthorizationCode(session, req.getClientId(), userIdStr, true);
-        return new DingTalkStreamAuthorizationResponse(code, req.getState());
+        return new DingTalkStreamAuthorizationVo(code, req.getState());
     }
 
     private String oauthClientIdForBindMode(String bindMode) {

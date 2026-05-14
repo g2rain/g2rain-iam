@@ -11,7 +11,7 @@ import lombok.Setter;
 @Setter
 @Getter
 @NoArgsConstructor
-public class DingTalkStreamAuthorizationRequest {
+public class DingTalkStreamAuthorizationDto {
 
     /**
      * OAuth 客户端 ID（与换 token 时 DPoP kid 一致）。

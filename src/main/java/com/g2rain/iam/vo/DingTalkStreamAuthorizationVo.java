@@ -6,5 +6,5 @@ package com.g2rain.iam.vo;
  * @param code  授权码
  * @param state OAuth state（与请求一致，可为 null）
  */
-public record DingTalkStreamAuthorizationResponse(String code, String state) {
+public record DingTalkStreamAuthorizationVo(String code, String state) {
 }

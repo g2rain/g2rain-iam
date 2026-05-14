@@ -1,12 +1,14 @@
 package com.g2rain.iam.controller;
 
 import com.g2rain.common.model.Result;
-import com.g2rain.iam.dto.DingTalkStreamAuthorizationRequest;
+import com.g2rain.iam.dto.DingTalkQrBootstrapDto;
+import com.g2rain.iam.dto.DingTalkStreamAuthorizationDto;
 import com.g2rain.iam.dingtalk.DingTalkOAuthResult;
 import com.g2rain.iam.service.DingTalkOAuthService;
 import com.g2rain.iam.service.ModelAndViewService;
 import com.g2rain.iam.utils.Constants;
-import com.g2rain.iam.vo.DingTalkStreamAuthorizationResponse;
+import com.g2rain.iam.vo.DingTalkQrBootstrapVo;
+import com.g2rain.iam.vo.DingTalkStreamAuthorizationVo;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -24,6 +26,7 @@ import org.springframework.web.servlet.ModelAndView;
 /**
  * 钉钉 OAuth：浏览器跳转授权/回调；以及 Stream / 消息应用侧基于 unionId 的 JSON 发码。
  * <p>浏览器链路与现有密码登录共用 {@link Constants#SESSION_NAME} Cookie；换票成功后走 {@link ModelAndViewService#redirectConsent}（与 {@link LoginController} 一致）。</p>
+ * <p>内嵌扫码：{@link #qrBootstrap} 返回与跳转授权相同的 {@code goto} URL，前端 {@code DDLogin} 扫码后拼接 {@code loginTmpCode} 再跳转，仍回落到 {@code /callback}。</p>
  */
 @Slf4j
 @Controller
@@ -33,6 +36,23 @@ public class DingTalkOAuthController {
 
     private final DingTalkOAuthService dingTalkOAuthService;
     private final ModelAndViewService modelAndViewService;
+
+    /**
+     * 登录页内嵌扫码：申请钉钉 {@code goto} URL（写入 Redis state，与 {@link #authorize} 一致）。
+     */
+    @PostMapping("/qr/bootstrap")
+    @ResponseBody
+    public Result<DingTalkQrBootstrapVo> qrBootstrap(@Valid @RequestBody DingTalkQrBootstrapDto dto) {
+        DingTalkQrBootstrapVo data = dingTalkOAuthService.buildQrBootstrap(
+            dto.getBindMode(),
+            dto.getClientId(),
+            dto.getRedirectUri(),
+            dto.getState()
+        );
+        log.info("[dingtalk-oauth] qr bootstrap bindMode={} clientIdLen={}", dto.getBindMode(),
+            dto.getClientId() == null ? 0 : dto.getClientId().length());
+        return Result.success(data);
+    }
 
     /**
      * 跳转钉钉授权页。{@code bindMode} 为 {@link com.g2rain.basis.enums.IdpBindMode} 枚举名；
@@ -102,9 +122,9 @@ public class DingTalkOAuthController {
      */
     @PostMapping("/authorize_code")
     @ResponseBody
-    public Result<DingTalkStreamAuthorizationResponse> authorizeCode(
-        @Valid @RequestBody DingTalkStreamAuthorizationRequest body
+    public Result<DingTalkStreamAuthorizationVo> authorizeCode(
+        @Valid @RequestBody DingTalkStreamAuthorizationDto dto
     ) {
-        return Result.success(dingTalkOAuthService.issueStreamAuthorizationCode(body));
+        return Result.success(dingTalkOAuthService.issueStreamAuthorizationCode(dto));
     }
 }

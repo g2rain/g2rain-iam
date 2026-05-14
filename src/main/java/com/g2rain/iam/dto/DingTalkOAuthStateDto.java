@@ -11,7 +11,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
-public class DingTalkOAuthStatePayload {
+public class DingTalkOAuthStateDto {
 
     private String bindMode;
 
