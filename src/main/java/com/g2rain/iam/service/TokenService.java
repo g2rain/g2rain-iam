@@ -109,18 +109,20 @@ public class TokenService {
 
     /**
      * 原子读取并删除授权码对应的 Redis 值（Lua 内 GET 后 DEL，避免重放）。
+     * 脚本返回类型为 {@link Object}：{@link RedisTemplate} 的 JSON value 序列化器会把 GET 到的 JSON 反序列化为
+     * {@link AuthorizationCodeDto}，而非原始 {@link String}（与 {@code setResultType} 声明无关）。
      */
-    private static final DefaultRedisScript<String> AUTH_CODE_CONSUME_SCRIPT;
+    private static final DefaultRedisScript<Object> AUTH_CODE_CONSUME_SCRIPT;
 
     static {
-        DefaultRedisScript<String> script = new DefaultRedisScript<>();
+        DefaultRedisScript<Object> script = new DefaultRedisScript<>();
         script.setScriptText(
             "local v = redis.call('GET', KEYS[1])\n"
                 + "if v == false then return nil end\n"
                 + "redis.call('DEL', KEYS[1])\n"
                 + "return v"
         );
-        script.setResultType(String.class);
+        script.setResultType(Object.class);
         AUTH_CODE_CONSUME_SCRIPT = script;
     }
 
@@ -556,16 +558,30 @@ public class TokenService {
             throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "code");
         }
         String redisKey = RedisKeyRule.AUTHORIZATION_CODE.format(code);
-        String json = redisTemplate.execute(AUTH_CODE_CONSUME_SCRIPT, List.of(redisKey));
-        if (Strings.isBlank(json)) {
+        Object raw = redisTemplate.execute(AUTH_CODE_CONSUME_SCRIPT, List.of(redisKey));
+        if (raw == null) {
             throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
         }
-        try {
-            return jsonCodec.str2obj(json, AuthorizationCodeDto.class);
-        } catch (RuntimeException e) {
-            log.warn("authorization code payload deserialize failed after consume, key={}", redisKey, e);
-            throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
+        if (raw instanceof AuthorizationCodeDto dto) {
+            return dto;
         }
+        if (raw instanceof String s) {
+            if (Strings.isBlank(s)) {
+                throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
+            }
+            try {
+                return jsonCodec.str2obj(s, AuthorizationCodeDto.class);
+            } catch (RuntimeException e) {
+                log.warn("authorization code payload deserialize failed after consume, key={}", redisKey, e);
+                throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
+            }
+        }
+        log.warn(
+            "authorization code redis value unexpected type {} after consume, key={}",
+            raw.getClass().getName(),
+            redisKey
+        );
+        throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
     }
 
     /**
