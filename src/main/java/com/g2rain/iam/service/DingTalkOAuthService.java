@@ -45,20 +45,16 @@ public class DingTalkOAuthService {
     private final UserService userService;
 
     /**
-     * 内嵌扫码：生成与 {@link #buildDingTalkAuthorizeRedirectUrl} 相同的钉钉 {@code goto} URL（Redis state 已写入）。
-     *
-     * @param clientId            OAuth 客户端 ID（与跳转授权一致）
-     * @param clientRedirectUri   OAuth redirect_uri
-     * @param clientState         OAuth state（可选）
+     * 内嵌扫码：写入 Redis state 后，返回钉钉 {@code DDLogin} 使用的 {@code goto} URL（钉钉 {@code oapi} {@code sns_authorize}，带 {@code appid}）。
      */
     public DingTalkQrBootstrapVo buildQrBootstrap(String bindMode, String clientId, String clientRedirectUri,
                                                   String clientState) {
-        String gotoUrl = buildDingTalkAuthorizeRedirectUrl(bindMode, clientId, clientRedirectUri, clientState);
+        String gotoUrl = writeDingTalkOAuthStateAndAuthorizeUrl(bindMode, clientId, clientRedirectUri, clientState, true);
         return new DingTalkQrBootstrapVo(gotoUrl);
     }
 
     /**
-     * 生成 opaque state 写入 Redis，返回钉钉授权页完整 URL（跳转授权与内嵌扫码共用）。
+     * 生成 opaque state 写入 Redis，返回钉钉授权页完整 URL（浏览器跳转授权）。
      *
      * @param clientId            OAuth 客户端 ID（与后续 {@code /auth/authorize} 一致）
      * @param clientRedirectUri   OAuth redirect_uri（与后续 {@code /auth/authorize} 一致）
@@ -66,6 +62,14 @@ public class DingTalkOAuthService {
      */
     public String buildDingTalkAuthorizeRedirectUrl(String bindMode, String clientId, String clientRedirectUri,
                                                     String clientState) {
+        return writeDingTalkOAuthStateAndAuthorizeUrl(bindMode, clientId, clientRedirectUri, clientState, false);
+    }
+
+    /**
+     * @param qrEmbedded {@code true} 时使用 {@link DingTalkLoginAdapter#buildQrEmbeddedAuthorizeUrl}（内嵌扫码 goto）
+     */
+    private String writeDingTalkOAuthStateAndAuthorizeUrl(String bindMode, String clientId, String clientRedirectUri,
+                                                          String clientState, boolean qrEmbedded) {
         if (Strings.isBlank(clientId)) {
             throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "clientId");
         }
@@ -84,7 +88,11 @@ public class DingTalkOAuthService {
             payload,
             Duration.ofMinutes(10)
         );
-        return adapter.buildAuthorizeUrl(opaque, dingTalkIamProperties.fullCallbackUrl());
+        String callback = dingTalkIamProperties.fullCallbackUrl();
+        if (qrEmbedded) {
+            return adapter.buildQrEmbeddedAuthorizeUrl(opaque, callback);
+        }
+        return adapter.buildAuthorizeUrl(opaque, callback);
     }
 
     /**

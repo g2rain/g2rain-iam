@@ -21,6 +21,11 @@ public interface DingTalkLoginAdapter {
     String buildAuthorizeUrl(String state, String redirectUriForDingTalk);
 
     /**
+     * 内嵌扫码 {@code DDLogin} 的 {@code goto} 授权 URL（钉钉 {@code oapi} {@code sns_authorize}，使用 {@code appid}）。
+     */
+    String buildQrEmbeddedAuthorizeUrl(String state, String redirectUriForDingTalk);
+
+    /**
      * 使用授权码完成换票并解析用户主体。
      */
     DingTalkPrincipal exchangeCodeForPrincipal(String authCode);

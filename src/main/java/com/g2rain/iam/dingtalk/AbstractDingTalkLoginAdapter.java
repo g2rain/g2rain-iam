@@ -24,6 +24,14 @@ import java.nio.charset.StandardCharsets;
  */
 public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapter {
 
+    /**
+     * 内嵌扫码 {@code DDLogin} 的 {@code goto}：须带 {@code appid}（与 {@link #clientId()} 相同），与浏览器跳转的 {@code login.dingtalk.com} + {@code client_id} 不同。
+     * 见钉钉开放平台「扫码登录第三方网站」。
+     */
+    private static final String DD_LOGIN_SNS_AUTHORIZE_URL = "https://oapi.dingtalk.com/connect/oauth2/sns_authorize";
+
+    private static final String DD_LOGIN_SNS_SCOPE = "snsapi_login";
+
     private static final Logger log = LoggerFactory.getLogger(AbstractDingTalkLoginAdapter.class);
 
     protected final DingTalkIamProperties dingTalkIamProperties;
@@ -55,6 +63,19 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
             .queryParam("state", state)
             .queryParam("redirect_uri", redirectUriForDingTalk)
             .queryParam("prompt", "consent")
+            .build(true)
+            .toUriString();
+    }
+
+    @Override
+    public String buildQrEmbeddedAuthorizeUrl(String state, String redirectUriForDingTalk) {
+        requireCredentials();
+        return UriComponentsBuilder.fromUriString(DD_LOGIN_SNS_AUTHORIZE_URL)
+            .queryParam("appid", clientId())
+            .queryParam("response_type", "code")
+            .queryParam("scope", DD_LOGIN_SNS_SCOPE)
+            .queryParam("state", state)
+            .queryParam("redirect_uri", redirectUriForDingTalk)
             .build(true)
             .toUriString();
     }

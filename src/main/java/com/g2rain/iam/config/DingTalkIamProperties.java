@@ -17,7 +17,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class DingTalkIamProperties {
 
     /**
-     * 钉钉授权页 URL。
+     * 钉钉授权页 URL（浏览器整页跳转，通常 {@code login.dingtalk.com/oauth2/auth}，使用 {@code client_id}）。
      */
     private String authorizeUrl = "https://login.dingtalk.com/oauth2/auth";
 
