@@ -53,8 +53,11 @@ public class DingTalkIamConfiguration {
 
     private static void logCredential(String label, DingTalkIamProperties.Credential c) {
         String cid = c.getClientId() == null ? "" : c.getClientId().trim();
+        String aid = c.getAppid() == null ? "" : c.getAppid().trim();
         log.info("[iam-startup] g2rain.iam.dingtalk.{}.client-id={}",
             label, Strings.isBlank(cid) ? "(not set)" : cid);
+        log.info("[iam-startup] g2rain.iam.dingtalk.{}.appid={}",
+            label, Strings.isBlank(aid) ? "(not set, authorize URL uses client-id)" : aid);
         log.info("[iam-startup] g2rain.iam.dingtalk.{}.client-secret={}", label, maskSecret(c.getClientSecret()));
     }
 

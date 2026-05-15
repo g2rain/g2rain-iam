@@ -25,8 +25,8 @@ import java.nio.charset.StandardCharsets;
 public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapter {
 
     /**
-     * 浏览器跳转与内嵌扫码 {@code DDLogin} 的 {@code goto} 均使用 {@code login.dingtalk.com/oauth2/auth}（{@code client_id}、新版 scope），
-     * 勿再使用 {@code oapi.../sns_authorize} + {@code snsapi_login} 与 {@code Contact.User.Read} 混写，否则钉钉会返回 {@code goto param is invalid}。
+     * 浏览器跳转与内嵌扫码 {@code DDLogin} 的 {@code goto} 均使用 {@code login.dingtalk.com/oauth2/auth}
+     * （{@code client_id}、{@code appid}、新版 scope），勿再使用 {@code oapi.../sns_authorize} 与错误 scope 混写。
      */
     private static final String OAUTH_SCOPE_BROWSER = "openid Contact.User.Read";
 
@@ -57,6 +57,7 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
         return UriComponentsBuilder.fromUriString(dingTalkIamProperties.getAuthorizeUrl())
             .queryParam("response_type", "code")
             .queryParam("client_id", clientId())
+            .queryParam("appid", authorizeAppid())
             .queryParam("scope", OAUTH_SCOPE_BROWSER)
             .queryParam("state", state)
             .queryParam("redirect_uri", redirectUriForDingTalk)
@@ -69,6 +70,19 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
     @Override
     public String buildQrEmbeddedAuthorizeUrl(String state, String redirectUriForDingTalk) {
         return buildAuthorizeUrl(state, redirectUriForDingTalk);
+    }
+
+    /**
+     * 扫码等场景钉钉端要求 {@code appid}；Nacos 未单独配置时与 {@link #clientId()} 相同。
+     */
+    private String authorizeAppid() {
+        String configured = bindMode() == IdpBindMode.INTERNAL
+            ? dingTalkIamProperties.getInternal().getAppid()
+            : dingTalkIamProperties.getThirdParty().getAppid();
+        if (Strings.isNotBlank(configured)) {
+            return configured.trim();
+        }
+        return clientId() == null ? "" : clientId().trim();
     }
 
     @Override

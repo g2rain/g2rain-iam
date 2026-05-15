@@ -7,8 +7,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * 钉钉登录与换票相关配置（支持 Nacos / 环境变量覆盖）。
  * <p>
- * {@code bind_mode} 与 {@link com.g2rain.basis.enums.IdpBindMode} 一致：{@code INTERNAL} 使用 {@link #internal}
- * 凭证；{@code THIRD_PARTY} 使用 {@link #thirdParty} 凭证。两条链路均为钉钉 OAuth + 换票，非 OAuth「两跳」语义。
+     * {@code bind_mode} 与 {@link com.g2rain.basis.enums.IdpBindMode} 一致：{@code INTERNAL} 使用 {@link #internal}
+     * 凭证；{@code THIRD_PARTY} 使用 {@link #thirdParty} 凭证。两条链路均为钉钉 OAuth + 换票，非 OAuth「两跳」语义。
+     * Nacos 中可为各凭证单独配置 {@code appid}（与 {@code client-id} 常相同），授权链接会同时携带 {@code client_id} 与 {@code appid}。
  * </p>
  */
 @Getter
@@ -66,6 +67,12 @@ public class DingTalkIamProperties {
     public static class Credential {
         private String clientId = "";
         private String clientSecret = "";
+        /**
+         * 授权链接中显式传递的 {@code appid}（与钉钉开放平台应用一致，常同于 AppKey）；
+         * 由 Nacos {@code g2rain.iam.dingtalk.internal.appid} / {@code third-party.appid} 注入。
+         * 为空时生成链接仍带 {@code appid}，取值为 {@link #clientId}。
+         */
+        private String appid = "";
     }
 
     /**
