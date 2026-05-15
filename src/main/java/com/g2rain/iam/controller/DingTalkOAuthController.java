@@ -5,6 +5,8 @@ import com.g2rain.iam.dto.DingTalkQrBootstrapDto;
 import com.g2rain.iam.dto.DingTalkStreamAuthorizationDto;
 import com.g2rain.iam.dingtalk.DingTalkOAuthResult;
 import com.g2rain.iam.service.DingTalkOAuthService;
+import com.g2rain.iam.service.DingTalkQrBootstrapService;
+import com.g2rain.iam.service.DingTalkStreamAuthorizationService;
 import com.g2rain.iam.service.ModelAndViewService;
 import com.g2rain.iam.utils.Constants;
 import com.g2rain.iam.vo.DingTalkQrBootstrapVo;
@@ -34,7 +36,9 @@ import org.springframework.web.servlet.ModelAndView;
 @RequestMapping(value = "/auth/dingtalk")
 public class DingTalkOAuthController {
 
+    private final DingTalkQrBootstrapService dingTalkQrBootstrapService;
     private final DingTalkOAuthService dingTalkOAuthService;
+    private final DingTalkStreamAuthorizationService dingTalkStreamAuthorizationService;
     private final ModelAndViewService modelAndViewService;
 
     /**
@@ -43,7 +47,7 @@ public class DingTalkOAuthController {
     @PostMapping("/qr/bootstrap")
     @ResponseBody
     public Result<DingTalkQrBootstrapVo> qrBootstrap(@Valid @RequestBody DingTalkQrBootstrapDto dto) {
-        DingTalkQrBootstrapVo data = dingTalkOAuthService.buildQrBootstrap(
+        DingTalkQrBootstrapVo data = dingTalkQrBootstrapService.buildQrBootstrap(
             dto.getBindMode(),
             dto.getClientId(),
             dto.getRedirectUri(),
@@ -125,6 +129,6 @@ public class DingTalkOAuthController {
     public Result<DingTalkStreamAuthorizationVo> authorizeCode(
         @Valid @RequestBody DingTalkStreamAuthorizationDto dto
     ) {
-        return Result.success(dingTalkOAuthService.issueStreamAuthorizationCode(dto));
+        return Result.success(dingTalkStreamAuthorizationService.issueStreamAuthorizationCode(dto));
     }
 }
