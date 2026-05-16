@@ -28,7 +28,7 @@ import org.springframework.web.servlet.ModelAndView;
 /**
  * 钉钉 OAuth：浏览器跳转授权/回调；以及 Stream / 消息应用侧基于 unionId 的 JSON 发码。
  * <p>浏览器链路与现有密码登录共用 {@link Constants#SESSION_NAME} Cookie；换票成功后走 {@link ModelAndViewService#redirectConsent}（与 {@link LoginController} 一致）。</p>
- * <p>内嵌扫码：{@link #qrBootstrap} 返回与跳转授权相同的 {@code goto} URL，前端 {@code DDLogin} 扫码后拼接 {@code loginTmpCode} 再跳转，仍回落到 {@code /callback}。</p>
+ * <p>内嵌扫码（方式二）：{@link #qrBootstrap} 返回 {@code oapi.../sns_authorize} 的 {@code goto}，前端 {@code DDLogin} 扫码后拼接 {@code loginTmpCode} 再跳转，仍回落到 {@code /callback}。</p>
  */
 @Slf4j
 @Controller
@@ -42,7 +42,7 @@ public class DingTalkOAuthController {
     private final ModelAndViewService modelAndViewService;
 
     /**
-     * 登录页内嵌扫码：申请钉钉 {@code goto} URL（写入 Redis state，与 {@link #authorize} 一致）。
+     * 登录页内嵌扫码（方式二）：申请 {@code sns_authorize} 的 {@code goto} URL（写入 Redis state，与 {@link #authorize} 共用回调换票）。
      */
     @PostMapping("/qr/bootstrap")
     @ResponseBody

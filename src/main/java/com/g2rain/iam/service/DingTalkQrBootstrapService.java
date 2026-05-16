@@ -5,7 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * 登录页内嵌钉钉扫码：申请 {@code goto} URL（与浏览器授权共用 state 写入与回调换票）。
+ * 登录页内嵌钉钉扫码（方式二）：申请 {@code sns_authorize} 的 {@code goto} URL（与浏览器方式一共用 state 写入与回调换票）。
  */
 @Service
 @RequiredArgsConstructor

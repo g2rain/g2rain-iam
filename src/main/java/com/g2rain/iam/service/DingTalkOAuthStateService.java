@@ -16,7 +16,8 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 
 /**
- * 钉钉 OAuth 前置：将 opaque state 写入 Redis，并生成钉钉授权页 URL（浏览器跳转与内嵌扫码共用）。
+ * 钉钉 OAuth 前置：将 opaque state 写入 Redis，并生成钉钉授权页 URL；
+ * 浏览器跳转走方式一 {@code login.dingtalk.com/oauth2/auth}，内嵌扫码走方式二 {@code oapi.../sns_authorize}。
  */
 @Service
 @RequiredArgsConstructor
@@ -27,7 +28,7 @@ public class DingTalkOAuthStateService {
     private final DingTalkLoginAdapterRouter dingTalkLoginAdapterRouter;
 
     /**
-     * @param qrEmbedded {@code true} 时返回内嵌 {@code DDLogin} 的 {@code goto}（与浏览器授权 URL 形态一致）
+     * @param qrEmbedded {@code true} 时返回方式二内嵌扫码 {@code DDLogin} 的 {@code goto}（{@code sns_authorize}）
      */
     public String persistStateAndBuildAuthorizeUrl(String bindMode, String clientId, String clientRedirectUri,
                                                    String clientState, boolean qrEmbedded) {

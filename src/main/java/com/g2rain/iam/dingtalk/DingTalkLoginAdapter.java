@@ -13,7 +13,7 @@ public interface DingTalkLoginAdapter {
     IdpBindMode bindMode();
 
     /**
-     * 构造钉钉 {@code login.dingtalk.com/oauth2/auth} 授权 URL（浏览器整页跳转与内嵌 {@code DDLogin} 的 {@code goto} 共用）。
+     * 方式一：构造钉钉 {@code login.dingtalk.com/oauth2/auth} 授权 URL（浏览器整页跳转）。
      *
      * @param state                 防 CSRF 的 opaque state（由 IAM 写入 Redis）
      * @param redirectUriForDingTalk 须在钉钉开放平台配置的 IAM 回调地址
@@ -21,7 +21,8 @@ public interface DingTalkLoginAdapter {
     String buildAuthorizeUrl(String state, String redirectUriForDingTalk);
 
     /**
-     * 内嵌扫码 {@code DDLogin} 的 {@code goto} 授权 URL；与 {@link #buildAuthorizeUrl} 相同（{@code login.dingtalk.com/oauth2/auth}）。
+     * 方式二：内嵌扫码 {@code DDLogin} 的 {@code goto}，须为 {@code oapi.../sns_authorize}，{@code scope=snsapi_login}，
+     * 扫码后拼接 {@code loginTmpCode} 再跳转；回调仍回落同一 {@code redirect_uri}。
      */
     String buildQrEmbeddedAuthorizeUrl(String state, String redirectUriForDingTalk);
 
