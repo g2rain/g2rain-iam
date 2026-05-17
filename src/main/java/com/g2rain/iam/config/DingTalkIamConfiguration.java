@@ -34,18 +34,13 @@ public class DingTalkIamConfiguration {
         IamAccessProperties iamAccess
     ) {
         return args -> {
-            log.info("[iam-startup] g2rain.iam.access-base-url={}", nullToEmpty(iamAccess.getAccessBaseUrl()));
-            log.info("[iam-startup] g2rain.iam.platform-base-url={} (resolved console base={})",
-                nullToEmpty(iamAccess.getPlatformBaseUrl()),
-                iamAccess.resolvedPlatformBaseUrl());
-            log.info("[iam-startup] g2rain.iam.dingtalk.callback-base-url={}", nullToEmpty(dingTalk.getCallbackBaseUrl()));
-            log.info("[iam-startup] g2rain.iam.dingtalk.callback-path={}", nullToEmpty(dingTalk.getCallbackPath()));
-            log.info("[iam-startup] g2rain.iam.dingtalk fullCallbackUrl={}", dingTalk.fullCallbackUrl());
-            log.info("[iam-startup] g2rain.iam.dingtalk.login-page-bind-mode={}",
-                Strings.isBlank(dingTalk.getLoginPageBindMode()) ? "(empty, login page hides DingTalk)" : dingTalk.getLoginPageBindMode().trim());
-            log.info("[iam-startup] g2rain.iam.dingtalk.authorize-url={}", nullToEmpty(dingTalk.getAuthorizeUrl()));
-            log.info("[iam-startup] g2rain.iam.dingtalk.user-access-token-url={}", nullToEmpty(dingTalk.getUserAccessTokenUrl()));
-            log.info("[iam-startup] g2rain.iam.dingtalk.user-me-url={}", nullToEmpty(dingTalk.getUserMeUrl()));
+            log.info(
+                "[iam-startup] iam accessBaseUrl={} platformBaseUrl={} dingtalk callback={} loginPageBindMode={}",
+                nullToEmpty(iamAccess.getAccessBaseUrl()),
+                iamAccess.resolvedPlatformBaseUrl(),
+                dingTalk.fullCallbackUrl(),
+                Strings.isBlank(dingTalk.getLoginPageBindMode()) ? "(hidden)" : dingTalk.getLoginPageBindMode().trim()
+            );
             logCredential("internal", dingTalk.getInternal());
             logCredential("third-party", dingTalk.getThirdParty());
         };
@@ -53,9 +48,10 @@ public class DingTalkIamConfiguration {
 
     private static void logCredential(String label, DingTalkIamProperties.Credential c) {
         String cid = c.getClientId() == null ? "" : c.getClientId().trim();
-        log.info("[iam-startup] g2rain.iam.dingtalk.{}.client-id={}",
-            label, Strings.isBlank(cid) ? "(not set)" : cid);
-        log.info("[iam-startup] g2rain.iam.dingtalk.{}.client-secret={}", label, maskSecret(c.getClientSecret()));
+        log.info("[iam-startup] dingtalk.{} clientId={} clientSecret={}",
+            label,
+            Strings.isBlank(cid) ? "(not set)" : cid,
+            maskSecret(c.getClientSecret()));
     }
 
     private static String nullToEmpty(String s) {

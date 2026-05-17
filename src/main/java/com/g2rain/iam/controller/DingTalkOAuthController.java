@@ -47,15 +47,12 @@ public class DingTalkOAuthController {
     @PostMapping("/qr/bootstrap")
     @ResponseBody
     public Result<DingTalkQrBootstrapVo> qrBootstrap(@Valid @RequestBody DingTalkQrBootstrapDto dto) {
-        DingTalkQrBootstrapVo data = dingTalkQrBootstrapService.buildQrBootstrap(
+        return Result.success(dingTalkQrBootstrapService.buildQrBootstrap(
             dto.getBindMode(),
             dto.getClientId(),
             dto.getRedirectUri(),
             dto.getState()
-        );
-        log.info("[dingtalk-oauth] qr bootstrap bindMode={} clientIdLen={}", dto.getBindMode(),
-            dto.getClientId() == null ? 0 : dto.getClientId().length());
-        return Result.success(data);
+        ));
     }
 
     /**
@@ -69,8 +66,6 @@ public class DingTalkOAuthController {
                                   @RequestParam(name = "state", required = false) String state) {
         try {
             String url = dingTalkOAuthService.buildDingTalkAuthorizeRedirectUrl(bindMode, clientId, redirectUri, state);
-            log.info("[dingtalk-oauth] authorize redirect prepared bindMode={} clientIdLen={}", bindMode,
-                clientId == null ? 0 : clientId.length());
             return new ModelAndView(Constants.REDIRECT + url);
         } catch (Exception e) {
             log.error("钉钉授权跳转失败 bindMode={} message={}", bindMode, e.getMessage(), e);
@@ -91,9 +86,6 @@ public class DingTalkOAuthController {
     public ModelAndView callback(HttpServletResponse response,
                                  @RequestParam(name = "code") String code,
                                  @RequestParam(name = "state") String state) {
-        log.info("[dingtalk-oauth] callback GET codeLen={} stateLen={}",
-            code == null ? 0 : code.length(),
-            state == null ? 0 : state.length());
         try {
             DingTalkOAuthResult result = dingTalkOAuthService.finishLogin(code, state);
             Cookie cookie = new Cookie(Constants.SESSION_NAME, result.sessionId());
