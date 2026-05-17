@@ -19,6 +19,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
@@ -150,13 +151,12 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
      */
     private DingTalkPrincipal exchangeSnsTmpAuthCodeForPrincipal(String tmpAuthCode) {
         long timestamp = System.currentTimeMillis();
+        String accessKey = authorizeAppid();
         String signature = computeSnsRequestSignature(timestamp, clientSecret());
-        String url = UriComponentsBuilder.fromUriString(SNS_GET_USERINFO_BY_CODE_URL)
-            .queryParam("accessKey", authorizeAppid())
-            .queryParam("timestamp", timestamp)
-            .queryParam("signature", signature)
-            .build(false)
-            .toUriString();
+        String url = SNS_GET_USERINFO_BY_CODE_URL
+            + "?accessKey=" + URLEncoder.encode(accessKey, StandardCharsets.UTF_8)
+            + "&timestamp=" + timestamp
+            + "&signature=" + signature;
         String requestBody = snsTmpAuthCodeRequestBody(tmpAuthCode);
         String responseBody = postJsonToUrl(url, requestBody, "snsGetUserInfoByCode", IamErrorCode.DINGTALK_USERINFO_FAILED);
         return parseSnsUserInfo(responseBody);
@@ -173,18 +173,34 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
     }
 
     /**
-     * 钉钉 sns 接口签名：Base64(HmacSHA256(appSecret, timestamp + "\n" + appSecret))。
+     * 钉钉 sns 接口签名（个人免登 / getuserinfo_bycode）：
+     * Base64(HmacSHA256(appSecret, String.valueOf(timestamp))) 后再按钉钉规则 urlEncode。
+     *
+     * @see <a href="https://open.dingtalk.com/document/development/signature-personal-registration">个人免登场景的签名计算方法</a>
      */
     private static String computeSnsRequestSignature(long timestampMillis, String appSecret) {
         try {
-            String stringToSign = timestampMillis + "\n" + appSecret;
+            String stringToSign = Long.toString(timestampMillis);
             Mac mac = Mac.getInstance(SNS_SIGNATURE_MAC);
             mac.init(new SecretKeySpec(appSecret.getBytes(StandardCharsets.UTF_8), SNS_SIGNATURE_MAC));
             byte[] signData = mac.doFinal(stringToSign.getBytes(StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(signData);
+            String base64 = Base64.getEncoder().encodeToString(signData);
+            return urlEncodeDingTalkSignature(base64);
         } catch (Exception e) {
             throw new BusinessException(IamErrorCode.DINGTALK_USERINFO_FAILED);
         }
+    }
+
+    /**
+     * 钉钉要求对 Base64 签名再做 urlEncode，且 {@code + * ~ /} 需按约定替换（勿用 UriComponentsBuilder 二次编码）。
+     */
+    private static String urlEncodeDingTalkSignature(String base64Signature) {
+        String encoded = URLEncoder.encode(base64Signature, StandardCharsets.UTF_8);
+        return encoded
+            .replace("+", "%20")
+            .replace("*", "%2A")
+            .replace("~", "%7E")
+            .replace("/", "%2F");
     }
 
     private String postJsonToUrl(String url, String json, String logLabel, IamErrorCode failureCode) {
