@@ -102,9 +102,6 @@ g2rain:
       internal:
         client-id: ${DINGTALK_INTERNAL_CLIENT_ID:}
         client-secret: ${DINGTALK_INTERNAL_CLIENT_SECRET:}
-        # 与 client-id 相同时可省略；扫码等场景需在授权 URL 中带 appid 时由 Nacos 显式配置
-        appid: ${DINGTALK_INTERNAL_APPID:}
       third-party:
         client-id: ${DINGTALK_THIRD_PARTY_CLIENT_ID:}
         client-secret: ${DINGTALK_THIRD_PARTY_CLIENT_SECRET:}
-        appid: ${DINGTALK_THIRD_PARTY_APPID:}
