@@ -45,6 +45,7 @@ public class DingTalkOAuthStateService {
         payload.setClientId(clientId);
         payload.setClientRedirectUri(clientRedirectUri);
         payload.setClientState(clientState);
+        payload.setQrEmbedded(qrEmbedded);
         genericRedisHelper.set(
             RedisKeyRule.DINGTALK_OAUTH_STATE.format(opaque),
             payload,

@@ -17,7 +17,10 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 /**
  * 钉钉 OAuth2 授权码换票与用户信息的公共 HTTP 逻辑；子类仅提供 clientId / clientSecret 与 {@link IdpBindMode}。
@@ -37,7 +40,14 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
      */
     private static final String DD_LOGIN_SNS_AUTHORIZE_URL = "https://oapi.dingtalk.com/connect/oauth2/sns_authorize";
 
+    private static final String SNS_GET_USERINFO_BY_CODE_URL = "https://oapi.dingtalk.com/sns/getuserinfo_bycode";
+
     private static final String OAUTH_SCOPE_SNS_QR_ONLY = "snsapi_login";
+
+    /**
+     * 方式二 sns 用户信息：{@code POST .../sns/getuserinfo_bycode} 签名原文（毫秒时间戳 + 换行 + appSecret）。
+     */
+    private static final String SNS_SIGNATURE_MAC = "HmacSHA256";
 
     private static final Logger log = LoggerFactory.getLogger(AbstractDingTalkLoginAdapter.class);
 
@@ -103,25 +113,171 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
     }
 
     @Override
-    public DingTalkPrincipal exchangeCodeForPrincipal(String authCode) {
+    public DingTalkPrincipal exchangeCodeForPrincipal(String authCode, boolean snsQrLogin) {
         requireCredentials();
         log.info(
-            "[dingtalk-oauth] exchangeCodeForPrincipal start bindMode={} oauthClientIdPrefix={} authCodeLen={}",
+            "[dingtalk-oauth] exchangeCodeForPrincipal start bindMode={} snsQrLogin={} oauthClientIdPrefix={} authCodeLen={}",
             bindMode().name(),
+            snsQrLogin,
             maskClientId(clientId()),
             authCode == null ? 0 : authCode.length()
         );
-        String tokenBody = postJson(dingTalkIamProperties.getUserAccessTokenUrl(), tokenRequestBody(authCode));
-        String accessToken = extractAccessToken(tokenBody);
-        String userBody = getUserMe(accessToken);
-        DingTalkPrincipal p = parsePrincipal(userBody);
+        DingTalkPrincipal p = snsQrLogin
+            ? exchangeSnsTmpAuthCodeForPrincipal(authCode)
+            : exchangeOAuthCodeForPrincipal(authCode);
         log.info(
-            "[dingtalk-oauth] exchangeCodeForPrincipal done bindMode={} subjectPresent={} nickPresent={}",
+            "[dingtalk-oauth] exchangeCodeForPrincipal done bindMode={} snsQrLogin={} subjectPresent={} nickPresent={}",
             bindMode().name(),
+            snsQrLogin,
             Strings.isNotBlank(p.unionId()),
             Strings.isNotBlank(p.nick())
         );
         return p;
+    }
+
+    /** 方式一：新版 OAuth 换票 + {@code contact/users/me}。 */
+    private DingTalkPrincipal exchangeOAuthCodeForPrincipal(String authCode) {
+        String tokenBody = postJson(dingTalkIamProperties.getUserAccessTokenUrl(), tokenRequestBody(authCode));
+        String accessToken = extractAccessToken(tokenBody);
+        String userBody = getUserMe(accessToken);
+        return parsePrincipal(userBody);
+    }
+
+    /**
+     * 方式二：sns 临时授权码换用户信息（勿调 {@code users/me}，避免缺少 {@code Contact.User.Read}）。
+     *
+     * @see <a href="https://open.dingtalk.com/document/orgapp/obtain-the-user-information-based-on-the-sns-temporary-authorization">根据 sns 临时授权码获取用户信息</a>
+     */
+    private DingTalkPrincipal exchangeSnsTmpAuthCodeForPrincipal(String tmpAuthCode) {
+        long timestamp = System.currentTimeMillis();
+        String signature = computeSnsRequestSignature(timestamp, clientSecret());
+        String url = UriComponentsBuilder.fromUriString(SNS_GET_USERINFO_BY_CODE_URL)
+            .queryParam("accessKey", authorizeAppid())
+            .queryParam("timestamp", timestamp)
+            .queryParam("signature", signature)
+            .build(false)
+            .toUriString();
+        String requestBody = snsTmpAuthCodeRequestBody(tmpAuthCode);
+        String responseBody = postJsonToUrl(url, requestBody, "snsGetUserInfoByCode", IamErrorCode.DINGTALK_USERINFO_FAILED);
+        return parseSnsUserInfo(responseBody);
+    }
+
+    private String snsTmpAuthCodeRequestBody(String tmpAuthCode) {
+        try {
+            ObjectNode n = objectMapper.createObjectNode();
+            n.put("tmp_auth_code", tmpAuthCode);
+            return objectMapper.writeValueAsString(n);
+        } catch (Exception e) {
+            throw new BusinessException(IamErrorCode.DINGTALK_USERINFO_FAILED);
+        }
+    }
+
+    /**
+     * 钉钉 sns 接口签名：Base64(HmacSHA256(appSecret, timestamp + "\n" + appSecret))。
+     */
+    private static String computeSnsRequestSignature(long timestampMillis, String appSecret) {
+        try {
+            String stringToSign = timestampMillis + "\n" + appSecret;
+            Mac mac = Mac.getInstance(SNS_SIGNATURE_MAC);
+            mac.init(new SecretKeySpec(appSecret.getBytes(StandardCharsets.UTF_8), SNS_SIGNATURE_MAC));
+            byte[] signData = mac.doFinal(stringToSign.getBytes(StandardCharsets.UTF_8));
+            return Base64.getEncoder().encodeToString(signData);
+        } catch (Exception e) {
+            throw new BusinessException(IamErrorCode.DINGTALK_USERINFO_FAILED);
+        }
+    }
+
+    private String postJsonToUrl(String url, String json, String logLabel, IamErrorCode failureCode) {
+        log.debug("[dingtalk-oauth] POST {} url={} bodyLen={}", logLabel, url, json == null ? 0 : json.length());
+        try {
+            String body = restClient.post()
+                .uri(url)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(json)
+                .retrieve()
+                .body(String.class);
+            if (body == null) {
+                body = "";
+            }
+            log.debug("[dingtalk-oauth] {} response len={}", logLabel, body.length());
+            return body;
+        } catch (RestClientResponseException e) {
+            String errBody = responseExceptionBodyUtf8(e);
+            log.error(
+                "[dingtalk-oauth] {} HTTP {} url={} responseSnippet={}",
+                logLabel,
+                e.getStatusCode().value(),
+                url,
+                truncate(errBody, 900)
+            );
+            throw new BusinessException(failureCode);
+        } catch (RestClientException e) {
+            log.error("[dingtalk-oauth] {} request failed url={}", logLabel, url, e);
+            throw new BusinessException(failureCode);
+        }
+    }
+
+    private DingTalkPrincipal parseSnsUserInfo(String responseJson) {
+        try {
+            JsonNode root = objectMapper.readTree(responseJson);
+            if (root.has("errcode") && root.get("errcode").asInt() != 0) {
+                log.warn(
+                    "[dingtalk-oauth] sns getuserinfo_bycode errcode={} errmsg={} bindMode={}",
+                    root.get("errcode").asInt(),
+                    text(root, "errmsg"),
+                    bindMode().name()
+                );
+                throw new BusinessException(IamErrorCode.DINGTALK_USERINFO_FAILED);
+            }
+            JsonNode userInfo = root.path("user_info");
+            if (userInfo.isMissingNode() || userInfo.isNull()) {
+                userInfo = root.path("userInfo");
+            }
+            String unionId = firstNonBlank(
+                text(userInfo, "unionid"),
+                text(userInfo, "unionId")
+            );
+            String openId = firstNonBlank(
+                text(userInfo, "openid"),
+                text(userInfo, "openId")
+            );
+            if (Strings.isBlank(unionId) && Strings.isBlank(openId)) {
+                log.warn(
+                    "[dingtalk-oauth] sns user_info missing unionid/openid bindMode={} snippet={}",
+                    bindMode().name(),
+                    truncate(responseJson, 600)
+                );
+                throw new BusinessException(IamErrorCode.DINGTALK_USERINFO_FAILED);
+            }
+            String stableSubject = Strings.isNotBlank(unionId) ? unionId : openId;
+            String nick = text(userInfo, "nick");
+            return new DingTalkPrincipal(
+                stableSubject,
+                openId,
+                "",
+                nick,
+                bindMode().name(),
+                responseJson,
+                clientId()
+            );
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn(
+                "[dingtalk-oauth] parseSnsUserInfo failed bindMode={} snippet={}",
+                bindMode().name(),
+                truncate(responseJson, 500),
+                e
+            );
+            throw new BusinessException(IamErrorCode.DINGTALK_USERINFO_FAILED);
+        }
+    }
+
+    private static String firstNonBlank(String a, String b) {
+        if (Strings.isNotBlank(a)) {
+            return a;
+        }
+        return b == null ? "" : b;
     }
 
     private void requireCredentials() {
@@ -149,32 +305,7 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
      * （无 Jackson HTTP 转换器），此处 {@code .body(String.class)} 为<strong>原始 UTF-8 文本</strong>，再由 {@link ObjectMapper} 解析业务字段。
      */
     private String postJson(String url, String json) {
-        log.debug("[dingtalk-oauth] POST userAccessToken url={} bodyLen={}", url, json == null ? 0 : json.length());
-        try {
-            String body = restClient.post()
-                .uri(url)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(json)
-                .retrieve()
-                .body(String.class);
-            if (body == null) {
-                body = "";
-            }
-            log.debug("[dingtalk-oauth] userAccessToken response len={} summary={}", body.length(), summarizeTokenJsonForLog(body));
-            return body;
-        } catch (RestClientResponseException e) {
-            String errBody = responseExceptionBodyUtf8(e);
-            log.error(
-                "[dingtalk-oauth] userAccessToken HTTP {} url={} responseSnippet={}",
-                e.getStatusCode().value(),
-                url,
-                truncate(errBody, 900)
-            );
-            throw new BusinessException(IamErrorCode.DINGTALK_TOKEN_EXCHANGE_FAILED);
-        } catch (RestClientException e) {
-            log.error("[dingtalk-oauth] userAccessToken request failed url={}", url, e);
-            throw new BusinessException(IamErrorCode.DINGTALK_TOKEN_EXCHANGE_FAILED);
-        }
+        return postJsonToUrl(url, json, "userAccessToken", IamErrorCode.DINGTALK_TOKEN_EXCHANGE_FAILED);
     }
 
     private String extractAccessToken(String tokenJson) {

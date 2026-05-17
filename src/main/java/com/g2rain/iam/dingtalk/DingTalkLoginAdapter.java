@@ -27,7 +27,14 @@ public interface DingTalkLoginAdapter {
     String buildQrEmbeddedAuthorizeUrl(String state, String redirectUriForDingTalk);
 
     /**
-     * 使用授权码完成换票并解析用户主体。
+     * 使用授权码完成换票并解析用户主体（默认方式一浏览器 OAuth）。
      */
-    DingTalkPrincipal exchangeCodeForPrincipal(String authCode);
+    default DingTalkPrincipal exchangeCodeForPrincipal(String authCode) {
+        return exchangeCodeForPrincipal(authCode, false);
+    }
+
+    /**
+     * @param snsQrLogin {@code true} 时按方式二 sns 临时码调用 {@code getuserinfo_bycode}，否则 {@code userAccessToken} + {@code users/me}
+     */
+    DingTalkPrincipal exchangeCodeForPrincipal(String authCode, boolean snsQrLogin);
 }

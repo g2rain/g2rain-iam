@@ -28,7 +28,7 @@ public class DingTalkIamProperties {
     private String userAccessTokenUrl = "https://api.dingtalk.com/v1.0/oauth2/userAccessToken";
 
     /**
-     * 当前登录用户身份。
+     * 当前登录用户身份（方式一浏览器 OAuth，须 token 含 {@code Contact.User.Read}）。
      */
     private String userMeUrl = "https://api.dingtalk.com/v1.0/contact/users/me";
 

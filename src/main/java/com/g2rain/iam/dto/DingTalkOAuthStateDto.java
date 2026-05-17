@@ -29,4 +29,9 @@ public class DingTalkOAuthStateDto {
      * 业务系统传入的 state，原样回传。
      */
     private String clientState;
+
+    /**
+     * {@code true} 表示本次授权来自内嵌扫码（方式二 {@code sns_authorize}），回调换票走 SNS 用户信息接口，不走 {@code users/me}。
+     */
+    private Boolean qrEmbedded;
 }
