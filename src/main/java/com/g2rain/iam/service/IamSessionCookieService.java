@@ -31,12 +31,14 @@ public class IamSessionCookieService {
         if ("None".equals(sameSite) && !secure) {
             secure = true;
         }
-        return ResponseCookie.from(Constants.SESSION_NAME, value == null ? "" : value)
+        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(Constants.SESSION_NAME, value == null ? "" : value)
             .httpOnly(true)
             .secure(secure)
             .path("/")
-            .maxAge(maxAgeSeconds)
-            .sameSite(sameSite)
-            .build();
+            .maxAge(maxAgeSeconds);
+        if (sameSite != null) {
+            builder.sameSite(sameSite);
+        }
+        return builder.build();
     }
 }

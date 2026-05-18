@@ -72,12 +72,15 @@ public class IamAccessProperties {
     }
 
     /**
-     * SameSite 策略：{@code Lax} / {@code Strict} / {@code None}，非法值回退 {@code Lax}。
+     * SameSite 策略：{@code None}（跨域携带 Cookie）/ {@code Lax} / {@code Strict}；
+     * 配置为空白时不写入 SameSite 属性；非法值回退 {@code None}。
+     *
+     * @return {@code null} 表示不设置 SameSite
      */
     public String resolveSessionCookieSameSite() {
         String raw = sessionCookie.getSameSite();
         if (raw == null || raw.isBlank()) {
-            return "Lax";
+            return null;
         }
         String normalized = raw.trim();
         if ("Lax".equalsIgnoreCase(normalized)) {
@@ -89,7 +92,7 @@ public class IamAccessProperties {
         if ("None".equalsIgnoreCase(normalized)) {
             return "None";
         }
-        return "Lax";
+        return "None";
     }
 
     @Getter
@@ -101,9 +104,9 @@ public class IamAccessProperties {
         private Boolean secure;
 
         /**
-         * SameSite：默认 {@code Lax}（OAuth 重定向登录兼容较好）。
+         * SameSite：默认 {@code None}，便于 IAM 与业务前端跨域携带会话 Cookie（须 HTTPS + Secure）。
          */
-        private String sameSite = "Lax";
+        private String sameSite = "None";
 
         /**
          * 会话 Cookie 有效期（秒），默认 24 小时。
