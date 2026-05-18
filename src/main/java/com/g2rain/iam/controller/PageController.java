@@ -160,7 +160,7 @@ public class PageController {
     }
 
     /**
-     * 控制台对外根 URL（无尾斜杠）：{@code platform-base-url}，未配置时回退为 IAM {@code access-base-url}。
+     * 控制台对外根 URL（无尾斜杠）：{@code platform-base-url}，未配置时回退为 IAM {@code base-url}。
      */
     private String resolvePlatformBaseUrl() {
         return iamAccessProperties.resolvedPlatformBaseUrl();

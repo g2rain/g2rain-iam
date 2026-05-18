@@ -66,5 +66,11 @@ public class Constants {
      */
     public static final String SESSION_NAME = "G2RAIN_AUTH_SESSION_ID";
 
+    /**
+     * 第三方身份源（钉钉等）自动建号时写入 Basis 的占位密码：新建 passport 必填字段，
+     * 实际登录走 SSO；须配合 {@code password_trusted=false}，禁止用户名密码登录。
+     */
+    public static final String THIRD_PARTY_IDP_AUTO_REGISTER_PASSPORT_PASSWORD = "123456";
+
     public static final String REQUEST_ID = "requestId";
 }

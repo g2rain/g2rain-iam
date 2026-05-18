@@ -20,6 +20,7 @@ import com.g2rain.iam.dingtalk.DingTalkPrincipal;
 import com.g2rain.iam.dto.SessionDto;
 import com.g2rain.iam.enums.IamErrorCode;
 import com.g2rain.iam.enums.RedisKeyRule;
+import com.g2rain.iam.utils.Constants;
 import com.g2rain.iam.utils.IamUtils;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -59,11 +60,6 @@ import java.util.Objects;
 @Slf4j
 @Service
 public class AuthService {
-
-    /**
-     * 钉钉自动注册 passport 时使用的登录密码（Basis 新建必填；此类账号实际以钉钉 SSO 登录）。
-     */
-    private static final String DINGTALK_AUTO_REGISTER_PASSPORT_PASSWORD = "123456";
 
     /**
      * 通用 Redis 辅助类，用于存储会话信息。
@@ -188,7 +184,8 @@ public class AuthService {
     }
 
     /**
-     * Basis 新建 passport（钉钉专用登录名）并写入 {@code passport_idp_binding}。
+     * Basis 新建 passport（钉钉专用登录名）并写入 {@code passport_idp_binding}；
+     * 密码使用 {@link Constants#THIRD_PARTY_IDP_AUTO_REGISTER_PASSPORT_PASSWORD}（与其它第三方建号一致）。
      */
     private String registerPassportAndDingTalkBinding(
         DingTalkPrincipal principal,
@@ -198,7 +195,7 @@ public class AuthService {
         String username = dingTalkPassportUsername(principal.unionId());
         PassportDto passportDto = new PassportDto();
         passportDto.setUsername(username);
-        passportDto.setPassword(DINGTALK_AUTO_REGISTER_PASSPORT_PASSWORD);
+        passportDto.setPassword(Constants.THIRD_PARTY_IDP_AUTO_REGISTER_PASSPORT_PASSWORD);
         String realName = Strings.isBlank(principal.nick()) ? "钉钉用户" : principal.nick().trim();
         if (realName.length() > 128) {
             realName = realName.substring(0, 128);

@@ -5,6 +5,7 @@ import com.g2rain.common.exception.SystemErrorCode;
 import com.g2rain.common.utils.Strings;
 import com.g2rain.data.redis.GenericRedisHelper;
 import com.g2rain.iam.config.DingTalkIamProperties;
+import com.g2rain.iam.config.IamAccessProperties;
 import com.g2rain.iam.dto.DingTalkOAuthStateDto;
 import com.g2rain.iam.dingtalk.DingTalkLoginAdapter;
 import com.g2rain.iam.dingtalk.DingTalkLoginAdapterRouter;
@@ -23,6 +24,7 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class DingTalkOAuthStateService {
 
+    private final IamAccessProperties iamAccessProperties;
     private final DingTalkIamProperties dingTalkIamProperties;
     private final GenericRedisHelper genericRedisHelper;
     private final DingTalkLoginAdapterRouter dingTalkLoginAdapterRouter;
@@ -51,7 +53,7 @@ public class DingTalkOAuthStateService {
             payload,
             Duration.ofMinutes(10)
         );
-        String callback = dingTalkIamProperties.fullCallbackUrl();
+        String callback = dingTalkIamProperties.fullCallbackUrl(iamAccessProperties.normalizedBaseUrl());
         if (qrEmbedded) {
             return adapter.buildQrEmbeddedAuthorizeUrl(opaque, callback);
         }

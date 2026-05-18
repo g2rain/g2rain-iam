@@ -35,11 +35,13 @@ public class DingTalkIamConfiguration {
     ) {
         return args -> {
             log.info(
-                "[iam-startup] iam accessBaseUrl={} platformBaseUrl={} dingtalk callback={} loginPageBindMode={}",
-                nullToEmpty(iamAccess.getAccessBaseUrl()),
+                "[iam-startup] iam baseUrl={} platformBaseUrl={} dingtalk callback={} loginPageBindMode={} sessionCookieSecure={} sessionCookieSameSite={}",
+                nullToEmpty(iamAccess.getBaseUrl()),
                 iamAccess.resolvedPlatformBaseUrl(),
-                dingTalk.fullCallbackUrl(),
-                Strings.isBlank(dingTalk.getLoginPageBindMode()) ? "(hidden)" : dingTalk.getLoginPageBindMode().trim()
+                dingTalk.fullCallbackUrl(iamAccess.normalizedBaseUrl()),
+                Strings.isBlank(dingTalk.getLoginPageBindMode()) ? "(hidden)" : dingTalk.getLoginPageBindMode().trim(),
+                iamAccess.resolveSessionCookieSecure(),
+                iamAccess.resolveSessionCookieSameSite()
             );
             logCredential("internal", dingTalk.getInternal());
             logCredential("third-party", dingTalk.getThirdParty());

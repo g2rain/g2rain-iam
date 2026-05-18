@@ -33,15 +33,9 @@ public class DingTalkIamProperties {
     private String userMeUrl = "https://api.dingtalk.com/v1.0/contact/users/me";
 
     /**
-     * IAM 暴露给钉钉的回调路径（与 {@link #callbackBaseUrl} 拼接后须与钉钉开放平台配置一致）。
+     * IAM 暴露给钉钉的回调路径（与 {@link IamAccessProperties#normalizedBaseUrl()} 拼接后须与钉钉开放平台配置一致）。
      */
     private String callbackPath = "/auth/dingtalk/callback";
-
-    /**
-     * 钉钉 OAuth 回调使用的 IAM 根地址（与 {@link IamAccessProperties#getAccessBaseUrl()} 通常一致；
-     * 也可单独配置以支持回调域名与对外访问域名不同）。
-     */
-    private String callbackBaseUrl = "http://127.0.0.1:8082";
 
     /**
      * 企业内部应用凭证。
@@ -70,10 +64,12 @@ public class DingTalkIamProperties {
     }
 
     /**
-     * 钉钉回调完整 URL（作为授权请求中的 redirect_uri）。
+     * 钉钉回调完整 URL（作为授权请求中的 redirect_uri），根地址取自 {@code g2rain.iam.base-url}。
+     *
+     * @param iamBaseUrl {@link IamAccessProperties#normalizedBaseUrl()}
      */
-    public String fullCallbackUrl() {
-        String base = callbackBaseUrl.endsWith("/") ? callbackBaseUrl.substring(0, callbackBaseUrl.length() - 1) : callbackBaseUrl;
+    public String fullCallbackUrl(String iamBaseUrl) {
+        String base = iamBaseUrl == null ? "" : iamBaseUrl.trim();
         String path = callbackPath.startsWith("/") ? callbackPath : "/" + callbackPath;
         return base + path;
     }

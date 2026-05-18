@@ -2,6 +2,7 @@ package com.g2rain.iam.controller;
 
 import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.service.AuthService;
+import com.g2rain.iam.service.IamSessionCookieService;
 import com.g2rain.iam.service.ModelAndViewService;
 import com.g2rain.iam.utils.Constants;
 import jakarta.servlet.http.Cookie;
@@ -52,6 +53,8 @@ public class LoginController {
      */
     private final ModelAndViewService modelAndViewService;
 
+    private final IamSessionCookieService iamSessionCookieService;
+
     /**
      * 用户登录接口，接收用户名和密码进行身份验证。
      * <p>
@@ -79,13 +82,7 @@ public class LoginController {
             // 调用认证服务验证用户名和密码，获取会话 ID
             String sessionId = authService.authenticate(username, password);
 
-            // 创建 HttpOnly Cookie
-            Cookie cookie = new Cookie(Constants.SESSION_NAME, sessionId);
-            cookie.setHttpOnly(true);             // 防止 JavaScript 访问 Cookie
-            cookie.setSecure(false);               // 在 HTTPS 下才生效
-            cookie.setPath("/");                  // 全站可用
-            cookie.setMaxAge(24 * 60 * 60);       // 设置 Cookie 的有效期为 24 小时
-            response.addCookie(cookie);           // 将 Cookie 添加到响应中
+            iamSessionCookieService.writeSessionCookie(response, sessionId);
 
             // 登录成功，使用 ModelAndViewService 重定向到授权页面
             return modelAndViewService.redirectConsent(sessionId,clientId, redirectUri, state);
@@ -136,13 +133,7 @@ public class LoginController {
             }
         }
 
-        // 清除 Cookie（设置 MaxAge 为 0 并立即过期）
-        Cookie cookie = new Cookie(Constants.SESSION_NAME, "");
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false);
-        cookie.setPath("/");
-        cookie.setMaxAge(0); // 立即过期
-        response.addCookie(cookie);
+        iamSessionCookieService.clearSessionCookie(response);
 
         // 返回前端跳转页：前端负责跳转到首页
         return new ModelAndView("logout");

@@ -7,11 +7,11 @@ import com.g2rain.iam.dingtalk.DingTalkOAuthResult;
 import com.g2rain.iam.service.DingTalkOAuthService;
 import com.g2rain.iam.service.DingTalkQrBootstrapService;
 import com.g2rain.iam.service.DingTalkStreamAuthorizationService;
+import com.g2rain.iam.service.IamSessionCookieService;
 import com.g2rain.iam.service.ModelAndViewService;
 import com.g2rain.iam.utils.Constants;
 import com.g2rain.iam.vo.DingTalkQrBootstrapVo;
 import com.g2rain.iam.vo.DingTalkStreamAuthorizationVo;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
@@ -40,6 +40,8 @@ public class DingTalkOAuthController {
     private final DingTalkOAuthService dingTalkOAuthService;
     private final DingTalkStreamAuthorizationService dingTalkStreamAuthorizationService;
     private final ModelAndViewService modelAndViewService;
+
+    private final IamSessionCookieService iamSessionCookieService;
 
     /**
      * 登录页内嵌扫码（方式二）：申请 {@code sns_authorize} 的 {@code goto} URL（写入 Redis state，与 {@link #authorize} 共用回调换票）。
@@ -88,12 +90,7 @@ public class DingTalkOAuthController {
                                  @RequestParam(name = "state") String state) {
         try {
             DingTalkOAuthResult result = dingTalkOAuthService.finishLogin(code, state);
-            Cookie cookie = new Cookie(Constants.SESSION_NAME, result.sessionId());
-            cookie.setHttpOnly(true);
-            cookie.setSecure(false);
-            cookie.setPath("/");
-            cookie.setMaxAge(24 * 60 * 60);
-            response.addCookie(cookie);
+            iamSessionCookieService.writeSessionCookie(response, result.sessionId());
             return modelAndViewService.redirectConsent(
                 result.sessionId(), result.clientId(), result.redirectUri(), result.state());
         } catch (Exception e) {
