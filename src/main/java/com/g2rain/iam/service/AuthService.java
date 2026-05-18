@@ -204,6 +204,7 @@ public class AuthService {
             realName = realName.substring(0, 128);
         }
         passportDto.setRealName(realName);
+        passportDto.setPasswordTrusted(false);
 
         Result<?> passportSave = passportService.register(passportDto);
         if (!passportSave.isSuccess()) {
