@@ -14,6 +14,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+
 /**
  * 钉钉 OAuth：浏览器跳转前的授权 URL 委托 {@link DingTalkOAuthStateService}；回调换票、建会话与 {@code redirectConsent}。
  * 内嵌扫码入口见 {@link DingTalkQrBootstrapService}；Stream 发码见 {@link DingTalkStreamAuthorizationService}。
@@ -32,6 +34,19 @@ public class DingTalkOAuthService {
                                                     String clientState) {
         return dingTalkOAuthStateService.persistStateAndBuildAuthorizeUrl(
             bindMode, clientId, clientRedirectUri, clientState, false);
+    }
+
+    /**
+     * 按钉钉回调中的 opaque {@code state} 读取 OAuth 上下文（不删除 Redis），供失败页恢复 {@code clientId}/{@code redirectUri}。
+     */
+    public Optional<DingTalkOAuthStateDto> peekOAuthState(String dingTalkState) {
+        if (Strings.isBlank(dingTalkState)) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(genericRedisHelper.get(
+            RedisKeyRule.DINGTALK_OAUTH_STATE.format(dingTalkState.trim()),
+            DingTalkOAuthStateDto.class
+        ));
     }
 
     public DingTalkOAuthResult finishLogin(String authCode, String dingTalkState) {

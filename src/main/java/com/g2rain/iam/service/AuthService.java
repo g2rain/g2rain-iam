@@ -132,38 +132,40 @@ public class AuthService {
     /**
      * 钉钉换票成功后建立 IAM 会话：若 Basis 已存在 {@code passport_idp_binding} 则写入 {@link SessionDto#getPassportId()}。
      * <p>当 {@code autoProvisionMissingPassport} 为 {@code true} 且查询成功但无绑定时，在 Basis 注册 passport 并初始化绑定；
-     * 为 {@code false} 时（Stream 发码）无绑定或查询失败则抛出 {@link IamErrorCode#DINGTALK_STREAM_USER_NOT_BOUND} 或 Basis 错误，不自动注册。</p>
+     * 为 {@code false} 时（Stream 发码）无绑定则抛出 {@link IamErrorCode#DINGTALK_STREAM_USER_NOT_BOUND}；
+     * 绑定查询异常或最终无 {@code passportId} 时 fail-fast，不发放空上下文会话。</p>
      *
      * @param principal                    钉钉统一主体
      * @param autoProvisionMissingPassport {@code true} 允许无绑定时自动建号；{@code false} 必须已绑定
      * @return 新会话 ID
      */
     public String authenticateDingTalk(DingTalkPrincipal principal, boolean autoProvisionMissingPassport) {
-        String passportId = null;
         String idpAppCode = principal.idpApplicationCode() == null ? "" : principal.idpApplicationCode().trim();
         PassportIdpBindingSelectDto query = new PassportIdpBindingSelectDto();
         query.setIdpType(IdpType.DINGTALK.name());
         query.setIdpSubject(principal.unionId());
         query.setIdpApplicationCode(idpAppCode);
 
-        Result<List<PassportIdpBindingVo>> result = null;
+        Result<List<PassportIdpBindingVo>> result;
         try {
             result = passportIdpBindingClient.selectList(query);
         } catch (Exception e) {
-            log.warn("passport_idp_binding lookup failed: {}", e.toString());
+            log.error("passport_idp_binding lookup failed idpSubject={} idpAppCode={}", principal.unionId(), idpAppCode, e);
+            throw new BusinessException(IamErrorCode.DINGTALK_IDP_BINDING_LOOKUP_FAILED);
+        }
+        if (!result.isSuccess()) {
+            throw ExceptionConverter.of(result);
         }
 
-        boolean hasBinding = result != null && result.isSuccess() && Collections.isNotEmpty(result.getData());
-        if (hasBinding) {
+        String passportId;
+        if (Collections.isNotEmpty(result.getData())) {
             passportId = Objects.toString(result.getData().getFirst().getPassportId(), null);
         } else if (!autoProvisionMissingPassport) {
-            if (result != null && !result.isSuccess()) {
-                throw ExceptionConverter.of(result);
-            }
             throw new BusinessException(IamErrorCode.DINGTALK_STREAM_USER_NOT_BOUND);
-        } else if (result != null && result.isSuccess()) {
+        } else {
             passportId = registerPassportAndDingTalkBinding(principal, idpAppCode, query);
         }
+        requireNonBlankPassportId(passportId);
 
         String sessionId = IamUtils.generateSessionId();
         SessionDto session = new SessionDto();
@@ -173,7 +175,7 @@ public class AuthService {
         session.setIdpType(IdpType.DINGTALK.name());
         session.setIdpSubject(principal.unionId());
         session.setIdpBindMode(principal.bindMode());
-        session.setIdpApplicationCode(principal.idpApplicationCode() == null ? "" : principal.idpApplicationCode().trim());
+        session.setIdpApplicationCode(idpAppCode);
 
         genericRedisHelper.set(
             RedisKeyRule.SESSION.format(sessionId),
@@ -181,6 +183,12 @@ public class AuthService {
             Duration.ofHours(24)
         );
         return sessionId;
+    }
+
+    private static void requireNonBlankPassportId(String passportId) {
+        if (Strings.isBlank(passportId)) {
+            throw new BusinessException(IamErrorCode.DINGTALK_SESSION_PASSPORT_MISSING);
+        }
     }
 
     /**

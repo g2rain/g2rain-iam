@@ -1,6 +1,8 @@
 package com.g2rain.iam.controller;
 
 import com.g2rain.common.model.Result;
+import com.g2rain.common.utils.Strings;
+import com.g2rain.iam.dto.DingTalkOAuthStateDto;
 import com.g2rain.iam.dto.DingTalkQrBootstrapDto;
 import com.g2rain.iam.dto.DingTalkStreamAuthorizationDto;
 import com.g2rain.iam.dingtalk.DingTalkOAuthResult;
@@ -24,6 +26,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.ModelAndView;
+
+import java.util.Optional;
 
 /**
  * 钉钉 OAuth：浏览器跳转授权/回调；以及 Stream / 消息应用侧基于 unionId 的 JSON 发码。
@@ -102,12 +106,34 @@ public class DingTalkOAuthController {
                 e.getMessage(),
                 e
             );
+            return dingTalkCallbackErrorView(state, "钉钉登录失败，请返回应用重新发起授权");
+        }
+    }
+
+    /**
+     * 回调失败时尝试用 opaque {@code state} 从 Redis 恢复 OAuth 参数；若可恢复则回到登录页便于重试。
+     */
+    private ModelAndView dingTalkCallbackErrorView(String dingTalkOpaqueState, String errorMessage) {
+        Optional<DingTalkOAuthStateDto> payloadOpt = dingTalkOAuthService.peekOAuthState(dingTalkOpaqueState);
+        if (payloadOpt.isPresent()) {
+            DingTalkOAuthStateDto payload = payloadOpt.get();
+            String clientId = payload.getClientId() == null ? "" : payload.getClientId().trim();
+            String redirectUri = payload.getClientRedirectUri() == null ? "" : payload.getClientRedirectUri().trim();
+            String clientState = payload.getClientState() == null ? "" : payload.getClientState();
+            if (Strings.isNotBlank(clientId) && Strings.isNotBlank(redirectUri)) {
+                return modelAndViewService.redirectLogin(clientId, redirectUri, clientState, errorMessage, null);
+            }
             ModelAndView mv = new ModelAndView("error");
-            mv.addObject("error", "钉钉登录失败，请返回应用重新发起授权");
-            mv.addObject("redirectUri", "");
-            mv.addObject("state", state != null ? state : "");
+            mv.addObject("error", errorMessage);
+            mv.addObject("redirectUri", redirectUri);
+            mv.addObject("state", clientState);
             return mv;
         }
+        ModelAndView mv = new ModelAndView("error");
+        mv.addObject("error", errorMessage);
+        mv.addObject("redirectUri", "");
+        mv.addObject("state", dingTalkOpaqueState != null ? dingTalkOpaqueState : "");
+        return mv;
     }
 
     /**
