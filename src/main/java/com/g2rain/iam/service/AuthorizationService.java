@@ -1,6 +1,7 @@
 package com.g2rain.iam.service;
 
 
+import com.g2rain.common.utils.Strings;
 import com.g2rain.data.redis.GenericRedisHelper;
 import com.g2rain.iam.dto.AuthorizationCodeDto;
 import com.g2rain.iam.dto.SessionDto;
@@ -46,15 +47,20 @@ public class AuthorizationService {
      *
      * @param session  当前用户会话信息
      * @param clientId 客户端 ID
-     * @param userId   用户 ID
+     * @param userId               用户 ID
+     * @param thirdPartyIdpLogin   是否外部身份源（如钉钉）授权链路发码
      * @return {@link String} 生成的授权码
      */
-    public String generateAuthorizationCode(SessionDto session, String clientId, String userId) {
+    public String generateAuthorizationCode(SessionDto session, String clientId, String userId, boolean thirdPartyIdpLogin) {
         // 1. 校验用户名 + 密码是否正确
         AuthorizationCodeDto codeDto = new AuthorizationCodeDto();
         codeDto.setSessionId(session.getSessionId());
         codeDto.setClientId(clientId);
         codeDto.setUserId(userId);
+        codeDto.setThirdPartyIdpLogin(thirdPartyIdpLogin);
+        codeDto.setIdpType(Strings.isBlank(session.getIdpType()) ? null : session.getIdpType().trim());
+        codeDto.setIdpSubject(Strings.isBlank(session.getIdpSubject()) ? null : session.getIdpSubject().trim());
+        codeDto.setIdpApplicationCode(Strings.isBlank(session.getIdpApplicationCode()) ? null : session.getIdpApplicationCode().trim());
 
         // 2. 生成授权码
         String code = IamUtils.generateAuthorizationCode();
@@ -67,5 +73,12 @@ public class AuthorizationService {
         );
 
         return code;
+    }
+
+    /**
+     * 与 {@link #generateAuthorizationCode(SessionDto, String, String, boolean)} 等价，{@code thirdPartyIdpLogin=false}（密码登录等）。
+     */
+    public String generateAuthorizationCode(SessionDto session, String clientId, String userId) {
+        return generateAuthorizationCode(session, clientId, userId, false);
     }
 }

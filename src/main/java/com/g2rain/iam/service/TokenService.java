@@ -40,6 +40,8 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import java.security.KeyFactory;
@@ -98,6 +100,31 @@ public class TokenService {
 
     @Resource
     private ApplicationClient applicationClient;
+
+    /**
+     * 与 {@link com.g2rain.iam.config.RedisConfig#redisTemplate} 一致，用于授权码原子消费（Lua GET+DEL）。
+     */
+    @Resource
+    private RedisTemplate<String, Object> redisTemplate;
+
+    /**
+     * 原子读取并删除授权码对应的 Redis 值（Lua 内 GET 后 DEL，避免重放）。
+     * 脚本返回类型为 {@link Object}：{@link RedisTemplate} 的 JSON value 序列化器会把 GET 到的 JSON 反序列化为
+     * {@link AuthorizationCodeDto}，而非原始 {@link String}（与 {@code setResultType} 声明无关）。
+     */
+    private static final DefaultRedisScript<Object> AUTH_CODE_CONSUME_SCRIPT;
+
+    static {
+        DefaultRedisScript<Object> script = new DefaultRedisScript<>();
+        script.setScriptText(
+            "local v = redis.call('GET', KEYS[1])\n"
+                + "if v == false then return nil end\n"
+                + "redis.call('DEL', KEYS[1])\n"
+                + "return v"
+        );
+        script.setResultType(Object.class);
+        AUTH_CODE_CONSUME_SCRIPT = script;
+    }
 
     /**
      * 构造方法，注入所需依赖
@@ -190,8 +217,12 @@ public class TokenService {
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWS");
         }
 
-        // 获取 redis 中存储的 AuthorizationCodeDto 对象信息
-        AuthorizationCodeDto codeDto = getAuthorizationByCode(code);
+        // 原子消费授权码（GET+DEL），防止同一 code 多次换 token
+        AuthorizationCodeDto codeDto = consumeAuthorizationByCode(code);
+        String boundClientId = Strings.isBlank(codeDto.getClientId()) ? null : codeDto.getClientId().trim();
+        if (Strings.isBlank(boundClientId) || !boundClientId.equals(clientId.trim())) {
+            throw new BusinessException(IamErrorCode.OAUTH_AUTHORIZATION_CODE_CLIENT_MISMATCH);
+        }
         Long userId = IamUtils.parseLongSafe(codeDto.getUserId(), "userId");
 
         // 校验 应用 DPoP Proof
@@ -202,11 +233,6 @@ public class TokenService {
 
         validateApplicationDPoP(applicationDPoP, applicationResult.getData());
 
-        Result<TokenJWTPayload> result = loginTokenClient.fetchTokenContext(userId, applicationCode);
-        if (!result.isSuccess()) {
-            throw ExceptionConverter.of(result);
-        }
-
         SessionDto session = genericRedisHelper.get(
             RedisKeyRule.SESSION.format(codeDto.getSessionId()),
             SessionDto.class
@@ -216,8 +242,23 @@ public class TokenService {
             throw new BusinessException(SystemErrorCode.UNAUTHENTICATED, "请先登录");
         }
 
+        Long sessionPassportId = IamUtils.parseLongSafe(session.getPassportId(), "passportId");
+
+        Result<TokenJWTPayload> result = loginTokenClient.fetchTokenContext(
+            sessionPassportId,
+            userId,
+            applicationCode,
+            codeDto.getThirdPartyIdpLogin(),
+            codeDto.getIdpType(),
+            codeDto.getIdpSubject(),
+            codeDto.getIdpApplicationCode()
+        );
+        if (!result.isSuccess()) {
+            throw ExceptionConverter.of(result);
+        }
+
         TokenJWTPayload payload = result.getData();
-        payload.setPassportId(Long.valueOf(session.getPassportId()));
+        payload.setPassportId(sessionPassportId);
         // 如果是账号身份, 设置一下账号名称
         if (SessionType.PASSPORT.equals(payload.getSessionType())) {
             payload.setName(session.getName());
@@ -411,7 +452,8 @@ public class TokenService {
                 throw new BusinessException(IamErrorCode.REFRESH_TOKEN_EXPIRED);
             }
 
-            Result<TokenJWTPayload> result = loginTokenClient.fetchTokenContext(userId, applicationCode);
+            Result<TokenJWTPayload> result = loginTokenClient.fetchTokenContext(
+                null, userId, applicationCode, null, null, null, null);
             if (!result.isSuccess()) {
                 throw ExceptionConverter.of(result);
             }
@@ -505,28 +547,41 @@ public class TokenService {
     }
 
     /**
-     * 根据授权码获取授权信息。
-     * <p>从 [Redis](https://redis.io) 中检索并验证授权码的有效性，若不存在或已过期则抛出异常。</p>
+     * 原子读取并删除授权码元数据（Lua 脚本内 GET 后 DEL），与发码时使用的 Redis 键、JSON 序列化约定一致。
      *
-     * @param code 客户端提交的授权码 (Authorization Code)
-     * @return {@link AuthorizationCodeDto} 授权码对应的元数据对象
-     * @throws BusinessException 如果 code 为空或在缓存中未找到匹配项
+     * @param code 客户端提交的授权码
+     * @return 已消费的 {@link AuthorizationCodeDto}
+     * @throws BusinessException code 为空、Redis 中不存在或 JSON 无法解析
      */
-    private AuthorizationCodeDto getAuthorizationByCode(String code) {
+    private AuthorizationCodeDto consumeAuthorizationByCode(String code) {
         if (Strings.isBlank(code)) {
             throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "code");
         }
-
-        AuthorizationCodeDto codeDto = genericRedisHelper.get(
-            RedisKeyRule.AUTHORIZATION_CODE.format(code),
-            AuthorizationCodeDto.class
-        );
-
-        if (Objects.isNull(codeDto)) {
+        String redisKey = RedisKeyRule.AUTHORIZATION_CODE.format(code);
+        Object raw = redisTemplate.execute(AUTH_CODE_CONSUME_SCRIPT, List.of(redisKey));
+        if (raw == null) {
             throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
         }
-
-        return codeDto;
+        if (raw instanceof AuthorizationCodeDto dto) {
+            return dto;
+        }
+        if (raw instanceof String s) {
+            if (Strings.isBlank(s)) {
+                throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
+            }
+            try {
+                return jsonCodec.str2obj(s, AuthorizationCodeDto.class);
+            } catch (RuntimeException e) {
+                log.warn("authorization code payload deserialize failed after consume, key={}", redisKey, e);
+                throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
+            }
+        }
+        log.warn(
+            "authorization code redis value unexpected type {} after consume, key={}",
+            raw.getClass().getName(),
+            redisKey
+        );
+        throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
     }
 
     /**

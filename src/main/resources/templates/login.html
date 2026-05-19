@@ -5,6 +5,59 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>登录</title>
     <link rel="stylesheet" th:href="@{/auth/css/common.css}">
+    <style>
+        .login-tabs { margin-top: 0.25rem; }
+        .login-tab-bar {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 1.25rem;
+        }
+        .login-tab {
+            flex: 1;
+            padding: 0.65rem 0.75rem;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            color: #64748b;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            cursor: pointer;
+            border-radius: 6px 6px 0 0;
+        }
+        .login-tab:hover { color: #334155; background: #f8fafc; }
+        .login-tab-active {
+            color: #0f172a;
+            border-bottom-color: #3b82f6;
+            background: transparent;
+        }
+        .login-tab-panel { display: none; }
+        .login-tab-panel-active { display: block; }
+        .dingtalk-login-wrap .btn-block {
+            display: block;
+            width: 100%;
+            text-align: center;
+            box-sizing: border-box;
+            margin-top: 0.75rem;
+        }
+        .dingtalk-qr-box {
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        .dingtalk-qr-status {
+            text-align: center;
+            font-size: 0.8125rem;
+            color: #64748b;
+            margin: 0.5rem 0 0.25rem;
+            min-height: 1.25rem;
+        }
+    </style>
 </head>
 <body class="landing-body">
 <main class="landing-shell">
@@ -38,29 +91,62 @@
             </div>
         </div>
 
-        <div class="landing-panel action-panel landing-op-form">
+        <div class="landing-panel action-panel landing-op-form"
+             th:with="hasDingTalk=${clientId != null and !#strings.isEmpty(clientId) and redirectUri != null and !#strings.isEmpty(redirectUri) and dingTalkBindMode != null and !#strings.isEmpty(dingTalkBindMode)}">
             <h2 class="title">登录</h2>
-            <form method="POST" action="/auth/login">
-                <div class="form-group">
-                    <label for="username">用户名<span class="required-asterisk" aria-hidden="true">*</span></label>
-                    <input type="text" id="username" name="username" th:value="${username} ?: ''" required>
+
+            <div class="login-tabs">
+                <div class="login-tab-bar" th:if="${hasDingTalk}" role="tablist">
+                    <button type="button" class="login-tab login-tab-active" role="tab" aria-selected="true"
+                            data-login-tab="account" id="login-tab-btn-account">账号登录</button>
+                    <button type="button" class="login-tab" role="tab" aria-selected="false"
+                            data-login-tab="dingtalk" id="login-tab-btn-dingtalk">钉钉登录</button>
                 </div>
 
-                <div class="form-group">
-                    <label for="password">密码<span class="required-asterisk" aria-hidden="true">*</span></label>
-                    <input type="password" id="password" name="password" required>
+                <div id="login-tab-panel-account"
+                     class="login-tab-panel login-tab-panel-active"
+                     role="tabpanel"
+                     th:attr="aria-labelledby=${hasDingTalk} ? 'login-tab-btn-account' : _">
+                    <form method="POST" action="/auth/login">
+                        <div class="form-group">
+                            <label for="username">用户名<span class="required-asterisk" aria-hidden="true">*</span></label>
+                            <input type="text" id="username" name="username" th:value="${username} ?: ''" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="password">密码<span class="required-asterisk" aria-hidden="true">*</span></label>
+                            <input type="password" id="password" name="password" required>
+                        </div>
+
+                        <input type="hidden" id="clientId" name="clientId" th:value="${clientId} ?: ''">
+                        <input type="hidden" id="redirectUri" name="redirectUri" th:value="${redirectUri} ?: ''">
+                        <input type="hidden" id="state" name="state" th:value="${state} ?: ''">
+
+                        <div class="form-actions landing-form-actions">
+                            <button type="submit" class="btn btn-primary btn-lg">登录</button>
+                            <a th:href="@{/auth/register.html(clientId=${clientId ?: ''}, redirectUri=${redirectUri ?: ''}, state=${state ?: ''})}"
+                               class="btn btn-outline btn-lg">注册账号</a>
+                        </div>
+                    </form>
                 </div>
 
-                <input type="hidden" id="clientId" name="clientId" th:value="${clientId} ?: ''">
-                <input type="hidden" id="redirectUri" name="redirectUri" th:value="${redirectUri} ?: ''">
-                <input type="hidden" id="state" name="state" th:value="${state} ?: ''">
-
-                <div class="form-actions landing-form-actions">
-                    <button type="submit" class="btn btn-primary btn-lg">登录</button>
-                    <a th:href="@{/auth/register.html(clientId=${clientId ?: ''}, redirectUri=${redirectUri ?: ''}, state=${state ?: ''})}"
-                       class="btn btn-outline btn-lg">注册账号</a>
+                <div id="login-tab-panel-dingtalk"
+                     class="login-tab-panel"
+                     role="tabpanel"
+                     aria-labelledby="login-tab-btn-dingtalk"
+                     th:if="${hasDingTalk}">
+                    <div class="dingtalk-login-wrap"
+                         th:attr="data-dingtalk-qr-init=1,
+                                  data-bootstrap-url=@{/auth/dingtalk/qr/bootstrap},
+                                  data-bind-mode=${dingTalkBindMode},
+                                  data-qr-container-id=dingtalk-qr-container">
+                        <div id="dingtalk-qr-container" class="dingtalk-qr-box" aria-label="钉钉扫码登录"></div>
+                        <p class="dingtalk-qr-status" id="dingtalk-qr-status">切换到本标签后将加载钉钉扫码</p>
+                        <a class="btn btn-outline btn-lg btn-block"
+                           th:href="@{/auth/dingtalk/authorize(bindMode=${dingTalkBindMode},clientId=${clientId},redirectUri=${redirectUri},state=${state != null ? state : ''})}">浏览器跳转钉钉登录</a>
+                    </div>
                 </div>
-            </form>
+            </div>
 
             <div class="error-message" th:if="${error != null and error != ''}" th:text="${error}"></div>
         </div>
@@ -70,6 +156,121 @@
         G2Rain IAM
     </footer>
 </main>
+<th:block th:if="${clientId != null and !#strings.isEmpty(clientId) and redirectUri != null and !#strings.isEmpty(redirectUri) and dingTalkBindMode != null and !#strings.isEmpty(dingTalkBindMode)}">
+<script>
+/*<![CDATA[*/
+(function () {
+    var wrap = document.querySelector('[data-dingtalk-qr-init]');
+    if (!wrap) { return; }
+    var bootstrapUrl = wrap.getAttribute('data-bootstrap-url');
+    var bindMode = wrap.getAttribute('data-bind-mode') || '';
+    var qrId = wrap.getAttribute('data-qr-container-id') || 'dingtalk-qr-container';
+    var statusEl = document.getElementById('dingtalk-qr-status');
+    var ddLoginSrc = 'https://g.alicdn.com/dingding/dinglogin/0.0.5/ddLogin.js';
+
+    function setStatus(t) {
+        if (statusEl) { statusEl.textContent = t; }
+    }
+
+    function loadScript(src) {
+        return new Promise(function (resolve, reject) {
+            var s = document.createElement('script');
+            s.src = src;
+            s.async = true;
+            s.onload = function () { resolve(); };
+            s.onerror = function () { reject(new Error('ddLogin script load failed')); };
+            document.head.appendChild(s);
+        });
+    }
+
+    function extractLoginTmpCode(data) {
+        if (data == null) { return null; }
+        if (typeof data === 'string') { return data; }
+        if (typeof data === 'object') {
+            if (data.loginTmpCode) { return String(data.loginTmpCode); }
+            if (data.tmpCode) { return String(data.tmpCode); }
+        }
+        return null;
+    }
+
+    function runQrBootstrap() {
+        return fetch(bootstrapUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                bindMode: bindMode,
+                clientId: document.getElementById('clientId').value,
+                redirectUri: document.getElementById('redirectUri').value,
+                state: document.getElementById('state').value || ''
+            })
+        }).then(function (r) { return r.json(); }).then(function (json) {
+            if (!json || !json.data || !json.data.gotoUrl) {
+                setStatus('无法准备钉钉扫码，请使用「浏览器跳转钉钉登录」。');
+                return;
+            }
+            var gotoPlain = json.data.gotoUrl;
+            if (typeof window.DDLogin !== 'function') {
+                setStatus('钉钉扫码组件未就绪，请使用「浏览器跳转钉钉登录」。');
+                return;
+            }
+            function onMsg(ev) {
+                if (ev.origin !== 'https://login.dingtalk.com') { return; }
+                var code = extractLoginTmpCode(ev.data);
+                if (!code) { return; }
+                window.removeEventListener('message', onMsg, false);
+                try {
+                    var u = new URL(gotoPlain);
+                    u.searchParams.set('loginTmpCode', code);
+                    window.location.assign(u.toString());
+                } catch (e) {
+                    setStatus('扫码成功，但跳转失败，请使用「浏览器跳转钉钉登录」。');
+                }
+            }
+            window.addEventListener('message', onMsg, false);
+            window.DDLogin({
+                id: qrId,
+                goto: encodeURIComponent(gotoPlain),
+                style: 'border:none;background-color:#FFFFFF;',
+                width: '300',
+                height: '300'
+            });
+            setStatus('请使用钉钉扫描上方二维码');
+        });
+    }
+
+    window.__g2rainInitDingTalkQr = function () {
+        if (window.__g2rainDingTalkQrStarted) { return; }
+        window.__g2rainDingTalkQrStarted = true;
+        setStatus('正在加载钉钉扫码…');
+        loadScript(ddLoginSrc).then(runQrBootstrap).catch(function () {
+            setStatus('加载钉钉扫码失败，请使用「浏览器跳转钉钉登录」。');
+        });
+    };
+
+    var tabBtns = document.querySelectorAll('[data-login-tab]');
+    var panelAccount = document.getElementById('login-tab-panel-account');
+    var panelDingtalk = document.getElementById('login-tab-panel-dingtalk');
+    if (tabBtns.length && panelAccount && panelDingtalk) {
+        tabBtns.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var name = btn.getAttribute('data-login-tab');
+                tabBtns.forEach(function (b) {
+                    var on = b.getAttribute('data-login-tab') === name;
+                    b.classList.toggle('login-tab-active', on);
+                    b.setAttribute('aria-selected', on ? 'true' : 'false');
+                });
+                panelAccount.classList.toggle('login-tab-panel-active', name === 'account');
+                panelDingtalk.classList.toggle('login-tab-panel-active', name === 'dingtalk');
+                if (name === 'dingtalk') {
+                    window.__g2rainInitDingTalkQr();
+                }
+            });
+        });
+    }
+})();
+/*]]>*/
+</script>
+</th:block>
 </body>
 </html>
-

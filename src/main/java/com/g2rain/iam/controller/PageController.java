@@ -2,6 +2,8 @@ package com.g2rain.iam.controller;
 
 
 import com.g2rain.common.utils.Strings;
+import com.g2rain.iam.config.DingTalkIamProperties;
+import com.g2rain.iam.config.IamAccessProperties;
 import lombok.AllArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
@@ -37,6 +39,16 @@ public class PageController {
      * 资源加载器，用于检查模板文件是否存在。
      */
     private ResourceLoader resourceLoader;
+
+    /**
+     * IAM / 平台对外地址，用于首页「立即登录」绝对跳转。
+     */
+    private IamAccessProperties iamAccessProperties;
+
+    /**
+     * 登录页钉钉入口使用的 {@code bindMode} 等配置。
+     */
+    private DingTalkIamProperties dingTalkIamProperties;
 
     /**
      * 注册页面渲染方法，处理 /auth/register.html 路径。
@@ -91,6 +103,8 @@ public class PageController {
     @GetMapping(value = "/auth/{filename}.html")
     public ModelAndView dynamicPage(@PathVariable(name = "filename") String filename,
                                     @RequestParam(name = "redirectUri", required = false) String redirectUri,
+                                    @RequestParam(name = "clientId", required = false) String clientId,
+                                    @RequestParam(name = "state", required = false) String state,
                                     Model model) {
         // 防止路径遍历攻击，确保文件名只包含合法字符
         if (filename == null || filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
@@ -108,6 +122,15 @@ public class PageController {
             if ("index".equals(filename)) {
                 applyIndexLoginRedirect(model, redirectUri);
             }
+            if ("login".equals(filename)) {
+                model.addAttribute("clientId", clientId != null ? clientId : "");
+                model.addAttribute("redirectUri", redirectUri != null ? redirectUri : "");
+                model.addAttribute("state", state != null ? state : "");
+                String m = dingTalkIamProperties.getLoginPageBindMode();
+                if (Strings.isNotBlank(m)) {
+                    model.addAttribute("dingTalkBindMode", m.trim());
+                }
+            }
             return new ModelAndView(filename);
         } else {
             // 模板不存在，返回错误页面
@@ -122,10 +145,11 @@ public class PageController {
      * 首页「立即登录」跳转目标：
      * <ul>
      *     <li>若请求参数 {@code redirectUri} 非空且通过校验：跳转到该地址（由对方页面再重定向回 {@code /auth/authorize?...}）</li>
-     *     <li>若 {@code redirectUri} 为空或非法：与错误页一致，跳转到控制台 {@code /main/home}</li>
+     *     <li>若 {@code redirectUri} 为空或非法：由模板将 {@code platformBaseUrl} 与 {@code /main/home} 拼成绝对链接跳转</li>
      * </ul>
      */
     private void applyIndexLoginRedirect(Model model, String redirectUri) {
+        model.addAttribute("platformBaseUrl", resolvePlatformBaseUrl());
         String resolved = resolveIndexLoginRedirectUri(redirectUri);
         if (resolved == null) {
             model.addAttribute("loginViaRedirectUri", false);
@@ -133,6 +157,13 @@ public class PageController {
             model.addAttribute("loginViaRedirectUri", true);
             model.addAttribute("loginRedirectUri", resolved);
         }
+    }
+
+    /**
+     * 控制台对外根 URL（无尾斜杠）：{@code platform-base-url}，未配置时回退为 IAM {@code base-url}。
+     */
+    private String resolvePlatformBaseUrl() {
+        return iamAccessProperties.resolvedPlatformBaseUrl();
     }
 
     /**
