@@ -122,35 +122,35 @@ public class AuthService {
     }
 
     /**
-     * 钉钉换票成功后建立 IAM 会话：与 {@link #authenticateDingTalk(DingTalkPrincipal, boolean)} 等价，
-     * {@code autoProvisionMissingPassport=true}（浏览器 OAuth：无绑定时自动注册 passport 并写绑定）。
+     * 钉钉换票成功后建立 IAM 会话（浏览器 OAuth：无绑定时自动注册 passport）
+     *
+     * @param principal 钉钉用户主体
+     * @return 新会话 ID
      */
     public String authenticateDingTalk(DingTalkPrincipal principal) {
         return authenticateDingTalk(principal, true);
     }
 
     /**
-     * 钉钉换票成功后建立 IAM 会话：若 Basis 已存在 {@code passport_idp_binding} 则写入 {@link SessionDto#getPassportId()}。
-     * <p>当 {@code autoProvisionMissingPassport} 为 {@code true} 且查询成功但无绑定时，在 Basis 注册 passport 并初始化绑定；
-     * 为 {@code false} 时（Stream 发码）无绑定则抛出 {@link IamErrorCode#DINGTALK_STREAM_USER_NOT_BOUND}；
-     * 绑定查询异常或最终无 {@code passportId} 时 fail-fast，不发放空上下文会话。</p>
+     * 钉钉换票成功后建立 IAM 会话
      *
-     * @param principal                    钉钉统一主体
-     * @param autoProvisionMissingPassport {@code true} 允许无绑定时自动建号；{@code false} 必须已绑定
+     * @param principal                    钉钉用户主体
+     * @param autoProvisionMissingPassport {@code true} 无绑定时自动建号；{@code false} 必须已绑定（Stream 发码）
      * @return 新会话 ID
      */
     public String authenticateDingTalk(DingTalkPrincipal principal, boolean autoProvisionMissingPassport) {
-        String idpAppCode = principal.idpApplicationCode() == null ? "" : principal.idpApplicationCode().trim();
+        String idpApplicationCode = principal.idpApplicationCode() == null ? "" : principal.idpApplicationCode().trim();
         PassportIdpBindingSelectDto query = new PassportIdpBindingSelectDto();
         query.setIdpType(IdpType.DINGTALK.name());
         query.setIdpSubject(principal.unionId());
-        query.setIdpApplicationCode(idpAppCode);
+        query.setIdpApplicationCode(idpApplicationCode);
 
         Result<List<PassportIdpBindingVo>> result;
         try {
             result = passportIdpBindingClient.selectList(query);
         } catch (Exception e) {
-            log.error("passport_idp_binding lookup failed idpSubject={} idpAppCode={}", principal.unionId(), idpAppCode, e);
+            log.error("passport_idp_binding lookup failed idpSubject={} idpApplicationCode={}",
+                principal.unionId(), idpApplicationCode, e);
             throw new BusinessException(IamErrorCode.DINGTALK_IDP_BINDING_LOOKUP_FAILED);
         }
         if (!result.isSuccess()) {
@@ -163,7 +163,7 @@ public class AuthService {
         } else if (!autoProvisionMissingPassport) {
             throw new BusinessException(IamErrorCode.DINGTALK_STREAM_USER_NOT_BOUND);
         } else {
-            passportId = registerPassportAndDingTalkBinding(principal, idpAppCode, query);
+            passportId = registerPassportAndDingTalkBinding(principal, idpApplicationCode, query);
         }
         requireNonBlankPassportId(passportId);
 
@@ -175,7 +175,7 @@ public class AuthService {
         session.setIdpType(IdpType.DINGTALK.name());
         session.setIdpSubject(principal.unionId());
         session.setIdpBindMode(principal.bindMode());
-        session.setIdpApplicationCode(idpAppCode);
+        session.setIdpApplicationCode(idpApplicationCode);
 
         genericRedisHelper.set(
             RedisKeyRule.SESSION.format(sessionId),
@@ -192,8 +192,12 @@ public class AuthService {
     }
 
     /**
-     * Basis 新建 passport（钉钉专用登录名）并写入 {@code passport_idp_binding}；
-     * 密码使用 {@link Constants#THIRD_PARTY_IDP_AUTO_REGISTER_PASSPORT_PASSWORD}（与其它第三方建号一致）。
+     * 自动注册 passport 并写入 passport_idp_binding
+     *
+     * @param principal       钉钉用户主体
+     * @param idpApplicationCode IdP 应用编码
+     * @param bindingQuery    绑定查询条件（用于并发重试）
+     * @return 新 passportId
      */
     private String registerPassportAndDingTalkBinding(
         DingTalkPrincipal principal,
@@ -240,7 +244,10 @@ public class AuthService {
     }
 
     /**
-     * 与 {@code passport.username}（varchar 64）对齐的稳定登录名：{@code dt_} + unionId；过长时对 unionId 做摘要缩短。
+     * 生成钉钉自动注册用的 passport 登录名
+     *
+     * @param unionId 钉钉 unionId
+     * @return 登录名（前缀 dt_，总长不超过 64）
      */
     private static String dingTalkPassportUsername(String unionId) {
         String prefix = "dt_";

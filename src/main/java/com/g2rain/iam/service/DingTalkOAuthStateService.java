@@ -17,8 +17,10 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 
 /**
- * 钉钉 OAuth 前置：将 opaque state 写入 Redis，并生成钉钉授权页 URL；
- * 浏览器跳转走方式一 {@code login.dingtalk.com/oauth2/auth}，内嵌扫码走方式二 {@code oapi.../sns_authorize}。
+ * 钉钉 OAuth State 服务
+ * 存储: Redis，键规则见 {@link RedisKeyRule#DINGTALK_OAUTH_STATE}
+ *
+ * @author Alpha
  */
 @Service
 @RequiredArgsConstructor
@@ -30,33 +32,40 @@ public class DingTalkOAuthStateService {
     private final DingTalkLoginAdapterRouter dingTalkLoginAdapterRouter;
 
     /**
-     * @param qrEmbedded {@code true} 时返回方式二内嵌扫码 {@code DDLogin} 的 {@code goto}（{@code sns_authorize}）
+     * 持久化 OAuth 上下文并生成钉钉授权页 URL
+     *
+     * @param bindMode    IdP 接入形态
+     * @param clientId    OAuth2 客户端 ID
+     * @param redirectUri OAuth2 回调地址
+     * @param state       业务系统 state
+     * @param qrEmbedded  {@code true} 时返回方式二内嵌扫码 sns_authorize 的 goto URL
+     * @return 钉钉授权页或 sns goto 完整 URL
      */
-    public String persistStateAndBuildAuthorizeUrl(String bindMode, String clientId, String clientRedirectUri,
-                                                   String clientState, boolean qrEmbedded) {
+    public String persistStateAndBuildAuthorizeUrl(String bindMode, String clientId, String redirectUri,
+                                                   String state, boolean qrEmbedded) {
         if (Strings.isBlank(clientId)) {
             throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "clientId");
         }
-        if (Strings.isBlank(clientRedirectUri)) {
+        if (Strings.isBlank(redirectUri)) {
             throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "redirectUri");
         }
         DingTalkLoginAdapter adapter = dingTalkLoginAdapterRouter.resolve(bindMode);
-        String opaque = IamUtils.generateAuthorizationCode();
+        String opaqueState = IamUtils.generateAuthorizationCode();
         DingTalkOAuthStateDto payload = new DingTalkOAuthStateDto();
         payload.setBindMode(bindMode);
         payload.setClientId(clientId);
-        payload.setClientRedirectUri(clientRedirectUri);
-        payload.setClientState(clientState);
+        payload.setRedirectUri(redirectUri);
+        payload.setState(state);
         payload.setQrEmbedded(qrEmbedded);
         genericRedisHelper.set(
-            RedisKeyRule.DINGTALK_OAUTH_STATE.format(opaque),
+            RedisKeyRule.DINGTALK_OAUTH_STATE.format(opaqueState),
             payload,
             Duration.ofMinutes(10)
         );
         String callback = dingTalkIamProperties.fullCallbackUrl(iamAccessProperties.normalizedBaseUrl());
         if (qrEmbedded) {
-            return adapter.buildQrEmbeddedAuthorizeUrl(opaque, callback);
+            return adapter.buildQrEmbeddedAuthorizeUrl(opaqueState, callback);
         }
-        return adapter.buildAuthorizeUrl(opaque, callback);
+        return adapter.buildAuthorizeUrl(opaqueState, callback);
     }
 }

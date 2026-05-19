@@ -9,7 +9,10 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Service;
 
 /**
- * 统一写入 / 清除 IAM 会话 Cookie（HttpOnly、Secure、SameSite）。
+ * IAM 会话 Cookie 服务
+ * 功能：统一写入或清除登录会话 HttpOnly Cookie
+ *
+ * @author Alpha
  */
 @Service
 @RequiredArgsConstructor
@@ -17,10 +20,21 @@ public class IamSessionCookieService {
 
     private final IamAccessProperties iamAccessProperties;
 
+    /**
+     * 写入会话 Cookie
+     *
+     * @param response  HTTP 响应
+     * @param sessionId 会话 ID
+     */
     public void writeSessionCookie(HttpServletResponse response, String sessionId) {
         response.addHeader(HttpHeaders.SET_COOKIE, buildCookie(sessionId, iamAccessProperties.getSessionCookie().getMaxAgeSeconds()).toString());
     }
 
+    /**
+     * 清除会话 Cookie
+     *
+     * @param response HTTP 响应
+     */
     public void clearSessionCookie(HttpServletResponse response) {
         response.addHeader(HttpHeaders.SET_COOKIE, buildCookie("", 0).toString());
     }

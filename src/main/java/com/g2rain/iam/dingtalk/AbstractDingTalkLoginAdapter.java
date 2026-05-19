@@ -28,7 +28,10 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * 钉钉 OAuth2 授权码换票与用户信息的公共 HTTP 逻辑；子类仅提供 clientId / clientSecret 与 {@link IdpBindMode}。
+ * 钉钉登录换票适配器抽象实现
+ * 功能：封装授权 URL 构造、OAuth 换票与 SNS 扫码换票公共 HTTP 逻辑；子类提供 clientId / clientSecret 与 {@link IdpBindMode}
+ *
+ * @author Alpha
  */
 public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapter {
 

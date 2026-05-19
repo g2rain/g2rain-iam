@@ -6,7 +6,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * 钉钉 Stream 场景下发 OAuth 授权码的请求体。
+ * 钉钉 Stream 授权码请求 DTO
+ *
+ * @author Alpha
  */
 @Setter
 @Getter
@@ -14,30 +16,30 @@ import lombok.Setter;
 public class DingTalkStreamAuthorizationDto {
 
     /**
-     * OAuth 客户端 ID（与换 token 时 DPoP kid 一致）。
+     * OAuth2 客户端 ID（与换 token 时 DPoP kid 一致）
      */
     @NotBlank
     private String clientId;
 
     /**
-     * OAuth state，原样返回。
+     * 业务系统传入的 state
      */
     private String state;
 
     /**
-     * IdP 接入形态，{@link com.g2rain.basis.enums.IdpBindMode} 枚举名。
+     * IdP 接入形态[INTERNAL:企业内部应用, THIRD_PARTY:第三方企业应用]
      */
     @NotBlank
     private String bindMode;
 
     /**
-     * 钉钉 unionId，与 Basis passport_idp_binding.idp_subject 一致。
+     * 钉钉 unionId（与 Basis passport_idp_binding.idp_subject 一致）
      */
     @NotBlank
     private String unionId;
 
     /**
-     * 钉钉 corpId，可选。
+     * 钉钉企业 corpId
      */
     private String corpId;
 }

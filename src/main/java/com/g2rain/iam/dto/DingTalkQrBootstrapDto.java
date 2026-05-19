@@ -6,21 +6,35 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * 登录页内嵌钉钉扫码（方式二）：向 IAM 申请 {@code sns_authorize} 的 {@code goto} URL（与浏览器方式一共用 Redis state 与回调换票逻辑）。
+ * 钉钉内嵌扫码引导请求 DTO
+ *
+ * @author Alpha
  */
 @Getter
 @Setter
 @NoArgsConstructor
 public class DingTalkQrBootstrapDto {
 
+    /**
+     * IdP 接入形态[INTERNAL:企业内部应用, THIRD_PARTY:第三方企业应用]
+     */
     @NotBlank
     private String bindMode;
 
+    /**
+     * OAuth2 客户端 ID
+     */
     @NotBlank
     private String clientId;
 
+    /**
+     * OAuth2 客户端回调地址
+     */
     @NotBlank
     private String redirectUri;
 
+    /**
+     * 业务系统传入的 state
+     */
     private String state;
 }

@@ -18,7 +18,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 钉钉 IAM 相关 Bean。
+ * 钉钉 IAM 配置类
+ * 功能：注册钉钉换票所需的 RestClient、ObjectMapper 等 Bean
+ *
+ * @author Alpha
  */
 @Slf4j
 @Configuration
@@ -26,7 +29,11 @@ import java.util.List;
 public class DingTalkIamConfiguration {
 
     /**
-     * 启动完成后打印当前生效的 IAM / 钉钉配置（secret 脱敏），便于对照 Nacos 与钉钉开放平台。
+     * 启动后打印 IAM / 钉钉生效配置（secret 脱敏）
+     *
+     * @param dingTalk  钉钉配置属性
+     * @param iamAccess IAM 访问配置属性
+     * @return 启动回调
      */
     @Bean
     public ApplicationRunner logIamDingTalkStartupProperties(
@@ -61,7 +68,7 @@ public class DingTalkIamConfiguration {
     }
 
     /**
-     * 不落库明文，仅提示是否已配置及长度。
+     * 脱敏 secret，仅提示是否已配置及长度
      */
     private static String maskSecret(String secret) {
         if (secret == null || secret.isBlank()) {
@@ -71,7 +78,9 @@ public class DingTalkIamConfiguration {
     }
 
     /**
-     * Spring Boot 4 默认未暴露 {@link ObjectMapper} Bean，钉钉换票 JSON 解析依赖显式注册。
+     * 钉钉换票 JSON 解析用 ObjectMapper
+     *
+     * @return ObjectMapper 实例
      */
     @Bean
     public ObjectMapper objectMapper() {
@@ -79,9 +88,9 @@ public class DingTalkIamConfiguration {
     }
 
     /**
-     * 钉钉 OpenAPI 响应为 {@code application/json} 对象体；使用全局 {@link RestClient.Builder} 时，
-     * Jackson 会参与 {@code String}/{@code byte[]} 反序列化导致非数组/非字符串根节点报错。
-     * 此处使用<strong>不含 Jackson</strong>的转换器列表，按字节流读写 JSON 文本。
+     * 钉钉 OpenAPI 专用 RestClient（不含 Jackson，按字节流读写 JSON 文本）
+     *
+     * @return RestClient 实例
      */
     @Bean
     public RestClient dingTalkRestClient() {

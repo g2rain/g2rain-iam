@@ -8,7 +8,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 /**
- * 钉钉第三方企业应用换票链路（{@link IdpBindMode#THIRD_PARTY}）。
+ * 钉钉第三方企业应用换票适配器
+ * 接入形态: {@link IdpBindMode#THIRD_PARTY}
+ *
+ * @author Alpha
  */
 @Component
 public class ThirdPartyDingTalkLoginAdapter extends AbstractDingTalkLoginAdapter {

@@ -17,8 +17,10 @@ import org.springframework.stereotype.Service;
 import java.util.Optional;
 
 /**
- * 钉钉 OAuth：浏览器跳转前的授权 URL 委托 {@link DingTalkOAuthStateService}；回调换票、建会话与 {@code redirectConsent}。
- * 内嵌扫码入口见 {@link DingTalkQrBootstrapService}；Stream 发码见 {@link DingTalkStreamAuthorizationService}。
+ * 钉钉 OAuth 服务
+ * 功能：浏览器授权跳转、回调换票建会话；内嵌扫码与 Stream 发码委托 {@link DingTalkQrBootstrapService}、{@link DingTalkStreamAuthorizationService}
+ *
+ * @author Alpha
  */
 @Slf4j
 @Service
@@ -30,33 +32,52 @@ public class DingTalkOAuthService {
     private final DingTalkLoginAdapterRouter dingTalkLoginAdapterRouter;
     private final AuthService authService;
 
-    public String buildDingTalkAuthorizeRedirectUrl(String bindMode, String clientId, String clientRedirectUri,
-                                                    String clientState) {
+    /**
+     * 生成钉钉浏览器授权跳转 URL（方式一）
+     *
+     * @param bindMode    IdP 接入形态
+     * @param clientId    OAuth2 客户端 ID
+     * @param redirectUri OAuth2 回调地址
+     * @param state       业务系统 state
+     * @return 钉钉授权页完整 URL
+     */
+    public String buildDingTalkAuthorizeRedirectUrl(String bindMode, String clientId, String redirectUri,
+                                                    String state) {
         return dingTalkOAuthStateService.persistStateAndBuildAuthorizeUrl(
-            bindMode, clientId, clientRedirectUri, clientState, false);
+            bindMode, clientId, redirectUri, state, false);
     }
 
     /**
-     * 按钉钉回调中的 opaque {@code state} 读取 OAuth 上下文（不删除 Redis），供失败页恢复 {@code clientId}/{@code redirectUri}。
+     * 按 opaque state 读取 OAuth 上下文（不删除 Redis）
+     *
+     * @param opaqueState 钉钉回调中的 opaque state
+     * @return OAuth state 载荷，不存在或为空时返回空 Optional
      */
-    public Optional<DingTalkOAuthStateDto> peekOAuthState(String dingTalkState) {
-        if (Strings.isBlank(dingTalkState)) {
+    public Optional<DingTalkOAuthStateDto> peekOAuthState(String opaqueState) {
+        if (Strings.isBlank(opaqueState)) {
             return Optional.empty();
         }
         return Optional.ofNullable(genericRedisHelper.get(
-            RedisKeyRule.DINGTALK_OAUTH_STATE.format(dingTalkState.trim()),
+            RedisKeyRule.DINGTALK_OAUTH_STATE.format(opaqueState.trim()),
             DingTalkOAuthStateDto.class
         ));
     }
 
-    public DingTalkOAuthResult finishLogin(String authCode, String dingTalkState) {
-        String key = RedisKeyRule.DINGTALK_OAUTH_STATE.format(dingTalkState);
+    /**
+     * 使用授权码完成换票、建会话，并返回后续 OAuth 重定向所需参数
+     *
+     * @param authCode    钉钉授权码
+     * @param opaqueState IAM opaque state
+     * @return 会话 ID 与 OAuth 客户端参数
+     */
+    public DingTalkOAuthResult finishLogin(String authCode, String opaqueState) {
+        String key = RedisKeyRule.DINGTALK_OAUTH_STATE.format(opaqueState);
         DingTalkOAuthStateDto payload = genericRedisHelper.get(key, DingTalkOAuthStateDto.class);
         if (payload == null) {
             log.warn("[dingtalk-oauth] invalid or expired state");
             throw new BusinessException(IamErrorCode.DINGTALK_OAUTH_INVALID_STATE);
         }
-        if (Strings.isBlank(payload.getClientId()) || Strings.isBlank(payload.getClientRedirectUri())) {
+        if (Strings.isBlank(payload.getClientId()) || Strings.isBlank(payload.getRedirectUri())) {
             log.warn("[dingtalk-oauth] state payload missing oauth clientId or redirectUri bindMode={}",
                 payload.getBindMode());
             throw new BusinessException(IamErrorCode.DINGTALK_OAUTH_INVALID_STATE);
@@ -70,8 +91,8 @@ public class DingTalkOAuthService {
         return new DingTalkOAuthResult(
             sessionId,
             payload.getClientId(),
-            payload.getClientRedirectUri(),
-            payload.getClientState()
+            payload.getRedirectUri(),
+            payload.getState()
         );
     }
 }

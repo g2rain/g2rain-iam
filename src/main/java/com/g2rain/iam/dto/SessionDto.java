@@ -54,22 +54,22 @@ public class SessionDto {
     private String name;
 
     /**
-     * 身份源类型（如钉钉 {@code DINGTALK}），密码登录时可为空。
+     * 身份源类型[DINGTALK:钉钉]；密码登录时为空
      */
     private String idpType;
 
     /**
-     * IdP 稳定主体（如钉钉 unionId），密码登录时可为空。
+     * IdP 稳定主体（如钉钉 unionId）；密码登录时为空
      */
     private String idpSubject;
 
     /**
-     * IdP 接入形态，与 {@link com.g2rain.basis.enums.IdpBindMode} 一致。
+     * IdP 接入形态[INTERNAL:企业内部应用, THIRD_PARTY:第三方企业应用]
      */
     private String idpBindMode;
 
     /**
-     * 三方应用在 IdP 侧的应用标识（如钉钉 OAuth clientId），与 Basis {@code idp_application_code} 一致。
+     * IdP 应用编码（如钉钉 OAuth clientId）
      */
     private String idpApplicationCode;
 }

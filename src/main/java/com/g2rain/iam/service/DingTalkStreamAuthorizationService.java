@@ -19,7 +19,10 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Stream / 消息应用侧：基于已绑定 unionId 建会话并发放 OAuth 授权码（与浏览器 OAuth 回调链路分离）。
+ * 钉钉 Stream 授权码服务
+ * 功能：基于已绑定 unionId 建会话并发放 OAuth 授权码（与浏览器 OAuth 回调链路分离）
+ *
+ * @author Alpha
  */
 @Service
 @RequiredArgsConstructor
@@ -31,12 +34,18 @@ public class DingTalkStreamAuthorizationService {
     private final AuthorizationService authorizationService;
     private final UserService userService;
 
+    /**
+     * 为 Stream / 消息应用场景发放 OAuth 授权码
+     *
+     * @param req Stream 发码请求 DTO
+     * @return 授权码及 state
+     */
     public DingTalkStreamAuthorizationVo issueStreamAuthorizationCode(DingTalkStreamAuthorizationDto req) {
         dingTalkLoginAdapterRouter.resolve(req.getBindMode());
 
         String unionId = req.getUnionId().trim();
-        String idpAppCode = oauthClientIdForBindMode(req.getBindMode());
-        if (Strings.isBlank(idpAppCode)) {
+        String idpApplicationCode = oauthClientIdForBindMode(req.getBindMode());
+        if (Strings.isBlank(idpApplicationCode)) {
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "dingtalk clientId");
         }
 
@@ -47,7 +56,7 @@ public class DingTalkStreamAuthorizationService {
             "",
             req.getBindMode(),
             "{}",
-            idpAppCode
+            idpApplicationCode
         );
         String sessionId = authService.authenticateDingTalk(principal, false);
         SessionDto session = authService.getSession(sessionId);
@@ -60,6 +69,12 @@ public class DingTalkStreamAuthorizationService {
         return new DingTalkStreamAuthorizationVo(code, req.getState());
     }
 
+    /**
+     * 按接入形态解析钉钉 OAuth clientId（作为 IdP 应用编码）
+     *
+     * @param bindMode IdP 接入形态
+     * @return clientId，未配置时返回空字符串
+     */
     private String oauthClientIdForBindMode(String bindMode) {
         if (IdpBindMode.THIRD_PARTY.name().equals(bindMode)) {
             String v = dingTalkIamProperties.getThirdParty().getClientId();
@@ -70,8 +85,10 @@ public class DingTalkStreamAuthorizationService {
     }
 
     /**
-     * 无用户时为 null；单用户取该用户；多用户时取 {@link UserVo#getUpdateTime()} 最新的一条
-     * （时间为空或相同时取更大 {@link UserVo#getId()}）。
+     * 解析会话关联的用户 ID（多用户时取更新时间最新的一条）
+     *
+     * @param session 当前会话
+     * @return 用户 ID 字符串，无用户时为 null
      */
     private String resolveUserId(SessionDto session) {
         List<UserVo> users = userService.listUserVos(session);
