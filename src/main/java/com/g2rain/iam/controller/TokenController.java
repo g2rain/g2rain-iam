@@ -5,6 +5,9 @@ import com.g2rain.common.model.Result;
 import com.g2rain.iam.dto.GenerateTokenDto;
 import com.g2rain.iam.service.TokenService;
 import com.g2rain.iam.vo.TokenVo;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -32,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @AllArgsConstructor
 @RequestMapping(value = "/auth")
+@Tag(name = "Token", description = "Token 相关接口")
 public class TokenController {
 
     /**
@@ -52,10 +56,12 @@ public class TokenController {
      * @return {@link Result<String>} 包含生成的 JWT 令牌
      */
     @PostMapping(value = "/token")
-    public Result<TokenVo> token(@RequestHeader(name = "DPoP") String clientDPoP,
-                                 @RequestHeader(name = "application-DPoP", required = false) String applicationDPoP,
-                                 @RequestHeader(name = "Authorization", required = false) String authorization,
-                                 @Valid @ModelAttribute GenerateTokenDto generateTokenDto) {
+    @Operation(summary = "获取 Token", description = "根据授权码或交换令牌模式生成 JWT 访问令牌")
+    public Result<TokenVo> token(
+        @Parameter(description = "客户端级 DPoP 证明", required = true) @RequestHeader(name = "DPoP") String clientDPoP,
+        @Parameter(description = "应用级 DPoP 证明") @RequestHeader(name = "application-DPoP", required = false) String applicationDPoP,
+        @Parameter(description = "Bearer 令牌（如 refresh_token 换票场景）") @RequestHeader(name = "Authorization", required = false) String authorization,
+        @Parameter(description = "令牌生成请求参数（application/x-www-form-urlencoded）", required = true) @Valid @ModelAttribute GenerateTokenDto generateTokenDto) {
         return Result.success(tokenService.generateToken(clientDPoP, applicationDPoP, authorization, generateTokenDto));
     }
 }
