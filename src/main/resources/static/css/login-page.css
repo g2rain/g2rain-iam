@@ -1,0 +1,278 @@
+/**
+ * 登录页专用样式（深色 landing 玻璃态）
+ * 仅由 templates/login.html 引用
+ */
+
+/* ---------- 右侧面板 ---------- */
+.login-page .landing-op-login .title {
+    margin-bottom: 0.35rem;
+}
+
+.login-page .login-panel-lead {
+    margin: 0 0 1.25rem;
+    font-size: 0.875rem;
+    line-height: 1.55;
+    color: #94a3b8;
+}
+
+.login-page .login-error {
+    margin: 0 0 1rem;
+    border-radius: 10px;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+/* ---------- 表单（深色面板内） ---------- */
+.login-page .landing-op-login .form-group {
+    margin-bottom: 1.125rem;
+}
+
+.login-page .landing-op-login .form-group:last-of-type {
+    margin-bottom: 1.375rem;
+}
+
+.login-page .landing-op-login label {
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #cbd5e1;
+}
+
+.login-page .landing-op-login .required-asterisk {
+    color: #f87171;
+    margin-left: 0.15rem;
+}
+
+.login-page .landing-op-login input[type="text"],
+.login-page .landing-op-login input[type="password"] {
+    padding: 0.75rem 1rem;
+    font-size: 0.9375rem;
+    border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.32);
+    background: rgba(2, 6, 23, 0.42);
+    color: #f1f5f9;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.login-page .landing-op-login input::placeholder {
+    color: #64748b;
+}
+
+.login-page .landing-op-login input:hover {
+    border-color: rgba(148, 163, 184, 0.45);
+    background: rgba(2, 6, 23, 0.5);
+}
+
+.login-page .landing-op-login input:focus {
+    outline: none;
+    border-color: rgba(129, 140, 248, 0.85);
+    background: rgba(2, 6, 23, 0.55);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.22);
+}
+
+.login-page .landing-op-login .landing-form-actions {
+    gap: 0.75rem;
+    margin-top: 0.25rem;
+}
+
+.login-page .landing-op-login .btn-outline {
+    background: rgba(15, 23, 42, 0.25);
+    color: #c7d2fe;
+    border: 1px solid rgba(129, 140, 248, 0.55);
+}
+
+.login-page .landing-op-login .btn-outline:hover {
+    background: rgba(99, 102, 241, 0.18);
+    border-color: #a5b4fc;
+    color: #e0e7ff;
+    box-shadow: 0 4px 18px rgba(102, 126, 234, 0.28);
+    transform: translateY(-1px);
+}
+
+.login-page .landing-op-login .btn-primary {
+    box-shadow: 0 4px 14px rgba(102, 126, 234, 0.35);
+}
+
+.login-page .landing-op-login .btn-primary:hover {
+    box-shadow: 0 6px 22px rgba(102, 126, 234, 0.45);
+}
+
+/* ---------- Tab：轨道 + 分段 ---------- */
+.login-page .login-tabs {
+    margin-top: 0.125rem;
+}
+
+.login-page .login-tab-bar {
+    display: flex;
+    gap: 5px;
+    padding: 5px;
+    margin-bottom: 1.375rem;
+    border-radius: 12px;
+    background: rgba(2, 6, 23, 0.4);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.login-page .login-tab {
+    flex: 1;
+    padding: 0.7rem 0.85rem;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: #94a3b8;
+    background: transparent;
+    border: none;
+    border-radius: 9px;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-page .login-tab:hover {
+    color: #e2e8f0;
+    background: rgba(248, 249, 255, 0.07);
+}
+
+.login-page .login-tab:focus-visible {
+    outline: 2px solid rgba(129, 140, 248, 0.75);
+    outline-offset: 2px;
+}
+
+.login-page .login-tab-active {
+    color: #f8fafc;
+    background: linear-gradient(180deg, rgba(51, 65, 85, 0.72) 0%, rgba(30, 41, 59, 0.62) 100%);
+    box-shadow:
+        0 1px 4px rgba(8, 15, 35, 0.4),
+        inset 0 -2px 0 #818cf8;
+}
+
+.login-page .login-tab-active:hover {
+    color: #f8fafc;
+    background: linear-gradient(180deg, rgba(51, 65, 85, 0.78) 0%, rgba(30, 41, 59, 0.68) 100%);
+}
+
+/* ---------- Tab 面板切换 ---------- */
+.login-page .login-tab-panel {
+    display: none;
+}
+
+.login-page .login-tab-panel-active {
+    display: block;
+    animation: login-tab-panel-in 0.22s ease;
+}
+
+@keyframes login-tab-panel-in {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .login-page .login-tab-panel-active {
+        animation: none;
+    }
+}
+
+/* ---------- 钉钉登录区 ---------- */
+.login-page .dingtalk-login-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.login-page .dingtalk-qr-hint {
+    margin: 0 0 0.75rem;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: #94a3b8;
+    text-align: center;
+}
+
+.login-page .dingtalk-qr-box {
+    min-height: 300px;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(2, 6, 23, 0.38);
+    border-radius: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.login-page .dingtalk-qr-status {
+    text-align: center;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: #94a3b8;
+    margin: 0.75rem 0 0.5rem;
+    min-height: 1.25rem;
+}
+
+.login-page .dingtalk-qr-status.is-loading::before {
+    content: '';
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    margin-right: 0.4rem;
+    vertical-align: -0.1em;
+    border: 2px solid rgba(148, 163, 184, 0.35);
+    border-top-color: #818cf8;
+    border-radius: 50%;
+    animation: login-qr-spin 0.7s linear infinite;
+}
+
+@keyframes login-qr-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.login-page .dingtalk-login-wrap .btn-block {
+    display: block;
+    width: 100%;
+    text-align: center;
+    box-sizing: border-box;
+    margin-top: 0.5rem;
+}
+
+.login-page .dingtalk-fallback-note {
+    margin: 0.75rem 0 0;
+    font-size: 0.75rem;
+    color: #64748b;
+    text-align: center;
+    line-height: 1.45;
+}
+
+/* ---------- 无钉钉 Tab 时表单顶距 ---------- */
+.login-page .login-tabs--solo .login-tab-panel-active {
+    animation: none;
+}
+
+/* ---------- 窄屏 ---------- */
+@media (max-width: 900px) {
+    .login-page .landing-op-login .landing-form-actions {
+        flex-wrap: wrap;
+    }
+
+    .login-page .landing-op-login .landing-form-actions .btn {
+        flex: 1 1 calc(50% - 0.375rem);
+        min-width: 8.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .login-page .login-tab {
+        padding: 0.65rem 0.5rem;
+        font-size: 0.875rem;
+    }
+
+    .login-page .landing-op-login .landing-form-actions .btn {
+        flex: 1 1 100%;
+    }
+}
