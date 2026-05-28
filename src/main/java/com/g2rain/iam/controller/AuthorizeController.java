@@ -3,7 +3,6 @@ package com.g2rain.iam.controller;
 
 import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.service.AuthService;
-import com.g2rain.iam.service.AuthorizationService;
 import com.g2rain.iam.service.ModelAndViewService;
 import com.g2rain.iam.utils.Constants;
 import lombok.AllArgsConstructor;
@@ -36,11 +35,6 @@ import org.springframework.web.servlet.ModelAndView;
 @AllArgsConstructor
 @RequestMapping(value = "/auth")
 public class AuthorizeController {
-
-    /**
-     * 授权服务，处理授权码的生成等业务逻辑。
-     */
-    private AuthorizationService authorizationService;
 
     /**
      * 认证服务，处理用户的会话、登录状态等业务逻辑。

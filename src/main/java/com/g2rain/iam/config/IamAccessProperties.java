@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
 import java.util.Locale;
+import java.util.Objects;
 
 /**
  * IAM 自身对外可访问地址（部署时由环境变量 / Nacos 注入），用于拼 OAuth 回调、文档链接等。
@@ -61,13 +62,15 @@ public class IamAccessProperties {
     }
 
     private static String trimTrailingSlash(String url) {
-        if (url == null) {
+        if (Objects.isNull(url)) {
             return "";
         }
+
         String base = url.trim();
-        while (!base.isEmpty() && base.endsWith("/")) {
+        while (base.endsWith("/")) {
             base = base.substring(0, base.length() - 1);
         }
+
         return base;
     }
 

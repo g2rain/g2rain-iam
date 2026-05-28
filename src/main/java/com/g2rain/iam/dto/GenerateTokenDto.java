@@ -1,6 +1,7 @@
 package com.g2rain.iam.dto;
 
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -32,6 +33,7 @@ import lombok.Setter;
 @Setter
 @Getter
 @NoArgsConstructor
+@Schema(description = "令牌生成请求 DTO")
 public class GenerateTokenDto {
 
     /**
@@ -41,6 +43,7 @@ public class GenerateTokenDto {
      * </p>
      */
     @NotBlank
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "授权类型，如 authorization_code")
     private String grantType;
 
     /**
@@ -49,6 +52,7 @@ public class GenerateTokenDto {
      * 该字段可选，只有在授权码模式下需要传入。
      * </p>
      */
+    @Schema(description = "授权码（authorization_code 模式）")
     private String code;
 
     /**
@@ -57,5 +61,6 @@ public class GenerateTokenDto {
      * 该字段可选，只有在交换令牌模式下需要传入。
      * </p>
      */
+    @Schema(description = "用户标识（交换令牌模式）")
     private Long userId;
 }

@@ -6,8 +6,10 @@ import com.g2rain.common.exception.BusinessException;
 import com.g2rain.common.exception.SystemErrorCode;
 import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.enums.ESAlgorithm;
+import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.Curve;
 import com.nimbusds.jose.jwk.ECKey;
+import com.nimbusds.jose.jwk.JWK;
 import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -24,7 +26,9 @@ import java.security.interfaces.ECPublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.text.ParseException;
 import java.util.Base64;
+import java.util.Objects;
 import java.util.regex.Pattern;
 
 /**
@@ -153,6 +157,23 @@ public class IamUtils {
     }
 
     /**
+     * 判断 Token 绑定的 {@code clientPublicKey} 与 DPoP Proof 头 JWK 是否同一公钥（RFC 7638 Thumbprint）。
+     */
+    public static boolean matches(String clientPublicKey, JWK proofJwk) {
+        if (Strings.isBlank(clientPublicKey) || Objects.isNull(proofJwk)) {
+            return false;
+        }
+
+        try {
+            JWK stored = JWK.parse(clientPublicKey);
+            return stored.toPublicJWK().computeThumbprint()
+                .equals(proofJwk.toPublicJWK().computeThumbprint());
+        } catch (ParseException | JOSEException e) {
+            return false;
+        }
+    }
+
+    /**
      * 从提供的公钥和私钥字符串加载一个 EC 密钥对（椭圆曲线密钥对）。
      *
      * @param keyId      与此 EC 密钥对关联的密钥 ID。
@@ -211,7 +232,6 @@ public class IamUtils {
         PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(toDer(privateKey));
         return (ECPrivateKey) KeyFactory.getInstance("EC").generatePrivate(spec);
     }
-
 
     /**
      * 将 PEM 格式公钥转换为 DER 二进制字节。
