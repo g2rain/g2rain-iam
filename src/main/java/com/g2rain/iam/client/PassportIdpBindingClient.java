@@ -1,5 +1,6 @@
 package com.g2rain.iam.client;
 
+import com.g2rain.basis.dto.PassportIdpBindingBindDto;
 import com.g2rain.basis.dto.PassportIdpBindingDto;
 import com.g2rain.basis.dto.PassportIdpBindingSelectDto;
 import com.g2rain.basis.vo.PassportIdpBindingVo;
@@ -23,4 +24,7 @@ public interface PassportIdpBindingClient {
 
     @PostMapping("/save")
     Result<Long> save(@RequestBody PassportIdpBindingDto dto);
+
+    @PostMapping("/bind")
+    Result<Long> bind(@RequestBody PassportIdpBindingBindDto dto);
 }

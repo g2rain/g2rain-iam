@@ -624,4 +624,45 @@ public class TokenService {
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Application DPoP Proof JWS");
         }
     }
+
+    /**
+     * 校验 Bearer access token 并返回 JWT 载荷（用于通行证绑定等已登录场景）
+     *
+     * @param authorization Authorization 头（可含 Bearer 前缀）
+     * @return 已校验的 token 载荷
+     */
+    public TokenJWTPayload requireValidAccessToken(String authorization) {
+        if (Strings.isBlank(authorization)) {
+            throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_UNAUTHORIZED);
+        }
+        try {
+            if (Strings.startsWith(authorization, "Bearer ")) {
+                authorization = authorization.substring(7);
+            }
+            SignedJWT signedJWT = SignedJWT.parse(authorization);
+            JWSHeader header = signedJWT.getHeader();
+            ECKey publicKey = tokenKeyManager.getKey(header.getKeyID());
+            if (Objects.isNull(publicKey)) {
+                throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_UNAUTHORIZED);
+            }
+            JWSVerifier verifier = new ECDSAVerifier(publicKey);
+            if (!signedJWT.verify(verifier)) {
+                throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_UNAUTHORIZED);
+            }
+            TokenJWTPayload body = jsonCodec.str2obj(signedJWT.getJWTClaimsSet().toString(), TokenJWTPayload.class);
+            Long expireAt = body.getExpireAt();
+            if (Objects.isNull(expireAt) || expireAt < Instant.now().getEpochSecond()) {
+                throw new BusinessException(IamErrorCode.REFRESH_TOKEN_EXPIRED);
+            }
+            if (body.getPassportId() == null || body.getPassportId() <= 0L) {
+                throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_CONTEXT_INVALID);
+            }
+            if (body.getOrganId() == null || body.getOrganId() <= 0L) {
+                throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_CONTEXT_INVALID);
+            }
+            return body;
+        } catch (ParseException | JOSEException e) {
+            throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_UNAUTHORIZED);
+        }
+    }
 }

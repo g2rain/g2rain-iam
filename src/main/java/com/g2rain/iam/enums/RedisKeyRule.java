@@ -39,7 +39,12 @@ public enum RedisKeyRule {
     /**
      * 钉钉 OAuth 防 CSRF 的 state，格式为 "auth:dingtalk:oauth:state:{state}"
      */
-    DINGTALK_OAUTH_STATE("auth:dingtalk:oauth:state:%s");
+    DINGTALK_OAUTH_STATE("auth:dingtalk:oauth:state:%s"),
+
+    /**
+     * 通行证绑定钉钉扫码 state，格式为 "auth:dingtalk:passport:bind:state:{opaqueState}"
+     */
+    DINGTALK_PASSPORT_BIND_STATE("auth:dingtalk:passport:bind:state:%s");
 
     /**
      * Redis 键的格式规则，使用占位符 %s。
