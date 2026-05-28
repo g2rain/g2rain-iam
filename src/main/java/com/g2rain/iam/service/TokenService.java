@@ -281,6 +281,7 @@ public class TokenService {
         }
 
         // 校验客户端 DPoP Proof
+        JWK jwk;
         String applicationCode;
         try {
             SignedJWT signedJWT = SignedJWT.parse(clientDPoP);
@@ -292,7 +293,7 @@ public class TokenService {
             }
 
             // 校验 JWK 类型
-            JWK jwk = header.getJWK();
+            jwk = header.getJWK();
             if (!(jwk instanceof ECKey ecKey)) {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWK");
             }
@@ -334,9 +335,12 @@ public class TokenService {
 
             String payload = signedJWT.getJWTClaimsSet().toString();
             TokenJWTPayload body = jsonCodec.str2obj(payload, TokenJWTPayload.class);
-            Long refreshExpireAt = body.getRefreshExpireAt();
+            if (!IamUtils.matches(body.getClientPublicKey(), jwk)) {
+                throw new BusinessException(IamErrorCode.TOKEN_DPOP_KEY_MISMATCH);
+            }
 
             // 过期
+            Long refreshExpireAt = body.getRefreshExpireAt();
             if (Objects.isNull(refreshExpireAt) || refreshExpireAt < Instant.now().getEpochSecond()) {
                 throw new BusinessException(IamErrorCode.REFRESH_TOKEN_EXPIRED);
             }
