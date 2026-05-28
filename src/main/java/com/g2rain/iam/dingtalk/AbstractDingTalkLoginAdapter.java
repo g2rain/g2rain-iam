@@ -236,7 +236,7 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
             String unionId = textAny(u, "unionId", "unionid");
             String openId = textAny(u, "openId", "openid");
             String nick = textAny(u, "nick", "name");
-            return buildPrincipal(unionId, openId, text(u, "corpId"), nick, userJson);
+            return buildPrincipal(unionId, openId, resolveCorpId(textAny(u, "corpId", "corp_id")), nick, userJson);
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
@@ -253,10 +253,11 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
             if (user.isMissingNode() || user.isNull()) {
                 user = root.path("userInfo");
             }
+            String corpId = resolveCorpId(textAny(user, "corpId", "corp_id", "main_corp_id"));
             return buildPrincipal(
                 textAny(user, "unionid", "unionId"),
                 textAny(user, "openid", "openId"),
-                "",
+                corpId,
                 text(user, "nick"),
                 responseJson
             );
@@ -279,6 +280,23 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
             bindMode().name()
         );
         throw new BusinessException(IamErrorCode.DINGTALK_USERINFO_FAILED);
+    }
+
+    /**
+     * SNS/OAuth 响应未带 corpId 时，INTERNAL 形态回退为配置的企业 CorpId
+     */
+    protected String resolveCorpId(String corpIdFromApi) {
+        if (Strings.isNotBlank(corpIdFromApi)) {
+            return corpIdFromApi.trim();
+        }
+        if (IdpBindMode.INTERNAL.equals(bindMode())) {
+            String configured = dingTalkIamProperties.getInternal().getCorpId();
+            if (Strings.isNotBlank(configured)) {
+                return configured.trim();
+            }
+            log.warn("[dingtalk-oauth] INTERNAL corpId missing from api and config bindMode={}", bindMode().name());
+        }
+        return "";
     }
 
     private DingTalkPrincipal buildPrincipal(String unionId, String openId, String corpId, String nick, String rawJson) {

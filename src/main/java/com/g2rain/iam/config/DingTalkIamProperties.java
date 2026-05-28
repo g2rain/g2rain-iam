@@ -81,6 +81,11 @@ public class DingTalkIamProperties {
          * 应用 clientSecret（AppSecret）
          */
         private String clientSecret = "";
+
+        /**
+         * 钉钉企业 CorpId（企业内部应用 INTERNAL 常用；SNS 扫码换票不返回 corpId 时作为回退）
+         */
+        private String corpId = "";
     }
 
     /**

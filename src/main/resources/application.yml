@@ -105,6 +105,8 @@ g2rain:
       internal:
         client-id: ${DINGTALK_INTERNAL_CLIENT_ID:}
         client-secret: ${DINGTALK_INTERNAL_CLIENT_SECRET:}
+        # SNS 扫码换票不返回 corpId，须配置本企业 CorpId（开放平台应用详情可见）
+        corp-id: ${DINGTALK_INTERNAL_CORP_ID:}
       third-party:
         client-id: ${DINGTALK_THIRD_PARTY_CLIENT_ID:}
         client-secret: ${DINGTALK_THIRD_PARTY_CLIENT_SECRET:}
