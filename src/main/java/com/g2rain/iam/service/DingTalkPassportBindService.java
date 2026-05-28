@@ -90,11 +90,11 @@ public class DingTalkPassportBindService {
             return buildResultRedirect(state.getReturnUrl(), true, null, null);
         } catch (BusinessException e) {
             log.warn("passport dingtalk bind failed passportId={} code={} message={}",
-                state.getPassportId(), e.getErrorCode() == null ? "" : e.getErrorCode().code(), e.getMessage());
+                state.getPassportId(), e.getErrorCode() == null ? "" : e.getErrorCode(), e.getMessage());
             return buildResultRedirect(
                 state.getReturnUrl(),
                 false,
-                e.getErrorCode() == null ? "BIND_FAILED" : e.getErrorCode().code(),
+                e.getErrorCode() == null ? "BIND_FAILED" : e.getErrorCode(),
                 e.getMessage()
             );
         } catch (Exception e) {
