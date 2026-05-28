@@ -63,8 +63,7 @@ public enum IamErrorCode implements ErrorCode {
     /**
      * 通行证绑定会话缺少 passportId 或 organId
      */
-    DINGTALK_PASSPORT_BIND_CONTEXT_INVALID("iam.40017", "绑定会话上下文无效");
-    OAUTH_AUTHORIZATION_CODE_CLIENT_MISMATCH("iam.40015", "授权码与当前客户端不匹配"),
+    DINGTALK_PASSPORT_BIND_CONTEXT_INVALID("iam.40017", "绑定会话上下文无效"),
 
     /**
      * Access Token 与当前客户端 DPoP 公钥不匹配
