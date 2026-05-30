@@ -66,6 +66,11 @@ public enum IamErrorCode implements ErrorCode {
     DINGTALK_PASSPORT_BIND_CONTEXT_INVALID("iam.40017", "绑定会话上下文无效"),
 
     /**
+     * Access Token 与当前客户端 DPoP 公钥不匹配
+     */
+    TOKEN_DPOP_KEY_MISMATCH("iam.40018", "Token 与客户端 DPoP 密钥不匹配"),
+
+    /**
      * 通行证绑定钉钉失败（未分类或系统异常）
      */
     DINGTALK_PASSPORT_BIND_FAILED("iam.50214", "绑定失败，请稍后重试");

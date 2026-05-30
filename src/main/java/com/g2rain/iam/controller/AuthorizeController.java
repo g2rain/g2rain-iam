@@ -3,8 +3,8 @@ package com.g2rain.iam.controller;
 
 import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.service.AuthorizationService;
-import com.g2rain.iam.service.SessionService;
 import com.g2rain.iam.service.ModelAndViewService;
+import com.g2rain.iam.service.SessionService;
 import com.g2rain.iam.utils.Constants;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Controller;

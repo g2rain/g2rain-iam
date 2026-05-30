@@ -102,13 +102,13 @@ public class DingTalkIamConfiguration {
         dingTalkReadableWritable.add(MediaType.APPLICATION_FORM_URLENCODED);
         strings.setSupportedMediaTypes(dingTalkReadableWritable);
 
-        return RestClient.builder()
-            .messageConverters(converters -> {
-                converters.clear();
+        return RestClient.builder().configureMessageConverters(client -> client
+            .disableDefaults()
+            .configureMessageConvertersList(converters -> {
                 converters.add(strings);
                 converters.add(new ByteArrayHttpMessageConverter());
                 converters.add(new ResourceHttpMessageConverter());
             })
-            .build();
+        ).build();
     }
 }
