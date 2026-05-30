@@ -1,5 +1,6 @@
 package com.g2rain.iam.config;
 
+import com.g2rain.iam.utils.IamUrlUtils;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -95,9 +96,7 @@ public class DingTalkIamProperties {
      * @return 钉钉 redirect_uri
      */
     public String fullCallbackUrl(String iamBaseUrl) {
-        String base = iamBaseUrl == null ? "" : iamBaseUrl.trim();
-        String path = callbackPath.startsWith("/") ? callbackPath : "/" + callbackPath;
-        return base + path;
+        return IamUrlUtils.joinAbsoluteUrl(iamBaseUrl, callbackPath);
     }
 
     /**
@@ -107,19 +106,7 @@ public class DingTalkIamProperties {
      * @return redirect_uri
      */
     public String fullPassportBindCallbackUrl(String platformBaseUrl) {
-        String base = platformBaseUrl == null ? "" : platformBaseUrl.trim();
-        while (!base.isEmpty() && base.endsWith("/")) {
-            base = base.substring(0, base.length() - 1);
-        }
-        String ctx = mainShellContextPath == null ? "" : mainShellContextPath.trim();
-        if (!ctx.isEmpty() && !ctx.startsWith("/")) {
-            ctx = "/" + ctx;
-        }
-        String path = passportBindCallbackPath == null ? "" : passportBindCallbackPath.trim();
-        if (!path.isEmpty() && !path.startsWith("/")) {
-            path = "/" + path;
-        }
-        return base + ctx + path;
+        return IamUrlUtils.joinAbsoluteUrl(platformBaseUrl, mainShellContextPath, passportBindCallbackPath);
     }
 
     /**
@@ -129,18 +116,6 @@ public class DingTalkIamProperties {
      * @return 结果页 URL
      */
     public String defaultPassportBindResultUrl(String platformBaseUrl) {
-        String base = platformBaseUrl == null ? "" : platformBaseUrl.trim();
-        while (!base.isEmpty() && base.endsWith("/")) {
-            base = base.substring(0, base.length() - 1);
-        }
-        String ctx = mainShellContextPath == null ? "" : mainShellContextPath.trim();
-        if (!ctx.isEmpty() && !ctx.startsWith("/")) {
-            ctx = "/" + ctx;
-        }
-        String path = passportBindResultPath == null ? "" : passportBindResultPath.trim();
-        if (!path.isEmpty() && !path.startsWith("/")) {
-            path = "/" + path;
-        }
-        return base + ctx + path;
+        return IamUrlUtils.joinAbsoluteUrl(platformBaseUrl, mainShellContextPath, passportBindResultPath);
     }
 }

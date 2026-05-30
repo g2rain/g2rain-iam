@@ -6,6 +6,7 @@ import com.g2rain.iam.config.DingTalkIamProperties;
 import com.g2rain.iam.config.IamAccessProperties;
 import com.g2rain.iam.dto.SessionDto;
 import com.g2rain.iam.utils.Constants;
+import com.g2rain.iam.utils.IamUrlUtils;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.ui.ModelMap;
@@ -163,8 +164,9 @@ public class ModelAndViewService {
      * @return {@code redirect:}{@link IamAccessProperties#resolvedPlatformBaseUrl()}{@code /main/home}
      */
     public ModelAndView redirectPlatformMainHome() {
-        String base = iamAccessProperties.resolvedPlatformBaseUrl();
-        return new ModelAndView(Constants.REDIRECT + base + "/main/home");
+        String url = IamUrlUtils.joinAbsoluteUrl(
+            iamAccessProperties.resolvedPlatformBaseUrl(), "/main", "/home");
+        return new ModelAndView(Constants.REDIRECT + url);
     }
 
     /**

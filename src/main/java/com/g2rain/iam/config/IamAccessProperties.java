@@ -1,12 +1,12 @@
 package com.g2rain.iam.config;
 
+import com.g2rain.iam.utils.IamUrlUtils;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
 import java.util.Locale;
-import java.util.Objects;
 
 /**
  * IAM 自身对外可访问地址（部署时由环境变量 / Nacos 注入），用于拼 OAuth 回调、文档链接等。
@@ -38,7 +38,7 @@ public class IamAccessProperties {
      * {@link #baseUrl} 已 trim、去尾斜杠。
      */
     public String normalizedBaseUrl() {
-        return trimTrailingSlash(baseUrl);
+        return IamUrlUtils.trimTrailingSlash(baseUrl);
     }
 
     /**
@@ -47,7 +47,7 @@ public class IamAccessProperties {
      */
     public String resolvedPlatformBaseUrl() {
         String chosen = (platformBaseUrl != null && !platformBaseUrl.isBlank()) ? platformBaseUrl : baseUrl;
-        return trimTrailingSlash(chosen);
+        return IamUrlUtils.trimTrailingSlash(chosen);
     }
 
     /**
@@ -59,19 +59,6 @@ public class IamAccessProperties {
         }
         String base = baseUrl == null ? "" : baseUrl.trim().toLowerCase(Locale.ROOT);
         return base.startsWith("https://");
-    }
-
-    private static String trimTrailingSlash(String url) {
-        if (Objects.isNull(url)) {
-            return "";
-        }
-
-        String base = url.trim();
-        while (base.endsWith("/")) {
-            base = base.substring(0, base.length() - 1);
-        }
-
-        return base;
     }
 
     /**
