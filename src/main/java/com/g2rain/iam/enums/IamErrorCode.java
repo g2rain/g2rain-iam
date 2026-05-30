@@ -73,7 +73,7 @@ public enum IamErrorCode implements ErrorCode {
     /**
      * 通行证绑定钉钉失败（未分类或系统异常）
      */
-    DINGTALK_PASSPORT_BIND_FAILED("iam.50214", "绑定失败，请稍后重试");
+    DINGTALK_PASSPORT_BIND_FAILED("iam.40019", "绑定失败，请稍后重试");
 
     private final String code;
 
