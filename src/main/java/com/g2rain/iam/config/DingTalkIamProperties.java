@@ -46,9 +46,9 @@ public class DingTalkIamProperties {
     private String mainShellContextPath = "/main";
 
     /**
-     * 绑定完成后默认跳转的 main-shell 结果页路径（相对 context，如 /passport/bind-result）
+     * 绑定完成后默认跳转的 main-shell 结果页路径（相对 context，如 /passport/bind_result）
      */
-    private String passportBindResultPath = "/passport/bind-result";
+    private String passportBindResultPath = "/passport/bind_result";
 
     /**
      * 企业内部应用凭证
