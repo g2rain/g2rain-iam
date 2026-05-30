@@ -41,7 +41,7 @@ public class IdpBindingSupport {
         } catch (Exception e) {
             log.error("passport_idp_binding lookup failed idpType={} idpSubject={} idpApplicationCode={}",
                 principal.idpType(), principal.idpSubject(), query.getIdpApplicationCode(), e);
-            throw new BusinessException(IamErrorCode.DINGTALK_IDP_BINDING_LOOKUP_FAILED);
+            throw new BusinessException(IamErrorCode.IDP_BINDING_LOOKUP_FAILED);
         }
         if (!result.isSuccess()) {
             throw ExceptionConverter.of(result);
@@ -76,7 +76,7 @@ public class IdpBindingSupport {
 
     public static void requireNonBlankPassportId(String passportId) {
         if (Strings.isBlank(passportId)) {
-            throw new BusinessException(IamErrorCode.DINGTALK_SESSION_PASSPORT_MISSING);
+            throw new BusinessException(IamErrorCode.IDP_SESSION_PASSPORT_MISSING);
         }
     }
 

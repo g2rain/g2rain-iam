@@ -36,14 +36,14 @@ public enum IamErrorCode implements ErrorCode {
     DINGTALK_STREAM_USER_NOT_BOUND("iam.40012", "钉钉账号未绑定系统通行证"),
 
     /**
-     * 查询 passport_idp_binding 失败
+     * 查询 passport_idp_binding 失败（身份源通用）
      */
-    DINGTALK_IDP_BINDING_LOOKUP_FAILED("iam.50212", "身份源绑定查询失败，请稍后重试"),
+    IDP_BINDING_LOOKUP_FAILED("iam.50212", "身份源绑定查询失败，请稍后重试"),
 
     /**
-     * 钉钉登录会话缺少 passportId
+     * IdP 登录会话缺少 passportId（身份源通用）
      */
-    DINGTALK_SESSION_PASSPORT_MISSING("iam.50213", "钉钉登录会话缺少通行证标识"),
+    IDP_SESSION_PASSPORT_MISSING("iam.50213", "身份源登录会话缺少通行证标识"),
 
     /**
      * 授权码与当前 OAuth 客户端不匹配
