@@ -2,8 +2,8 @@ package com.g2rain.iam.controller;
 
 
 import com.g2rain.common.utils.Strings;
-import com.g2rain.iam.service.AuthService;
 import com.g2rain.iam.service.AuthorizationService;
+import com.g2rain.iam.service.SessionService;
 import com.g2rain.iam.service.ModelAndViewService;
 import com.g2rain.iam.utils.Constants;
 import lombok.AllArgsConstructor;
@@ -42,10 +42,7 @@ public class AuthorizeController {
      */
     private AuthorizationService authorizationService;
 
-    /**
-     * 认证服务，处理用户的会话、登录状态等业务逻辑。
-     */
-    private AuthService authService;
+    private SessionService sessionService;
     /**
      * 服务用于处理 {@link ModelAndView} 对象的创建和管理。
      * 该服务利用所提供的参数（如客户端 ID、重定向 URI 和状态）来生成适当的视图和重定向响应。
@@ -83,7 +80,7 @@ public class AuthorizeController {
         }
 
         // 检查会话是否过期，若会话已过期，跳转到登录页
-        if (authService.isSessionExpired(sessionId)) {
+        if (sessionService.isSessionExpired(sessionId)) {
             return modelAndViewService.redirectLogin(clientId, redirectUri, state);
         }
 

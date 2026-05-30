@@ -34,11 +34,8 @@ public class ModelAndViewService {
     @Resource
     private UserService userService;
 
-    /**
-     * 认证服务，提供会话管理等认证相关的业务逻辑。
-     */
     @Resource
-    private AuthService authService;
+    private SessionService sessionService;
 
     @Resource
     private IamAccessProperties iamAccessProperties;
@@ -222,7 +219,7 @@ public class ModelAndViewService {
         }
 
         // 获取当前会话，若会话为空，则跳转到登录页面
-        SessionDto session = authService.getSession(sessionId);
+        SessionDto session = sessionService.getSession(sessionId);
         if (Objects.isNull(session)) {
             return this.redirectLogin(clientId, redirectUri, state);
         }
@@ -255,7 +252,7 @@ public class ModelAndViewService {
         }
 
         // 获取当前会话，若会话为空，则跳转到登录页面
-        SessionDto session = authService.getSession(sessionId);
+        SessionDto session = sessionService.getSession(sessionId);
         if (Objects.isNull(session)) {
             return this.redirectLogin(clientId, redirectUri, state);
         }

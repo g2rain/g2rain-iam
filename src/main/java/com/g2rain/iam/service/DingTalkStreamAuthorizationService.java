@@ -31,6 +31,7 @@ public class DingTalkStreamAuthorizationService {
     private final DingTalkIamProperties dingTalkIamProperties;
     private final DingTalkLoginAdapterRouter dingTalkLoginAdapterRouter;
     private final AuthService authService;
+    private final SessionService sessionService;
     private final AuthorizationService authorizationService;
     private final UserService userService;
 
@@ -59,7 +60,7 @@ public class DingTalkStreamAuthorizationService {
             idpApplicationCode
         );
         String sessionId = authService.authenticateDingTalk(principal, false);
-        SessionDto session = authService.getSession(sessionId);
+        SessionDto session = sessionService.getSession(sessionId);
         if (session == null) {
             throw new BusinessException(SystemErrorCode.UNAUTHENTICATED, "session");
         }

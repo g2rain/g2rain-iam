@@ -15,6 +15,7 @@ import com.g2rain.iam.dto.DingTalkPassportBindStateDto;
 import com.g2rain.iam.dingtalk.DingTalkLoginAdapter;
 import com.g2rain.iam.dingtalk.DingTalkLoginAdapterRouter;
 import com.g2rain.iam.dingtalk.DingTalkPrincipal;
+import com.g2rain.iam.enums.IamErrorCode;
 import com.g2rain.iam.vo.DingTalkPassportBindStartVo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -72,14 +73,13 @@ public class DingTalkPassportBindService {
             bindDto.setPassportId(state.getPassportId());
             bindDto.setOrganId(state.getOrganId());
             bindDto.setIdpType(IdpType.DINGTALK.name());
-            bindDto.setIdpSubject(principal.unionId());
-            bindDto.setCorpId(Strings.isBlank(principal.corpId()) ? null : principal.corpId().trim());
-            bindDto.setIdpUserId(Strings.isBlank(principal.openId()) ? null : principal.openId().trim());
-            bindDto.setIdpApplicationCode(
-                principal.idpApplicationCode() == null ? "" : principal.idpApplicationCode().trim()
-            );
-            bindDto.setBindMode(principal.bindMode());
-            bindDto.setRawProfile(Strings.isBlank(principal.rawJson()) ? "{}" : principal.rawJson());
+            var idpPrincipal = principal.toIdpPrincipal();
+            bindDto.setIdpSubject(idpPrincipal.idpSubject());
+            bindDto.setCorpId(idpPrincipal.corpId());
+            bindDto.setIdpUserId(idpPrincipal.idpUserId());
+            bindDto.setIdpApplicationCode(idpPrincipal.idpApplicationCode());
+            bindDto.setBindMode(idpPrincipal.bindMode());
+            bindDto.setRawProfile(idpPrincipal.rawProfile());
             bindDto.setSessionType(state.getSessionType());
             bindDto.setAdminUser(state.getAdminUser());
 
@@ -94,12 +94,17 @@ public class DingTalkPassportBindService {
             return buildResultRedirect(
                 state.getReturnUrl(),
                 false,
-                e.getErrorCode() == null ? "BIND_FAILED" : e.getErrorCode(),
+                resolveRedirectErrorCode(e.getErrorCode()),
                 e.getMessage()
             );
         } catch (Exception e) {
             log.error("passport dingtalk bind error passportId={}", state.getPassportId(), e);
-            return buildResultRedirect(state.getReturnUrl(), false, "BIND_FAILED", "绑定失败，请稍后重试");
+            return buildResultRedirect(
+                state.getReturnUrl(),
+                false,
+                IamErrorCode.DINGTALK_PASSPORT_BIND_FAILED.code(),
+                IamErrorCode.DINGTALK_PASSPORT_BIND_FAILED.messageTemplate()
+            );
         }
     }
 
@@ -112,7 +117,14 @@ public class DingTalkPassportBindService {
             .orElseGet(() -> dingTalkIamProperties.defaultPassportBindResultUrl(
                 iamAccessProperties.resolvedPlatformBaseUrl()
             ));
-        return buildResultRedirect(returnUrl, false, "INVALID_STATE", message);
+        return buildResultRedirect(
+            returnUrl,
+            false,
+            IamErrorCode.DINGTALK_PASSPORT_BIND_INVALID_STATE.code(),
+            Strings.isBlank(message)
+                ? IamErrorCode.DINGTALK_PASSPORT_BIND_INVALID_STATE.messageTemplate()
+                : message
+        );
     }
 
     private String resolveBindMode(String requested) {
@@ -123,7 +135,7 @@ public class DingTalkPassportBindService {
         if (Strings.isNotBlank(configured)) {
             return configured.trim();
         }
-        throw new BusinessException(com.g2rain.iam.enums.IamErrorCode.DINGTALK_PASSPORT_BIND_CONTEXT_INVALID);
+        throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_CONTEXT_INVALID);
     }
 
     private String resolveReturnUrl(String requested) {
@@ -131,6 +143,12 @@ public class DingTalkPassportBindService {
             return requested.trim();
         }
         return dingTalkIamProperties.defaultPassportBindResultUrl(iamAccessProperties.resolvedPlatformBaseUrl());
+    }
+
+    private static String resolveRedirectErrorCode(String errorCode) {
+        return Strings.isBlank(errorCode)
+            ? IamErrorCode.DINGTALK_PASSPORT_BIND_FAILED.code()
+            : errorCode;
     }
 
     private static String buildResultRedirect(String returnUrl, boolean success, String code, String message) {

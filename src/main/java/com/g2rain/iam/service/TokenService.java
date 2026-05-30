@@ -101,6 +101,9 @@ public class TokenService {
     @Resource
     private ApplicationClient applicationClient;
 
+    @Resource
+    private SessionService sessionService;
+
     /**
      * 与 {@link com.g2rain.iam.config.RedisConfig#redisTemplate} 一致，用于授权码原子消费（Lua GET+DEL）。
      */
@@ -233,10 +236,7 @@ public class TokenService {
 
         validateApplicationDPoP(applicationDPoP, applicationResult.getData());
 
-        SessionDto session = genericRedisHelper.get(
-            RedisKeyRule.SESSION.format(codeDto.getSessionId()),
-            SessionDto.class
-        );
+        SessionDto session = sessionService.getSession(codeDto.getSessionId());
 
         if (Objects.isNull(session)) {
             throw new BusinessException(SystemErrorCode.UNAUTHENTICATED, "请先登录");
