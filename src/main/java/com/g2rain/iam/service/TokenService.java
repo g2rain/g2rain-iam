@@ -101,6 +101,9 @@ public class TokenService {
     @Resource
     private ApplicationClient applicationClient;
 
+    @Resource
+    private SessionService sessionService;
+
     /**
      * 与 {@link com.g2rain.iam.config.RedisConfig#redisTemplate} 一致，用于授权码原子消费（Lua GET+DEL）。
      */
@@ -233,10 +236,7 @@ public class TokenService {
 
         validateApplicationDPoP(applicationDPoP, applicationResult.getData());
 
-        SessionDto session = genericRedisHelper.get(
-            RedisKeyRule.SESSION.format(codeDto.getSessionId()),
-            SessionDto.class
-        );
+        SessionDto session = sessionService.getSession(codeDto.getSessionId());
 
         if (Objects.isNull(session)) {
             throw new BusinessException(SystemErrorCode.UNAUTHENTICATED, "请先登录");
@@ -281,6 +281,7 @@ public class TokenService {
         }
 
         // 校验客户端 DPoP Proof
+        JWK jwk;
         String applicationCode;
         try {
             SignedJWT signedJWT = SignedJWT.parse(clientDPoP);
@@ -292,7 +293,7 @@ public class TokenService {
             }
 
             // 校验 JWK 类型
-            JWK jwk = header.getJWK();
+            jwk = header.getJWK();
             if (!(jwk instanceof ECKey ecKey)) {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWK");
             }
@@ -334,9 +335,12 @@ public class TokenService {
 
             String payload = signedJWT.getJWTClaimsSet().toString();
             TokenJWTPayload body = jsonCodec.str2obj(payload, TokenJWTPayload.class);
-            Long refreshExpireAt = body.getRefreshExpireAt();
+            if (!IamUtils.matches(body.getClientPublicKey(), jwk)) {
+                throw new BusinessException(IamErrorCode.TOKEN_DPOP_KEY_MISMATCH);
+            }
 
             // 过期
+            Long refreshExpireAt = body.getRefreshExpireAt();
             if (Objects.isNull(refreshExpireAt) || refreshExpireAt < Instant.now().getEpochSecond()) {
                 throw new BusinessException(IamErrorCode.REFRESH_TOKEN_EXPIRED);
             }
@@ -622,6 +626,47 @@ public class TokenService {
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Application DPoP Proof");
         } catch (JOSEException | InvalidKeySpecException | NoSuchAlgorithmException e) {
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Application DPoP Proof JWS");
+        }
+    }
+
+    /**
+     * 校验 Bearer access token 并返回 JWT 载荷（用于通行证绑定等已登录场景）
+     *
+     * @param authorization Authorization 头（可含 Bearer 前缀）
+     * @return 已校验的 token 载荷
+     */
+    public TokenJWTPayload requireValidAccessToken(String authorization) {
+        if (Strings.isBlank(authorization)) {
+            throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_UNAUTHORIZED);
+        }
+        try {
+            if (Strings.startsWith(authorization, "Bearer ")) {
+                authorization = authorization.substring(7);
+            }
+            SignedJWT signedJWT = SignedJWT.parse(authorization);
+            JWSHeader header = signedJWT.getHeader();
+            ECKey publicKey = tokenKeyManager.getKey(header.getKeyID());
+            if (Objects.isNull(publicKey)) {
+                throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_UNAUTHORIZED);
+            }
+            JWSVerifier verifier = new ECDSAVerifier(publicKey);
+            if (!signedJWT.verify(verifier)) {
+                throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_UNAUTHORIZED);
+            }
+            TokenJWTPayload body = jsonCodec.str2obj(signedJWT.getJWTClaimsSet().toString(), TokenJWTPayload.class);
+            Long expireAt = body.getExpireAt();
+            if (Objects.isNull(expireAt) || expireAt < Instant.now().getEpochSecond()) {
+                throw new BusinessException(IamErrorCode.REFRESH_TOKEN_EXPIRED);
+            }
+            if (body.getPassportId() == null || body.getPassportId() <= 0L) {
+                throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_CONTEXT_INVALID);
+            }
+            if (body.getOrganId() == null || body.getOrganId() <= 0L) {
+                throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_CONTEXT_INVALID);
+            }
+            return body;
+        } catch (ParseException | JOSEException e) {
+            throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_UNAUTHORIZED);
         }
     }
 }

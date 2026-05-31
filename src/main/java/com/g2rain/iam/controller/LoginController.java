@@ -3,6 +3,7 @@ package com.g2rain.iam.controller;
 import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.service.AuthService;
 import com.g2rain.iam.service.IamSessionCookieService;
+import com.g2rain.iam.service.SessionService;
 import com.g2rain.iam.service.ModelAndViewService;
 import com.g2rain.iam.utils.Constants;
 import jakarta.servlet.http.Cookie;
@@ -48,9 +49,8 @@ public class LoginController {
      */
     private final AuthService authService;
 
-    /**
-     * ModelAndView 服务，用于处理视图重定向逻辑。
-     */
+    private final SessionService sessionService;
+
     private final ModelAndViewService modelAndViewService;
 
     private final IamSessionCookieService iamSessionCookieService;
@@ -126,7 +126,7 @@ public class LoginController {
         // 删除 Redis 中的会话缓存
         if (Strings.isNotBlank(sessionId)) {
             try {
-                authService.logout(sessionId);
+                sessionService.logout(sessionId);
                 log.debug("用户登出成功, sessionId: {}", sessionId);
             } catch (Exception e) {
                 log.warn("删除会话缓存失败, sessionId: {}, error: {}", sessionId, e.getMessage());
