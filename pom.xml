@@ -62,9 +62,9 @@
         <spring.alibaba.nacos.version>2025.1.0.0</spring.alibaba.nacos.version>
         <commons.fileupload.version>1.6.0</commons.fileupload.version>
         <nimbus.jose.jwt.version>10.9</nimbus.jose.jwt.version>
-        <g2rain.aegis.core.version>1.0.0</g2rain.aegis.core.version>
-        <g2rain.data.redis.version>1.0.0</g2rain.data.redis.version>
-        <g2rain.feign.plus.version>1.0.0</g2rain.feign.plus.version>
+        <g2rain.aegis.core.version>1.0.2</g2rain.aegis.core.version>
+        <g2rain.data.redis.version>1.0.2</g2rain.data.redis.version>
+        <g2rain.feign.plus.version>1.0.2</g2rain.feign.plus.version>
         <g2rain.basis.api.version>1.0.0</g2rain.basis.api.version>
         <springdoc.openapi.version>3.0.2</springdoc.openapi.version>
         <commons.lang3.version>3.20.0</commons.lang3.version>
