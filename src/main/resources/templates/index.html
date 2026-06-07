@@ -15,7 +15,7 @@
         </a>
         <div class="landing-header-links">
             <a th:if="${loginViaRedirectUri}" th:href="${loginRedirectUri}" class="link-muted">立即登录</a>
-            <a th:unless="${loginViaRedirectUri}" th:href="@{/main/home}" class="link-muted">立即登录</a>
+            <a th:unless="${loginViaRedirectUri}" th:href="|${platformBaseUrl}/main/home|" class="link-muted">立即登录</a>
         </div>
     </header>
 
@@ -47,7 +47,7 @@
             <p class="desc">选择一个操作继续：登录系统、注册账号，或退出当前登录状态。</p>
             <div class="action-links">
                 <a th:if="${loginViaRedirectUri}" th:href="${loginRedirectUri}" class="btn btn-primary btn-lg">立即登录</a>
-                <a th:unless="${loginViaRedirectUri}" th:href="@{/main/home}" class="btn btn-primary btn-lg">立即登录</a>
+                <a th:unless="${loginViaRedirectUri}" th:href="|${platformBaseUrl}/main/home|" class="btn btn-primary btn-lg">立即登录</a>
                 <a th:href="@{/auth/register.html}" class="btn btn-outline btn-lg">注册账号</a>
                 <a th:href="@{/auth/logout}" class="link-muted">退出当前登录</a>
             </div>

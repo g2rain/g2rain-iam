@@ -52,4 +52,24 @@ public class SessionDto {
      * </p>
      */
     private String name;
+
+    /**
+     * 身份源类型[DINGTALK:钉钉]；密码登录时为空
+     */
+    private String idpType;
+
+    /**
+     * IdP 稳定主体（如钉钉 unionId）；密码登录时为空
+     */
+    private String idpSubject;
+
+    /**
+     * IdP 接入形态[INTERNAL:企业内部应用, THIRD_PARTY:第三方企业应用]
+     */
+    private String idpBindMode;
+
+    /**
+     * IdP 应用编码（如钉钉 OAuth clientId）
+     */
+    private String idpApplicationCode;
 }

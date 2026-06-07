@@ -2,6 +2,7 @@ package com.g2rain.iam.vo;
 
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -28,17 +29,20 @@ import lombok.Setter;
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
+@Schema(description = "访问令牌 VO")
 public class TokenVo {
 
     /**
      * 访问令牌字符串，通常用于 API 请求或身份验证。
      */
     @JsonProperty("token")
+    @Schema(description = "JWT 访问令牌")
     private String token;
 
     /**
      * Token 对应的密钥 ID，用于区分签发或验证 Token 的密钥。
      */
     @JsonProperty("keyId")
+    @Schema(description = "签发密钥 ID")
     private String keyId;
 }

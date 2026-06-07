@@ -2,6 +2,7 @@ package com.g2rain.iam.service;
 
 
 import com.g2rain.basis.dto.ApplicationSelectDto;
+import com.g2rain.basis.dto.LoginTokenDto;
 import com.g2rain.basis.vo.ApplicationVo;
 import com.g2rain.basis.vo.PublicKeyDescriptorVo;
 import com.g2rain.common.enums.SessionType;
@@ -39,6 +40,8 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import java.security.KeyFactory;
@@ -97,6 +100,34 @@ public class TokenService {
 
     @Resource
     private ApplicationClient applicationClient;
+
+    @Resource
+    private SessionService sessionService;
+
+    /**
+     * 与 {@link com.g2rain.iam.config.RedisConfig#redisTemplate} 一致，用于授权码原子消费（Lua GET+DEL）。
+     */
+    @Resource
+    private RedisTemplate<String, Object> redisTemplate;
+
+    /**
+     * 原子读取并删除授权码对应的 Redis 值（Lua 内 GET 后 DEL，避免重放）。
+     * 脚本返回类型为 {@link Object}：{@link RedisTemplate} 的 JSON value 序列化器会把 GET 到的 JSON 反序列化为
+     * {@link AuthorizationCodeDto}，而非原始 {@link String}（与 {@code setResultType} 声明无关）。
+     */
+    private static final DefaultRedisScript<Object> AUTH_CODE_CONSUME_SCRIPT;
+
+    static {
+        DefaultRedisScript<Object> script = new DefaultRedisScript<>();
+        script.setScriptText(
+            "local v = redis.call('GET', KEYS[1])\n"
+                + "if v == false then return nil end\n"
+                + "redis.call('DEL', KEYS[1])\n"
+                + "return v"
+        );
+        script.setResultType(Object.class);
+        AUTH_CODE_CONSUME_SCRIPT = script;
+    }
 
     /**
      * 构造方法，注入所需依赖
@@ -189,8 +220,12 @@ public class TokenService {
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWS");
         }
 
-        // 获取 redis 中存储的 AuthorizationCodeDto 对象信息
-        AuthorizationCodeDto codeDto = getAuthorizationByCode(code);
+        // 原子消费授权码（GET+DEL），防止同一 code 多次换 token
+        AuthorizationCodeDto codeDto = consumeAuthorizationByCode(code);
+        String boundClientId = Strings.isBlank(codeDto.getClientId()) ? null : codeDto.getClientId().trim();
+        if (Strings.isBlank(boundClientId) || !boundClientId.equals(clientId.trim())) {
+            throw new BusinessException(IamErrorCode.OAUTH_AUTHORIZATION_CODE_CLIENT_MISMATCH);
+        }
         Long userId = IamUtils.parseLongSafe(codeDto.getUserId(), "userId");
 
         // 校验 应用 DPoP Proof
@@ -201,22 +236,29 @@ public class TokenService {
 
         validateApplicationDPoP(applicationDPoP, applicationResult.getData());
 
-        Result<TokenJWTPayload> result = loginTokenClient.fetchTokenContext(userId, applicationCode);
-        if (!result.isSuccess()) {
-            throw ExceptionConverter.of(result);
-        }
-
-        SessionDto session = genericRedisHelper.get(
-            RedisKeyRule.SESSION.format(codeDto.getSessionId()),
-            SessionDto.class
-        );
+        SessionDto session = sessionService.getSession(codeDto.getSessionId());
 
         if (Objects.isNull(session)) {
             throw new BusinessException(SystemErrorCode.UNAUTHENTICATED, "请先登录");
         }
 
+        Long sessionPassportId = IamUtils.parseLongSafe(session.getPassportId(), "passportId");
+
+        Result<TokenJWTPayload> result = loginTokenClient.fetchTokenContext(
+            sessionPassportId,
+            userId,
+            applicationCode,
+            codeDto.getThirdPartyIdpLogin(),
+            codeDto.getIdpType(),
+            codeDto.getIdpSubject(),
+            codeDto.getIdpApplicationCode()
+        );
+        if (!result.isSuccess()) {
+            throw ExceptionConverter.of(result);
+        }
+
         TokenJWTPayload payload = result.getData();
-        payload.setPassportId(Long.valueOf(session.getPassportId()));
+        payload.setPassportId(sessionPassportId);
         // 如果是账号身份, 设置一下账号名称
         if (SessionType.PASSPORT.equals(payload.getSessionType())) {
             payload.setName(session.getName());
@@ -224,7 +266,7 @@ public class TokenService {
 
         payload.setClientId(clientId);
         payload.setClientPublicKey(publicKeyString);
-        return doGenerateToken(jsonCodec.obj2map(payload));
+        return doGenerateToken(applicationCode, payload);
     }
 
     /**
@@ -239,6 +281,7 @@ public class TokenService {
         }
 
         // 校验客户端 DPoP Proof
+        JWK jwk;
         String applicationCode;
         try {
             SignedJWT signedJWT = SignedJWT.parse(clientDPoP);
@@ -250,7 +293,7 @@ public class TokenService {
             }
 
             // 校验 JWK 类型
-            JWK jwk = header.getJWK();
+            jwk = header.getJWK();
             if (!(jwk instanceof ECKey ecKey)) {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWK");
             }
@@ -292,9 +335,12 @@ public class TokenService {
 
             String payload = signedJWT.getJWTClaimsSet().toString();
             TokenJWTPayload body = jsonCodec.str2obj(payload, TokenJWTPayload.class);
-            Long refreshExpireAt = body.getRefreshExpireAt();
+            if (!IamUtils.matches(body.getClientPublicKey(), jwk)) {
+                throw new BusinessException(IamErrorCode.TOKEN_DPOP_KEY_MISMATCH);
+            }
 
             // 过期
+            Long refreshExpireAt = body.getRefreshExpireAt();
             if (Objects.isNull(refreshExpireAt) || refreshExpireAt < Instant.now().getEpochSecond()) {
                 throw new BusinessException(IamErrorCode.REFRESH_TOKEN_EXPIRED);
             }
@@ -324,7 +370,7 @@ public class TokenService {
                 application.getRefreshTokenExpiresIn()
             )).getEpochSecond());
 
-            return doGenerateToken(jsonCodec.obj2map(body));
+            return doGenerateToken(applicationCode, body);
         } catch (JOSEException | ParseException e) {
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "token");
         }
@@ -410,7 +456,8 @@ public class TokenService {
                 throw new BusinessException(IamErrorCode.REFRESH_TOKEN_EXPIRED);
             }
 
-            Result<TokenJWTPayload> result = loginTokenClient.fetchTokenContext(userId, applicationCode);
+            Result<TokenJWTPayload> result = loginTokenClient.fetchTokenContext(
+                null, userId, applicationCode, null, null, null, null);
             if (!result.isSuccess()) {
                 throw ExceptionConverter.of(result);
             }
@@ -419,7 +466,7 @@ public class TokenService {
             payload.setPassportId(body.getPassportId());
             payload.setClientId(clientId);
             payload.setClientPublicKey(publicKeyString);
-            return doGenerateToken(jsonCodec.obj2map(payload));
+            return doGenerateToken(applicationCode, payload);
         } catch (ParseException e) {
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof");
         } catch (JOSEException e) {
@@ -430,11 +477,13 @@ public class TokenService {
     /**
      * 使用当前激活的密钥生成 JWT，并进行签名。
      *
-     * @param payloadClaims JWT Payload 中的自定义声明，可以为 {@code null}
+     * @param applicationCode 应用编码
+     * @param payload         JWT Payload 中的自定义声明，可以为 {@code null}
      * @return {@link TokenVo} 生成并签名后的 Token
      * @throws BusinessException 当未找到有效密钥或生成 JWT 失败时抛出
      */
-    private TokenVo doGenerateToken(Map<String, Object> payloadClaims) {
+    private TokenVo doGenerateToken(String applicationCode, TokenJWTPayload payload) {
+        Map<String, Object> payloadClaims = jsonCodec.obj2map(payload);
         ECKey ecKey = tokenKeyManager.getActiveKey();
         if (Objects.isNull(ecKey)) {
             throw new BusinessException(SystemErrorCode.JWT_KEY_PAIR_NON_EXIST);
@@ -461,36 +510,82 @@ public class TokenService {
 
             // 签名
             signedJWT.sign(new ECDSASigner(ecKey.toECPrivateKey()));
+
+            // 生成 Token
+            TokenVo token = new TokenVo(signedJWT.serialize(), keyID);
+
+            // 保存生成 Token 的日志记录
+            saveLoginToken(applicationCode, payload);
             // 返回 Token
-            return new TokenVo(signedJWT.serialize(), keyID);
+            return token;
         } catch (Exception e) {
+            log.error(e.getMessage(), e);
             throw new BusinessException(SystemErrorCode.GENERATE_JWT_ERROR);
         }
     }
 
     /**
-     * 根据授权码获取授权信息。
-     * <p>从 [Redis](https://redis.io) 中检索并验证授权码的有效性，若不存在或已过期则抛出异常。</p>
+     * 保存登陆日志
      *
-     * @param code 客户端提交的授权码 (Authorization Code)
-     * @return {@link AuthorizationCodeDto} 授权码对应的元数据对象
-     * @throws BusinessException 如果 code 为空或在缓存中未找到匹配项
+     * @param applicationCode 应用编码
+     * @param payload         token JWT 载荷
      */
-    private AuthorizationCodeDto getAuthorizationByCode(String code) {
+    private void saveLoginToken(String applicationCode, TokenJWTPayload payload) {
+        LoginTokenDto loginToken = new LoginTokenDto();
+        loginToken.setClientId(payload.getClientId());
+        if (Objects.nonNull(payload.getSessionType())) {
+            loginToken.setSessionType(payload.getSessionType().name());
+        }
+
+        loginToken.setOrganId(payload.getOrganId());
+        if (Objects.nonNull(payload.getOrganType())) {
+            loginToken.setOrganType(payload.getOrganType().name());
+        }
+
+        loginToken.setAdminCompany(payload.isAdminCompany());
+        loginToken.setPassportId(payload.getPassportId());
+        loginToken.setUserId(payload.getUserId());
+        loginToken.setRealName(payload.getName());
+        loginToken.setAdminUser(payload.isAdminUser());
+        loginTokenClient.save(applicationCode, loginToken);
+    }
+
+    /**
+     * 原子读取并删除授权码元数据（Lua 脚本内 GET 后 DEL），与发码时使用的 Redis 键、JSON 序列化约定一致。
+     *
+     * @param code 客户端提交的授权码
+     * @return 已消费的 {@link AuthorizationCodeDto}
+     * @throws BusinessException code 为空、Redis 中不存在或 JSON 无法解析
+     */
+    private AuthorizationCodeDto consumeAuthorizationByCode(String code) {
         if (Strings.isBlank(code)) {
             throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "code");
         }
-
-        AuthorizationCodeDto codeDto = genericRedisHelper.get(
-            RedisKeyRule.AUTHORIZATION_CODE.format(code),
-            AuthorizationCodeDto.class
-        );
-
-        if (Objects.isNull(codeDto)) {
+        String redisKey = RedisKeyRule.AUTHORIZATION_CODE.format(code);
+        Object raw = redisTemplate.execute(AUTH_CODE_CONSUME_SCRIPT, List.of(redisKey));
+        if (raw == null) {
             throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
         }
-
-        return codeDto;
+        if (raw instanceof AuthorizationCodeDto dto) {
+            return dto;
+        }
+        if (raw instanceof String s) {
+            if (Strings.isBlank(s)) {
+                throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
+            }
+            try {
+                return jsonCodec.str2obj(s, AuthorizationCodeDto.class);
+            } catch (RuntimeException e) {
+                log.warn("authorization code payload deserialize failed after consume, key={}", redisKey, e);
+                throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
+            }
+        }
+        log.warn(
+            "authorization code redis value unexpected type {} after consume, key={}",
+            raw.getClass().getName(),
+            redisKey
+        );
+        throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
     }
 
     /**
@@ -531,6 +626,47 @@ public class TokenService {
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Application DPoP Proof");
         } catch (JOSEException | InvalidKeySpecException | NoSuchAlgorithmException e) {
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Application DPoP Proof JWS");
+        }
+    }
+
+    /**
+     * 校验 Bearer access token 并返回 JWT 载荷（用于通行证绑定等已登录场景）
+     *
+     * @param authorization Authorization 头（可含 Bearer 前缀）
+     * @return 已校验的 token 载荷
+     */
+    public TokenJWTPayload requireValidAccessToken(String authorization) {
+        if (Strings.isBlank(authorization)) {
+            throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_UNAUTHORIZED);
+        }
+        try {
+            if (Strings.startsWith(authorization, "Bearer ")) {
+                authorization = authorization.substring(7);
+            }
+            SignedJWT signedJWT = SignedJWT.parse(authorization);
+            JWSHeader header = signedJWT.getHeader();
+            ECKey publicKey = tokenKeyManager.getKey(header.getKeyID());
+            if (Objects.isNull(publicKey)) {
+                throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_UNAUTHORIZED);
+            }
+            JWSVerifier verifier = new ECDSAVerifier(publicKey);
+            if (!signedJWT.verify(verifier)) {
+                throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_UNAUTHORIZED);
+            }
+            TokenJWTPayload body = jsonCodec.str2obj(signedJWT.getJWTClaimsSet().toString(), TokenJWTPayload.class);
+            Long expireAt = body.getExpireAt();
+            if (Objects.isNull(expireAt) || expireAt < Instant.now().getEpochSecond()) {
+                throw new BusinessException(IamErrorCode.REFRESH_TOKEN_EXPIRED);
+            }
+            if (body.getPassportId() == null || body.getPassportId() <= 0L) {
+                throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_CONTEXT_INVALID);
+            }
+            if (body.getOrganId() == null || body.getOrganId() <= 0L) {
+                throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_CONTEXT_INVALID);
+            }
+            return body;
+        } catch (ParseException | JOSEException e) {
+            throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_UNAUTHORIZED);
         }
     }
 }

@@ -2,8 +2,11 @@ package com.g2rain.iam.service;
 
 import com.g2rain.common.exception.SystemErrorCode;
 import com.g2rain.common.utils.Strings;
+import com.g2rain.iam.config.DingTalkIamProperties;
+import com.g2rain.iam.config.IamAccessProperties;
 import com.g2rain.iam.dto.SessionDto;
 import com.g2rain.iam.utils.Constants;
+import com.g2rain.iam.utils.IamUrlUtils;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.ui.ModelMap;
@@ -32,11 +35,14 @@ public class ModelAndViewService {
     @Resource
     private UserService userService;
 
-    /**
-     * 认证服务，提供会话管理等认证相关的业务逻辑。
-     */
     @Resource
-    private AuthService authService;
+    private SessionService sessionService;
+
+    @Resource
+    private IamAccessProperties iamAccessProperties;
+
+    @Resource
+    private DingTalkIamProperties dingTalkIamProperties;
 
     /**
      * 当客户端 ID 或重定向 URI 为空时，返回错误页面。
@@ -106,7 +112,19 @@ public class ModelAndViewService {
         if (Strings.isNotBlank(username)) {
             model.addAttribute("username", username);
         }
+        String bindMode = loginPageDingTalkBindModeOrNull();
+        if (bindMode != null) {
+            model.addAttribute("dingTalkBindMode", bindMode);
+        }
         return modelAndView;
+    }
+
+    /**
+     * @return 非空则启用登录页钉钉入口；未配置时返回 {@code null}
+     */
+    private String loginPageDingTalkBindModeOrNull() {
+        String m = dingTalkIamProperties.getLoginPageBindMode();
+        return Strings.isBlank(m) ? null : m.trim();
     }
 
     /**
@@ -138,6 +156,17 @@ public class ModelAndViewService {
      */
     public ModelAndView redirectLogin(String clientId, String redirectUri, String state) {
         return redirectLogin(clientId, redirectUri, state, null, null);
+    }
+
+    /**
+     * 重定向到业务平台控制台首页（无 OAuth {@code clientId} 时，注册完成后的默认去向）。
+     *
+     * @return {@code redirect:}{@link IamAccessProperties#resolvedPlatformBaseUrl()}{@code /main/home}
+     */
+    public ModelAndView redirectPlatformMainHome() {
+        String url = IamUrlUtils.joinAbsoluteUrl(
+            iamAccessProperties.resolvedPlatformBaseUrl(), "/main", "/home");
+        return new ModelAndView(Constants.REDIRECT + url);
     }
 
     /**
@@ -192,7 +221,7 @@ public class ModelAndViewService {
         }
 
         // 获取当前会话，若会话为空，则跳转到登录页面
-        SessionDto session = authService.getSession(sessionId);
+        SessionDto session = sessionService.getSession(sessionId);
         if (Objects.isNull(session)) {
             return this.redirectLogin(clientId, redirectUri, state);
         }
@@ -225,12 +254,13 @@ public class ModelAndViewService {
         }
 
         // 获取当前会话，若会话为空，则跳转到登录页面
-        SessionDto session = authService.getSession(sessionId);
+        SessionDto session = sessionService.getSession(sessionId);
         if (Objects.isNull(session)) {
             return this.redirectLogin(clientId, redirectUri, state);
         }
-        // 生成授权码
-        String code = authorizationService.generateAuthorizationCode(session, clientId, userId);
+        // 生成授权码（会话带 IdP 信息时视为外部身份源授权链路）
+        boolean thirdPartyIdpLogin = Strings.isNotBlank(session.getIdpType());
+        String code = authorizationService.generateAuthorizationCode(session, clientId, userId, thirdPartyIdpLogin);
 
         // 构造重定向 URL
         UriComponentsBuilder redirectUrl = UriComponentsBuilder.fromUriString(redirectUri)
