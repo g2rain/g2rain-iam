@@ -11,6 +11,7 @@ import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.List;
 
 
 /**
@@ -80,5 +81,29 @@ public class AuthorizationService {
      */
     public String generateAuthorizationCode(SessionDto session, String clientId, String userId) {
         return generateAuthorizationCode(session, clientId, userId, false);
+    }
+
+    /**
+     * 生成匿名授权码并存储在 Redis 中（无 session/user）。
+     *
+     * @param clientId 客户端 ID（DPoP kid）
+     * @param organId  机构 ID
+     * @param roleIds  角色 ID 列表
+     * @return 授权码
+     */
+    public String generateAnonymousAuthorizationCode(String clientId, Long organId, List<Long> roleIds) {
+        AuthorizationCodeDto codeDto = new AuthorizationCodeDto();
+        codeDto.setClientId(clientId);
+        codeDto.setAnonymous(true);
+        codeDto.setOrganId(organId);
+        codeDto.setRoleIds(roleIds);
+
+        String code = IamUtils.generateAuthorizationCode();
+        genericRedisHelper.set(
+            RedisKeyRule.AUTHORIZATION_CODE.format(code),
+            codeDto,
+            Duration.ofMinutes(10)
+        );
+        return code;
     }
 }
