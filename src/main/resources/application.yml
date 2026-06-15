@@ -98,6 +98,11 @@ g2rain:
     # 业务平台（控制台）对外根地址（无尾斜杠），用于首页「立即登录」在无 redirectUri 时跳转到 /main/home。
     # 未配置时回退为 base-url（同机部署）；前后端分离时设为前端或网关地址，如 https://console.example.com
     platform-base-url: ${PLATFORM_BASE_URL:}
+    # 匿名 OAuth：GET /auth/authorize?state=anonymous 跳过登录直接发码（默认关闭）
+    anonymous:
+      enabled: ${IAM_ANONYMOUS_ENABLED:false}
+      organ-id: ${IAM_ANONYMOUS_ORGAN_ID:}
+      role-ids: ${IAM_ANONYMOUS_ROLE_IDS:}
     dingtalk:
       callback-path: /auth/dingtalk/callback
       # 登录页「钉钉登录」的 bindMode（INTERNAL / THIRD_PARTY）；留空则不展示钉钉入口

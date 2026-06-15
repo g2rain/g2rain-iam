@@ -5,6 +5,7 @@ import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.service.AuthorizationService;
 import com.g2rain.iam.service.ModelAndViewService;
 import com.g2rain.iam.service.SessionService;
+import com.g2rain.iam.utils.AuthorizationState;
 import com.g2rain.iam.utils.Constants;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Controller;
@@ -72,6 +73,10 @@ public class AuthorizeController {
         // 检查 clientId 和 redirectUri 是否为空，若为空则返回错误页面
         if (Strings.isBlank(clientId) || Strings.isBlank(redirectUri)) {
             return modelAndViewService.redirectError(clientId, redirectUri, state);
+        }
+
+        if (AuthorizationState.isAnonymous(state)) {
+            return modelAndViewService.redirectAnonymousCallback(clientId, redirectUri, state);
         }
 
         // 检查 sessionId 是否为空，若为空说明未登录，跳转到登录页
