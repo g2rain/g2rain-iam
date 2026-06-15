@@ -73,7 +73,17 @@ public enum IamErrorCode implements ErrorCode {
     /**
      * 通行证绑定钉钉失败（未分类或系统异常）
      */
-    DINGTALK_PASSPORT_BIND_FAILED("iam.40019", "绑定失败，请稍后重试");
+    DINGTALK_PASSPORT_BIND_FAILED("iam.40019", "绑定失败，请稍后重试"),
+
+    /**
+     * 匿名 OAuth 授权未启用或配置不完整
+     */
+    ANONYMOUS_AUTH_DISABLED("iam.40020", "匿名授权未启用或配置不完整"),
+
+    /**
+     * 匿名 token 不允许 refresh
+     */
+    ANONYMOUS_REFRESH_NOT_ALLOWED("iam.40021", "匿名令牌不允许刷新");
 
     private final String code;
 

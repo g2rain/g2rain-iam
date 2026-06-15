@@ -55,6 +55,11 @@ public class Constants {
     public static final String STATE = "state";
 
     /**
+     * 匿名 OAuth 授权的 state 标识值。
+     */
+    public static final String STATE_ANONYMOUS = "anonymous";
+
+    /**
      * 授权码字段名，用于 OAuth2 等认证流程中传递授权码。
      */
     public static final String CODE = "code";

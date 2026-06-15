@@ -5,6 +5,8 @@ import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.config.DingTalkIamProperties;
 import com.g2rain.iam.config.IamAccessProperties;
 import com.g2rain.iam.dto.SessionDto;
+import com.g2rain.iam.enums.IamErrorCode;
+import com.g2rain.iam.utils.AuthorizationState;
 import com.g2rain.iam.utils.Constants;
 import com.g2rain.iam.utils.IamUrlUtils;
 import jakarta.annotation.Resource;
@@ -83,6 +85,18 @@ public class ModelAndViewService {
         }
 
         return null;
+    }
+
+    /**
+     * OAuth 流程错误页（clientId / redirectUri 已校验非空）。
+     */
+    public ModelAndView redirectOAuthError(String clientId, String redirectUri, String state, String errorMessage) {
+        ModelAndView modelAndView = new ModelAndView("error");
+        ModelMap model = modelAndView.getModelMap();
+        model.addAttribute("error", errorMessage);
+        model.addAttribute("redirectUri", redirectUri);
+        model.addAttribute("state", state != null ? state : "");
+        return modelAndView;
     }
 
 
@@ -269,6 +283,38 @@ public class ModelAndViewService {
 
         if (Strings.isNotBlank(state)) {
             redirectUrl.queryParam(Constants.STATE, state);
+        }
+
+        return new ModelAndView(Constants.REDIRECT + redirectUrl.build().toUriString());
+    }
+
+    /**
+     * 匿名 OAuth 授权：跳过登录/会话，直接发码并重定向到客户端回调地址。
+     */
+    public ModelAndView redirectAnonymousCallback(String clientId, String redirectUri, String state) {
+        IamAccessProperties.AnonymousAuth anonymous = iamAccessProperties.getAnonymous();
+        if (!anonymous.isConfigured()) {
+            return redirectOAuthError(
+                clientId,
+                redirectUri,
+                AuthorizationState.resolveCallbackState(state),
+                IamErrorCode.ANONYMOUS_AUTH_DISABLED.getMessage()
+            );
+        }
+
+        String code = authorizationService.generateAnonymousAuthorizationCode(
+            clientId,
+            anonymous.getOrganId(),
+            anonymous.getRoleIds()
+        );
+
+        UriComponentsBuilder redirectUrl = UriComponentsBuilder.fromUriString(redirectUri)
+            .queryParam(Constants.CLIENT_ID, clientId)
+            .queryParam(Constants.CODE, code);
+
+        String callbackState = AuthorizationState.resolveCallbackState(state);
+        if (Strings.isNotBlank(callbackState)) {
+            redirectUrl.queryParam(Constants.STATE, callbackState);
         }
 
         return new ModelAndView(Constants.REDIRECT + redirectUrl.build().toUriString());

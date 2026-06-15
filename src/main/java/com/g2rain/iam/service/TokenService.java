@@ -226,15 +226,20 @@ public class TokenService {
         if (Strings.isBlank(boundClientId) || !boundClientId.equals(clientId.trim())) {
             throw new BusinessException(IamErrorCode.OAUTH_AUTHORIZATION_CODE_CLIENT_MISMATCH);
         }
-        Long userId = IamUtils.parseLongSafe(codeDto.getUserId(), "userId");
 
-        // 校验 应用 DPoP Proof
+        // 校验应用 DPoP Proof
         Result<PublicKeyDescriptorVo> applicationResult = applicationClient.getPublicKeyDescriptor(applicationCode);
         if (!applicationResult.isSuccess()) {
             throw ExceptionConverter.of(applicationResult);
         }
 
         validateApplicationDPoP(applicationDPoP, applicationResult.getData());
+
+        if (Boolean.TRUE.equals(codeDto.getAnonymous())) {
+            return anonymousCode2token(clientId, applicationCode, publicKeyString, codeDto);
+        }
+
+        Long userId = IamUtils.parseLongSafe(codeDto.getUserId(), "userId");
 
         SessionDto session = sessionService.getSession(codeDto.getSessionId());
 
@@ -264,6 +269,26 @@ public class TokenService {
             payload.setName(session.getName());
         }
 
+        payload.setClientId(clientId);
+        payload.setClientPublicKey(publicKeyString);
+        return doGenerateToken(applicationCode, payload);
+    }
+
+    /**
+     * 匿名授权码换 token：跳过 session，由 Basis 构建 ANONYMOUS 载荷。
+     */
+    private TokenVo anonymousCode2token(String clientId, String applicationCode, String publicKeyString,
+                                        AuthorizationCodeDto codeDto) {
+        Result<TokenJWTPayload> result = loginTokenClient.fetchAnonymousTokenContext(
+            codeDto.getOrganId(),
+            applicationCode,
+            codeDto.getRoleIds()
+        );
+        if (!result.isSuccess()) {
+            throw ExceptionConverter.of(result);
+        }
+
+        TokenJWTPayload payload = result.getData();
         payload.setClientId(clientId);
         payload.setClientPublicKey(publicKeyString);
         return doGenerateToken(applicationCode, payload);
@@ -335,6 +360,9 @@ public class TokenService {
 
             String payload = signedJWT.getJWTClaimsSet().toString();
             TokenJWTPayload body = jsonCodec.str2obj(payload, TokenJWTPayload.class);
+            if (SessionType.isAnonymous(body.getSessionType())) {
+                throw new BusinessException(IamErrorCode.ANONYMOUS_REFRESH_NOT_ALLOWED);
+            }
             if (!IamUtils.matches(body.getClientPublicKey(), jwk)) {
                 throw new BusinessException(IamErrorCode.TOKEN_DPOP_KEY_MISMATCH);
             }
@@ -449,6 +477,9 @@ public class TokenService {
 
             String payloadStr = signedJWT.getJWTClaimsSet().toString();
             TokenJWTPayload body = jsonCodec.str2obj(payloadStr, TokenJWTPayload.class);
+            if (SessionType.isAnonymous(body.getSessionType())) {
+                throw new BusinessException(IamErrorCode.ANONYMOUS_REFRESH_NOT_ALLOWED);
+            }
             Long refreshExpireAt = body.getRefreshExpireAt();
 
             // 过期
