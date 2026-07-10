@@ -80,4 +80,9 @@ public class AuthorizationCodeDto {
      * 匿名发码时 IAM 配置的角色 ID 列表。
      */
     private List<Long> roleIds;
+
+    /**
+     * 客户端指纹，匿名发码时由 x-g2rain-fingerprint 写入，换票时传给 Basis 派生稳定 ID。
+     */
+    private String fingerprint;
 }

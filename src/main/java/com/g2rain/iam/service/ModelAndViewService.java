@@ -291,7 +291,7 @@ public class ModelAndViewService {
     /**
      * 匿名 OAuth 授权：跳过登录/会话，直接发码并重定向到客户端回调地址。
      */
-    public ModelAndView redirectAnonymousCallback(String clientId, String redirectUri, String state) {
+    public ModelAndView redirectAnonymousCallback(String clientId, String redirectUri, String state, String fingerprint) {
         IamAccessProperties.AnonymousAuth anonymous = iamAccessProperties.getAnonymous();
         if (!anonymous.isConfigured()) {
             return redirectOAuthError(
@@ -305,7 +305,8 @@ public class ModelAndViewService {
         String code = authorizationService.generateAnonymousAuthorizationCode(
             clientId,
             anonymous.getOrganId(),
-            anonymous.getRoleIds()
+            anonymous.getRoleIds(),
+            fingerprint
         );
 
         UriComponentsBuilder redirectUrl = UriComponentsBuilder.fromUriString(redirectUri)

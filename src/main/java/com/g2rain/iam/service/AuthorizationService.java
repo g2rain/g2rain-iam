@@ -89,14 +89,16 @@ public class AuthorizationService {
      * @param clientId 客户端 ID（DPoP kid）
      * @param organId  机构 ID
      * @param roleIds  角色 ID 列表
+     * @param fingerprint 客户端指纹（可选）
      * @return 授权码
      */
-    public String generateAnonymousAuthorizationCode(String clientId, Long organId, List<Long> roleIds) {
+    public String generateAnonymousAuthorizationCode(String clientId, Long organId, List<Long> roleIds, String fingerprint) {
         AuthorizationCodeDto codeDto = new AuthorizationCodeDto();
         codeDto.setClientId(clientId);
         codeDto.setAnonymous(true);
         codeDto.setOrganId(organId);
         codeDto.setRoleIds(roleIds);
+        codeDto.setFingerprint(Strings.isBlank(fingerprint) ? null : fingerprint.trim());
 
         String code = IamUtils.generateAuthorizationCode();
         genericRedisHelper.set(

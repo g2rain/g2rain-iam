@@ -12,6 +12,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.ModelAndView;
@@ -62,13 +63,15 @@ public class AuthorizeController {
      * @param clientId    客户端 ID
      * @param redirectUri 授权后重定向的 URI
      * @param state       请求的状态参数，通常用于防止 CSRF 攻击
+     * @param fingerprint 客户端指纹（匿名授权时可选，用于派生稳定匿名 ID）
      * @return {@link ModelAndView}，包含跳转到登录页或授权确认页的视图
      */
     @GetMapping(value = "/authorize")
     public ModelAndView authorize(@CookieValue(name = Constants.SESSION_NAME, required = false) String sessionId,
                                   @RequestParam(name = "clientId", required = false) String clientId,
                                   @RequestParam(name = "redirectUri", required = false) String redirectUri,
-                                  @RequestParam(name = "state", required = false) String state) {
+                                  @RequestParam(name = "state", required = false) String state,
+                                  @RequestHeader(name = Constants.FINGERPRINT_HEADER, required = false) String fingerprint) {
 
         // 检查 clientId 和 redirectUri 是否为空，若为空则返回错误页面
         if (Strings.isBlank(clientId) || Strings.isBlank(redirectUri)) {
@@ -76,7 +79,7 @@ public class AuthorizeController {
         }
 
         if (AuthorizationState.isAnonymous(state)) {
-            return modelAndViewService.redirectAnonymousCallback(clientId, redirectUri, state);
+            return modelAndViewService.redirectAnonymousCallback(clientId, redirectUri, state, fingerprint);
         }
 
         // 检查 sessionId 是否为空，若为空说明未登录，跳转到登录页

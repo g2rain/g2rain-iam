@@ -282,7 +282,8 @@ public class TokenService {
         Result<TokenJWTPayload> result = loginTokenClient.fetchAnonymousTokenContext(
             codeDto.getOrganId(),
             applicationCode,
-            codeDto.getRoleIds()
+            codeDto.getRoleIds(),
+            codeDto.getFingerprint()
         );
         if (!result.isSuccess()) {
             throw ExceptionConverter.of(result);

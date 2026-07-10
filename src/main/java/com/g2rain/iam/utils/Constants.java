@@ -78,4 +78,9 @@ public class Constants {
     public static final String THIRD_PARTY_IDP_AUTO_REGISTER_PASSPORT_PASSWORD = "123456";
 
     public static final String REQUEST_ID = "requestId";
+
+    /**
+     * 客户端指纹 Header，匿名授权时由客户端传入，用于 Basis 派生稳定的 passportId/userId。
+     */
+    public static final String FINGERPRINT_HEADER = "x-g2rain-fingerprint";
 }
