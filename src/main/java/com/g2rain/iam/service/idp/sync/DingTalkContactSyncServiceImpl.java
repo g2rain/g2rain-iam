@@ -48,11 +48,14 @@ public class DingTalkContactSyncServiceImpl implements IdpContactSyncService {
             throw new BusinessException(IamErrorCode.DINGTALK_CONTACT_BIND_MODE_UNSUPPORTED);
         }
         dingTalkContactClient.resetSyncMetrics();
+        String idpApplicationCode = dingTalkContactClient.resolveIdpApplicationCode(
+            bindMode, request.getIdpApplicationCode());
         String accessToken = dingTalkContactClient.resolveAccessToken(
-            bindMode, request.getIdpApplicationCode(), request.getCorpId());
+            bindMode, idpApplicationCode, request.getCorpId());
 
         List<DingTalkContactClient.DepartmentInfo> departments = dingTalkContactClient.listAllDepartments(accessToken);
         IdpOrganizationSnapshot snapshot = new IdpOrganizationSnapshot();
+        snapshot.setIdpApplicationCode(idpApplicationCode);
         snapshot.setDepartments(convertDepartments(departments));
         snapshot.setMembers(buildMembers(accessToken, departments));
 
@@ -75,8 +78,10 @@ public class DingTalkContactSyncServiceImpl implements IdpContactSyncService {
         if (bindMode != IdpBindMode.INTERNAL) {
             throw new BusinessException(IamErrorCode.DINGTALK_CONTACT_BIND_MODE_UNSUPPORTED);
         }
+        String idpApplicationCode = dingTalkContactClient.resolveIdpApplicationCode(
+            bindMode, request.getIdpApplicationCode());
         String accessToken = dingTalkContactClient.resolveAccessToken(
-            bindMode, request.getIdpApplicationCode(), request.getCorpId());
+            bindMode, idpApplicationCode, request.getCorpId());
         DingTalkContactClient.UserDetail detail = dingTalkContactClient.getUserDetail(
             accessToken, request.getIdpUserId().trim());
         if (Strings.isBlank(detail.unionId())) {

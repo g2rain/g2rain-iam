@@ -30,6 +30,12 @@ class DingTalkContactClientTest {
     }
 
     @Test
+    void resolveIdpApplicationCode_shouldDefaultToConfiguredClientId() {
+        assertEquals("ding-internal-client",
+            client.resolveIdpApplicationCode(IdpBindMode.INTERNAL, null));
+    }
+
+    @Test
     void resolveCredentialForContactSync_shouldAcceptMatchingContext() {
         DingTalkIamProperties.Credential credential = client.resolveCredentialForContactSync(
             IdpBindMode.INTERNAL, "ding-internal-client", "corp-internal");

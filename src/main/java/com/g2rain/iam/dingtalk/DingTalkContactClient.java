@@ -144,9 +144,26 @@ public class DingTalkContactClient {
     ) {
         DingTalkIamProperties.Credential credential = credential(bindMode);
         requireCredential(credential);
-        validateApplicationCode(credential, idpApplicationCode);
+        String resolvedApplicationCode = resolveIdpApplicationCode(bindMode, idpApplicationCode);
+        validateApplicationCode(credential, resolvedApplicationCode);
         validateCorpId(bindMode, credential, corpId);
         return credential;
+    }
+
+    /**
+     * 解析 IdP 侧应用标识：未传时使用当前 bindMode 对应 IAM 配置中的 clientId。
+     */
+    public String resolveIdpApplicationCode(IdpBindMode bindMode, String idpApplicationCode) {
+        if (Strings.isNotBlank(idpApplicationCode)) {
+            return idpApplicationCode.trim();
+        }
+        DingTalkIamProperties.Credential credential = credential(bindMode);
+        requireCredential(credential);
+        String configuredClientId = credential.getClientId();
+        if (Strings.isBlank(configuredClientId)) {
+            throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "idpApplicationCode");
+        }
+        return configuredClientId.trim();
     }
 
     static UserSummary parseUserSummary(JsonNode item) {

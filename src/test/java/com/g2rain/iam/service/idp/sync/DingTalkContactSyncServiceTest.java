@@ -70,12 +70,33 @@ class DingTalkContactSyncServiceTest {
     }
 
     @Test
+    void fetchSnapshot_shouldResolveIdpApplicationCodeWhenMissing() {
+        IdpFetchSnapshotRequest request = new IdpFetchSnapshotRequest();
+        request.setCorpId("corp-internal");
+        request.setBindMode("INTERNAL");
+
+        when(dingTalkContactClient.resolveIdpApplicationCode(IdpBindMode.INTERNAL, null))
+            .thenReturn("ding-internal-client");
+        when(dingTalkContactClient.resolveAccessToken(
+            IdpBindMode.INTERNAL, "ding-internal-client", "corp-internal")).thenReturn("token");
+        when(dingTalkContactClient.listAllDepartments("token")).thenReturn(List.of());
+        when(dingTalkContactClient.listDepartmentUsers(eq("token"), anyLong())).thenReturn(List.of());
+        when(dingTalkContactClient.syncMetrics()).thenReturn(new DingTalkContactClient.SyncMetrics(1, 0));
+
+        IdpOrganizationSnapshot snapshot = dingTalkContactSyncService.fetchSnapshot(request);
+
+        assertEquals("ding-internal-client", snapshot.getIdpApplicationCode());
+    }
+
+    @Test
     void fetchSnapshot_shouldNotCallGetUserDetailWhenUnionIdPresent() {
         IdpFetchSnapshotRequest request = new IdpFetchSnapshotRequest();
         request.setCorpId("corp-internal");
         request.setBindMode("INTERNAL");
         request.setIdpApplicationCode("ding-internal-client");
 
+        when(dingTalkContactClient.resolveIdpApplicationCode(IdpBindMode.INTERNAL, "ding-internal-client"))
+            .thenReturn("ding-internal-client");
         when(dingTalkContactClient.resolveAccessToken(
             IdpBindMode.INTERNAL, "ding-internal-client", "corp-internal")).thenReturn("token");
         when(dingTalkContactClient.listAllDepartments("token")).thenReturn(List.of(
@@ -92,6 +113,7 @@ class DingTalkContactSyncServiceTest {
 
         assertEquals(1, snapshot.getMembers().size());
         assertEquals("union-1", snapshot.getMembers().getFirst().getUnionId());
+        assertEquals("ding-internal-client", snapshot.getIdpApplicationCode());
         verify(dingTalkContactClient, never()).getUserDetail(anyString(), anyString());
     }
 
@@ -102,6 +124,8 @@ class DingTalkContactSyncServiceTest {
         request.setBindMode("INTERNAL");
         request.setIdpApplicationCode("ding-internal-client");
 
+        when(dingTalkContactClient.resolveIdpApplicationCode(IdpBindMode.INTERNAL, "ding-internal-client"))
+            .thenReturn("ding-internal-client");
         when(dingTalkContactClient.resolveAccessToken(
             IdpBindMode.INTERNAL, "ding-internal-client", "corp-internal")).thenReturn("token");
         when(dingTalkContactClient.listAllDepartments("token")).thenReturn(List.of(
