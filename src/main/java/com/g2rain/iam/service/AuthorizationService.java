@@ -62,6 +62,7 @@ public class AuthorizationService {
         codeDto.setIdpType(Strings.isBlank(session.getIdpType()) ? null : session.getIdpType().trim());
         codeDto.setIdpSubject(Strings.isBlank(session.getIdpSubject()) ? null : session.getIdpSubject().trim());
         codeDto.setIdpApplicationCode(Strings.isBlank(session.getIdpApplicationCode()) ? null : session.getIdpApplicationCode().trim());
+        codeDto.setIdpBindMode(Strings.isBlank(session.getIdpBindMode()) ? null : session.getIdpBindMode().trim());
 
         // 2. 生成授权码
         String code = IamUtils.generateAuthorizationCode();

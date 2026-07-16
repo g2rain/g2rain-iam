@@ -67,6 +67,12 @@ public class AuthorizationCodeDto {
     private String idpApplicationCode;
 
     /**
+     * 发码时会话中的 IdP 接入形态，与 {@link com.g2rain.basis.enums.IdpBindMode} 及
+     * {@code passport_idp_binding.bind_mode} 存库值一致。
+     */
+    private String idpBindMode;
+
+    /**
      * 为 true 表示匿名授权发码；换票时不查 session，走 {@code fetchAnonymousTokenContext}。
      */
     private Boolean anonymous;
