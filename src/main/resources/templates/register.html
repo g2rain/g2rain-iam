@@ -11,7 +11,7 @@
     <header class="landing-header">
         <a th:href="@{/auth/index.html}" class="landing-brand">
             <span class="landing-brand-mark">⚡</span>
-            <span>G2Rain IAM</span>
+            <span th:text="${brandName}">G2Rain IAM</span>
         </a>
         <div class="landing-header-links">
             <a th:href="@{/auth/authorize}" class="link-muted">立即登录</a>
@@ -130,7 +130,7 @@
         </div>
     </section>
 
-    <footer class="landing-footer">
+    <footer class="landing-footer" th:text="${brandName}">
         G2Rain IAM
     </footer>
 </main>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>欢迎</title>
+    <title th:text="${brandName}">欢迎</title>
     <style th:replace="~{fragments/styles-common :: common}"></style>
 </head>
 <body class="landing-body">
@@ -11,7 +11,7 @@
     <header class="landing-header">
         <a th:href="@{/auth/index.html}" class="landing-brand">
             <span class="landing-brand-mark">⚡</span>
-            <span>G2Rain IAM</span>
+            <span th:text="${brandName}">G2Rain IAM</span>
         </a>
         <div class="landing-header-links">
             <a th:if="${loginViaRedirectUri}" th:href="${loginRedirectUri}" class="link-muted">立即登录</a>
@@ -21,7 +21,7 @@
 
     <section class="landing-grid">
         <div class="landing-panel feature-panel">
-            <h1 class="title">G2Rain IAM</h1>
+            <h1 class="title" th:text="${brandName}">G2Rain IAM</h1>
             <p class="desc">
                 面向企业场景的统一身份认证入口，提供安全、稳定、可扩展的认证能力，
                 让业务系统更快接入、更易维护。
@@ -54,7 +54,7 @@
         </div>
     </section>
 
-    <footer class="landing-footer">
+    <footer class="landing-footer" th:text="${brandName}">
         G2Rain IAM
     </footer>
 </main>

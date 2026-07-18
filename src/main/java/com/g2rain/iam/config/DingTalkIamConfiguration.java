@@ -42,9 +42,10 @@ public class DingTalkIamConfiguration {
     ) {
         return args -> {
             log.info(
-                "[iam-startup] iam baseUrl={} platformBaseUrl={} dingtalk callback={} loginPageBindMode={} sessionCookieSecure={} sessionCookieSameSite={}",
+                "[iam-startup] iam baseUrl={} platformBaseUrl={} brandName={} dingtalk callback={} loginPageBindMode={} sessionCookieSecure={} sessionCookieSameSite={}",
                 nullToEmpty(iamAccess.getBaseUrl()),
                 iamAccess.resolvedPlatformBaseUrl(),
+                iamAccess.resolvedBrandName(),
                 dingTalk.fullCallbackUrl(iamAccess.normalizedBaseUrl()),
                 Strings.isBlank(dingTalk.getLoginPageBindMode()) ? "(hidden)" : dingTalk.getLoginPageBindMode().trim(),
                 iamAccess.resolveSessionCookieSecure(),
