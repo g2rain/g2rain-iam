@@ -83,7 +83,42 @@ public enum IamErrorCode implements ErrorCode {
     /**
      * 匿名 token 不允许 refresh
      */
-    ANONYMOUS_REFRESH_NOT_ALLOWED("iam.40021", "匿名令牌不允许刷新");
+    ANONYMOUS_REFRESH_NOT_ALLOWED("iam.40021", "匿名令牌不允许刷新"),
+
+    /**
+     * 钉钉通讯录 access token 获取失败
+     */
+    DINGTALK_CONTACT_ACCESS_TOKEN_FAILED("iam.50220", "钉钉通讯录 access token 获取失败"),
+
+    /**
+     * 钉钉通讯录拉取失败
+     */
+    DINGTALK_CONTACT_FETCH_FAILED("iam.50221", "钉钉通讯录拉取失败"),
+
+    /**
+     * 钉钉通讯录凭证未配置
+     */
+    DINGTALK_CONTACT_CREDENTIAL_MISSING("iam.50222", "钉钉通讯录凭证未配置"),
+
+    /**
+     * 钉钉通讯录接入形态暂不支持
+     */
+    DINGTALK_CONTACT_BIND_MODE_UNSUPPORTED("iam.40022", "钉钉通讯录同步暂不支持该接入形态"),
+
+    /**
+     * 钉钉成员缺少 unionId
+     */
+    DINGTALK_CONTACT_UNION_ID_MISSING("iam.50223", "钉钉成员缺少 unionId：{0:param}"),
+
+    /**
+     * 通讯录同步请求的 IdP 应用标识与 IAM 配置不一致
+     */
+    DINGTALK_CONTACT_APPLICATION_MISMATCH("iam.40023", "钉钉通讯录应用标识与 IAM 配置不一致"),
+
+    /**
+     * 通讯录同步请求的企业标识与 IAM 配置不一致
+     */
+    DINGTALK_CONTACT_CORP_MISMATCH("iam.40024", "钉钉通讯录企业标识与 IAM 配置不一致");
 
     private final String code;
 

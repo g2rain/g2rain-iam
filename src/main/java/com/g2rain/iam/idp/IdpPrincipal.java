@@ -6,7 +6,8 @@ package com.g2rain.iam.idp;
  *
  * @param idpType              身份源类型，如 {@link com.g2rain.basis.enums.IdpType#DINGTALK}
  * @param idpSubject           IdP 稳定主体（钉钉 unionId 等）
- * @param idpUserId            IdP 用户 ID（钉钉 openId 等，可空）
+ * @param idpUserId            IdP 企业内用户 ID（钉钉 userid，可空）
+ * @param idpOpenId            IdP 开放平台 openId（可空）
  * @param corpId               企业/租户标识（可空）
  * @param displayName          展示名（可空）
  * @param bindMode             接入形态，{@link com.g2rain.basis.enums.IdpBindMode} 枚举名
@@ -17,6 +18,7 @@ public record IdpPrincipal(
     String idpType,
     String idpSubject,
     String idpUserId,
+    String idpOpenId,
     String corpId,
     String displayName,
     String bindMode,

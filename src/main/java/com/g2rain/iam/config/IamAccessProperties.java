@@ -34,6 +34,12 @@ public class IamAccessProperties {
     private String platformBaseUrl = "";
 
     /**
+     * IAM 页面品牌展示名（header、footer、首页标题等）。
+     * <p>配置项 {@code g2rain.iam.brand-name}；可由 Nacos {@code g2rain-iam.yml} 覆盖。</p>
+     */
+    private String brandName = "G2Rain IAM";
+
+    /**
      * 登录会话 Cookie（{@code G2RAIN_AUTH_SESSION_ID}）安全属性。
      */
     @NestedConfigurationProperty
@@ -59,6 +65,13 @@ public class IamAccessProperties {
     public String resolvedPlatformBaseUrl() {
         String chosen = (platformBaseUrl != null && !platformBaseUrl.isBlank()) ? platformBaseUrl : baseUrl;
         return IamUrlUtils.trimTrailingSlash(chosen);
+    }
+
+    /**
+     * 页面品牌展示名（已 trim）；配置为空时回退 {@code G2Rain IAM}。
+     */
+    public String resolvedBrandName() {
+        return (brandName == null || brandName.isBlank()) ? "G2Rain IAM" : brandName.trim();
     }
 
     /**

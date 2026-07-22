@@ -13,7 +13,7 @@ import com.g2rain.iam.idp.IdpPrincipal;
  *
  * @author Alpha
  * @param unionId            钉钉稳定主体（映射为 {@link IdpPrincipal#idpSubject()}）
- * @param openId             开放平台 openId（映射为 {@link IdpPrincipal#idpUserId()}）
+ * @param openId             开放平台 openId（映射为 {@link IdpPrincipal#idpOpenId()}）
  * @param corpId             企业 corpId
  * @param nick               展示名（映射为 {@link IdpPrincipal#displayName()}）
  * @param bindMode           IdP 接入形态，{@link com.g2rain.basis.enums.IdpBindMode} 枚举名
@@ -37,6 +37,7 @@ public record DingTalkPrincipal(
         return new IdpPrincipal(
             IdpType.DINGTALK.name(),
             unionId,
+            null,
             Strings.isBlank(openId) ? null : openId.trim(),
             Strings.isBlank(corpId) ? null : corpId.trim(),
             nick,
