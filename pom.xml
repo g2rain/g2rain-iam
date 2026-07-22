@@ -111,11 +111,6 @@
             </dependency>
             <dependency>
                 <groupId>com.g2rain</groupId>
-                <artifactId>g2rain-common</artifactId>
-                <version>${g2rain.common.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.g2rain</groupId>
                 <artifactId>g2rain-starter-aegis-core</artifactId>
                 <version>${g2rain.aegis.core.version}</version>
                 <type>pom</type>
