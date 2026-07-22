@@ -67,6 +67,39 @@ public class DingTalkIamProperties {
     private String loginPageBindMode = "";
 
     /**
+     * 通讯录同步拉取配置
+     */
+    private final ContactSync contactSync = new ContactSync();
+
+    /**
+     * 通讯录同步拉取配置项。
+     */
+    @Getter
+    @Setter
+    public static class ContactSync {
+
+        /**
+         * TopAPI 全局 QPS 上限
+         */
+        private int qps = 15;
+
+        /**
+         * 可重试错误最大重试次数
+         */
+        private int maxRetries = 3;
+
+        /**
+         * 重试指数退避基数（毫秒）
+         */
+        private long retryBackoffMs = 500;
+
+        /**
+         * 部门成员 list 分页大小
+         */
+        private int userPageSize = 100;
+    }
+
+    /**
      * 钉钉 OAuth 单套 clientId / clientSecret
      */
     @Getter

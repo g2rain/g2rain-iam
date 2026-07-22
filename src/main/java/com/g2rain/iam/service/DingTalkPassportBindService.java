@@ -7,7 +7,7 @@ import com.g2rain.common.exception.ExceptionConverter;
 import com.g2rain.common.model.Result;
 import com.g2rain.common.utils.Strings;
 import com.g2rain.common.web.TokenJWTPayload;
-import com.g2rain.iam.client.PassportIdpBindingClient;
+import com.g2rain.iam.client.PassportIdpBindingInternalClient;
 import com.g2rain.iam.config.DingTalkIamProperties;
 import com.g2rain.iam.config.IamAccessProperties;
 import com.g2rain.iam.dto.DingTalkPassportBindStartDto;
@@ -38,7 +38,7 @@ public class DingTalkPassportBindService {
     private final IamAccessProperties iamAccessProperties;
     private final DingTalkPassportBindStateService dingTalkPassportBindStateService;
     private final DingTalkLoginAdapterRouter dingTalkLoginAdapterRouter;
-    private final PassportIdpBindingClient passportIdpBindingClient;
+    private final PassportIdpBindingInternalClient passportIdpBindingInternalClient;
 
     /**
      * 启动扫码绑定：校验 access token，写入 state，返回 gotoUrl
@@ -77,13 +77,14 @@ public class DingTalkPassportBindService {
             bindDto.setIdpSubject(idpPrincipal.idpSubject());
             bindDto.setCorpId(idpPrincipal.corpId());
             bindDto.setIdpUserId(idpPrincipal.idpUserId());
+            bindDto.setIdpOpenId(idpPrincipal.idpOpenId());
             bindDto.setIdpApplicationCode(idpPrincipal.idpApplicationCode());
             bindDto.setBindMode(idpPrincipal.bindMode());
             bindDto.setRawProfile(idpPrincipal.rawProfile());
             bindDto.setSessionType(state.getSessionType());
             bindDto.setAdminUser(state.getAdminUser());
 
-            Result<Long> result = passportIdpBindingClient.bind(bindDto);
+            Result<Long> result = passportIdpBindingInternalClient.bind(bindDto);
             if (!result.isSuccess()) {
                 throw ExceptionConverter.of(result);
             }

@@ -72,4 +72,9 @@ public class SessionDto {
      * IdP 应用编码（如钉钉 OAuth clientId）
      */
     private String idpApplicationCode;
+
+    /**
+     * IdP 企业内用户标识（如钉钉 userid）；可选，用于 resolve 次级 lookup
+     */
+    private String idpUserId;
 }

@@ -253,10 +253,11 @@ public class TokenService {
             sessionPassportId,
             userId,
             applicationCode,
-            codeDto.getThirdPartyIdpLogin(),
+            isIdpLogin(codeDto),
             codeDto.getIdpType(),
             codeDto.getIdpSubject(),
-            codeDto.getIdpApplicationCode()
+            codeDto.getIdpApplicationCode(),
+            codeDto.getIdpBindMode()
         );
         if (!result.isSuccess()) {
             throw ExceptionConverter.of(result);
@@ -488,7 +489,7 @@ public class TokenService {
             }
 
             Result<TokenJWTPayload> result = loginTokenClient.fetchTokenContext(
-                null, userId, applicationCode, null, null, null, null);
+                null, userId, applicationCode, null, null, null, null, null);
             if (!result.isSuccess()) {
                 throw ExceptionConverter.of(result);
             }
@@ -579,6 +580,17 @@ public class TokenService {
         loginToken.setRealName(payload.getName());
         loginToken.setAdminUser(payload.isAdminUser());
         loginTokenClient.save(applicationCode, loginToken);
+    }
+
+    /**
+     * 是否外部身份源授权链路发码：优先依据授权码中的 {@code idpBindMode}（与
+     * {@code passport_idp_binding.bind_mode} 一致），兼容旧码上的 {@code thirdPartyIdpLogin} 标记。
+     */
+    private static boolean isIdpLogin(AuthorizationCodeDto codeDto) {
+        if (Strings.isNotBlank(codeDto.getIdpSubject())) {
+            return true;
+        }
+        return Boolean.TRUE.equals(codeDto.getThirdPartyIdpLogin());
     }
 
     /**

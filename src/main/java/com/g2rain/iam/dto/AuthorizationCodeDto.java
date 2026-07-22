@@ -5,8 +5,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.List;
-
 /**
  * 授权码 DTO 类，用于在授权码授权流程中传递会话 ID、客户端 ID 和用户 ID 信息。
  * <p>
@@ -65,6 +63,12 @@ public class AuthorizationCodeDto {
      * 发码时会话中的三方应用标识（如钉钉 OAuth clientId）。
      */
     private String idpApplicationCode;
+
+    /**
+     * 发码时会话中的 IdP 接入形态，与 {@link com.g2rain.basis.enums.IdpBindMode} 及
+     * {@code passport_idp_binding.bind_mode} 存库值一致。
+     */
+    private String idpBindMode;
 
     /**
      * 为 true 表示匿名授权发码；换票时不查 session，走 {@code fetchAnonymousTokenContext}。
