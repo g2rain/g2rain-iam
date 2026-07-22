@@ -7,6 +7,7 @@ import com.g2rain.basis.idp.sync.dto.IdpFetchMemberRequest;
 import com.g2rain.basis.idp.sync.dto.IdpFetchSnapshotRequest;
 import com.g2rain.basis.idp.sync.dto.IdpMemberNode;
 import com.g2rain.basis.idp.sync.dto.IdpOrganizationSnapshot;
+import com.g2rain.basis.idp.sync.dto.IdpSnapshotFetchMeta;
 import com.g2rain.common.exception.BusinessException;
 import com.g2rain.common.exception.SystemErrorCode;
 import com.g2rain.common.utils.Strings;
@@ -59,17 +60,56 @@ public class DingTalkContactSyncServiceImpl implements IdpContactSyncService {
         snapshot.setDepartments(convertDepartments(departments));
         snapshot.setMembers(buildMembers(accessToken, departments));
 
+        DingTalkContactClient.FetchStatsSnapshot stats = dingTalkContactClient.fetchStatsSnapshot();
+        int deptNodeCount = snapshot.getDepartments().size();
+        int memberCount = snapshot.getMembers().size();
+        snapshot.setFetchMeta(toFetchMeta(stats, deptNodeCount, memberCount));
+        snapshot.setComplete(isSnapshotComplete(stats, deptNodeCount, memberCount));
+
         DingTalkContactClient.SyncMetrics metrics = dingTalkContactClient.syncMetrics();
         log.info(
-            "dingtalk contact snapshot fetched corpId={} deptCount={} memberCount={} apiCallCount={} retryCount={} elapsedMs={}",
+            "dingtalk contact snapshot fetched corpId={} deptCount={} memberCount={} "
+                + "complete={} apiCallCount={} retryCount={} elapsedMs={}",
             request.getCorpId(),
             snapshot.getDepartments().size(),
             snapshot.getMembers().size(),
+            snapshot.isComplete(),
             metrics.apiCallCount(),
             metrics.retryCount(),
             System.currentTimeMillis() - startedAt
         );
         return snapshot;
+    }
+
+    static IdpSnapshotFetchMeta toFetchMeta(
+        DingTalkContactClient.FetchStatsSnapshot stats,
+        int deptNodeCount,
+        int memberCount
+    ) {
+        IdpSnapshotFetchMeta meta = new IdpSnapshotFetchMeta();
+        meta.setDeptNodeCount(deptNodeCount);
+        meta.setMemberCount(memberCount);
+        meta.setDeptListApiCalls(stats.deptListApiCalls());
+        meta.setUserListApiCalls(stats.userListApiCalls());
+        meta.setUserDetailApiCalls(stats.userDetailApiCalls());
+        meta.setDeptSubListNonArrayCount(stats.deptSubListNonArrayCount());
+        meta.setUserListIncompletePages(stats.userListIncompletePages());
+        meta.setRetryCount(stats.retryCount());
+        return meta;
+    }
+
+    static boolean isSnapshotComplete(
+        DingTalkContactClient.FetchStatsSnapshot stats,
+        int deptNodeCount,
+        int memberCount
+    ) {
+        if (stats.deptSubListNonArrayCount() > 0 || stats.userListIncompletePages() > 0) {
+            return false;
+        }
+        if (stats.deptListApiCalls() <= 0) {
+            return false;
+        }
+        return deptNodeCount > 0 || memberCount > 0;
     }
 
     @Override

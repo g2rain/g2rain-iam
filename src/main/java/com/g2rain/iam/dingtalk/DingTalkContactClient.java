@@ -75,13 +75,83 @@ public class DingTalkContactClient {
     public record SyncMetrics(int apiCallCount, int retryCount) {
     }
 
+    /**
+     * 单次快照拉取统计的不可变快照（与 {@link #fetchStatsSnapshot()} 返回）。
+     */
+    public record FetchStatsSnapshot(
+        int deptListApiCalls,
+        int userListApiCalls,
+        int userDetailApiCalls,
+        int deptSubListNonArrayCount,
+        int userListIncompletePages,
+        int retryCount
+    ) {
+    }
+
+    /**
+     * 单次快照拉取期间的可变计数器（与 {@link #resetSyncMetrics()} 同步重置）。
+     */
+    private static final class FetchStatsAccumulator {
+        private int deptListApiCalls;
+        private int userListApiCalls;
+        private int userDetailApiCalls;
+        private int deptSubListNonArrayCount;
+        private int userListIncompletePages;
+
+        void reset() {
+            deptListApiCalls = 0;
+            userListApiCalls = 0;
+            userDetailApiCalls = 0;
+            deptSubListNonArrayCount = 0;
+            userListIncompletePages = 0;
+        }
+
+        void incrementDeptListApiCalls() {
+            deptListApiCalls++;
+        }
+
+        void incrementUserListApiCalls() {
+            userListApiCalls++;
+        }
+
+        void incrementUserDetailApiCalls() {
+            userDetailApiCalls++;
+        }
+
+        void incrementDeptSubListNonArrayCount() {
+            deptSubListNonArrayCount++;
+        }
+
+        void incrementUserListIncompletePages() {
+            userListIncompletePages++;
+        }
+
+        FetchStatsSnapshot snapshot(int retryCount) {
+            return new FetchStatsSnapshot(
+                deptListApiCalls,
+                userListApiCalls,
+                userDetailApiCalls,
+                deptSubListNonArrayCount,
+                userListIncompletePages,
+                retryCount
+            );
+        }
+    }
+
+    private final FetchStatsAccumulator fetchStatsAccumulator = new FetchStatsAccumulator();
+
     public void resetSyncMetrics() {
         apiCallCount = 0;
         retryCount = 0;
+        fetchStatsAccumulator.reset();
     }
 
     public SyncMetrics syncMetrics() {
         return new SyncMetrics(apiCallCount, retryCount);
+    }
+
+    public FetchStatsSnapshot fetchStatsSnapshot() {
+        return fetchStatsAccumulator.snapshot(retryCount);
     }
 
     public List<DepartmentInfo> listAllDepartments(String accessToken) {
@@ -101,6 +171,7 @@ public class DingTalkContactClient {
             body.put("cursor", cursor);
             body.put("size", pageSize);
             JsonNode response = postTopApi(LIST_USER_URL, accessToken, body);
+            fetchStatsAccumulator.incrementUserListApiCalls();
             JsonNode result = response.path("result");
             JsonNode list = result.path("list");
             if (list.isArray()) {
@@ -108,13 +179,21 @@ public class DingTalkContactClient {
                     users.add(parseUserSummary(item));
                 }
             }
-            hasMore = result.path("has_more").asBoolean(false);
-            cursor = result.path("next_cursor").asLong(0L);
+            boolean nextHasMore = result.path("has_more").asBoolean(false);
+            long nextCursor = result.path("next_cursor").asLong(0L);
+            if (nextHasMore && nextCursor == cursor) {
+                fetchStatsAccumulator.incrementUserListIncompletePages();
+                hasMore = false;
+            } else {
+                hasMore = nextHasMore;
+                cursor = nextCursor;
+            }
         }
         return users;
     }
 
     public UserDetail getUserDetail(String accessToken, String userId) {
+        fetchStatsAccumulator.incrementUserDetailApiCalls();
         ObjectNode body = objectMapper.createObjectNode();
         body.put("userid", userId);
         body.put("language", "zh_CN");
@@ -216,8 +295,10 @@ public class DingTalkContactClient {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("dept_id", parentDeptId);
         JsonNode response = postTopApi(LIST_SUB_DEPT_URL, accessToken, body);
+        fetchStatsAccumulator.incrementDeptListApiCalls();
         JsonNode list = response.path("result");
         if (!list.isArray()) {
+            fetchStatsAccumulator.incrementDeptSubListNonArrayCount();
             return;
         }
         for (JsonNode item : list) {

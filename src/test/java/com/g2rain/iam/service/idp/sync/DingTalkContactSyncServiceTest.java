@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -81,11 +82,36 @@ class DingTalkContactSyncServiceTest {
             IdpBindMode.INTERNAL, "ding-internal-client", "corp-internal")).thenReturn("token");
         when(dingTalkContactClient.listAllDepartments("token")).thenReturn(List.of());
         when(dingTalkContactClient.listDepartmentUsers(eq("token"), anyLong())).thenReturn(List.of());
+        when(dingTalkContactClient.fetchStatsSnapshot()).thenReturn(statsWithDeptListCalls(1));
         when(dingTalkContactClient.syncMetrics()).thenReturn(new DingTalkContactClient.SyncMetrics(1, 0));
 
         IdpOrganizationSnapshot snapshot = dingTalkContactSyncService.fetchSnapshot(request);
 
         assertEquals("ding-internal-client", snapshot.getIdpApplicationCode());
+        assertFalse(snapshot.isComplete());
+    }
+
+    private static DingTalkContactClient.FetchStatsSnapshot statsWithDeptListCalls(int deptListCalls) {
+        return new DingTalkContactClient.FetchStatsSnapshot(deptListCalls, 0, 0, 0, 0, 0);
+    }
+
+    @Test
+    void isSnapshotComplete_shouldBeFalseWhenBothCountsZero() {
+        DingTalkContactClient.FetchStatsSnapshot stats = statsWithDeptListCalls(1);
+        assertFalse(DingTalkContactSyncServiceImpl.isSnapshotComplete(stats, 0, 0));
+    }
+
+    @Test
+    void isSnapshotComplete_shouldBeFalseWhenDeptSubListNonArray() {
+        DingTalkContactClient.FetchStatsSnapshot stats =
+            new DingTalkContactClient.FetchStatsSnapshot(1, 0, 0, 1, 0, 0);
+        assertFalse(DingTalkContactSyncServiceImpl.isSnapshotComplete(stats, 1, 1));
+    }
+
+    @Test
+    void isSnapshotComplete_shouldBeTrueWhenCountsPresentAndStatsClean() {
+        DingTalkContactClient.FetchStatsSnapshot stats = statsWithDeptListCalls(1);
+        assertTrue(DingTalkContactSyncServiceImpl.isSnapshotComplete(stats, 1, 2));
     }
 
     @Test
@@ -107,6 +133,7 @@ class DingTalkContactSyncServiceTest {
                 "userid-1", "union-1", "张三", "13800000000", "zhang@example.com", List.of(2L)
             )
         ));
+        when(dingTalkContactClient.fetchStatsSnapshot()).thenReturn(statsWithDeptListCalls(1));
         when(dingTalkContactClient.syncMetrics()).thenReturn(new DingTalkContactClient.SyncMetrics(2, 0));
 
         IdpOrganizationSnapshot snapshot = dingTalkContactSyncService.fetchSnapshot(request);
@@ -114,6 +141,7 @@ class DingTalkContactSyncServiceTest {
         assertEquals(1, snapshot.getMembers().size());
         assertEquals("union-1", snapshot.getMembers().getFirst().getUnionId());
         assertEquals("ding-internal-client", snapshot.getIdpApplicationCode());
+        assertTrue(snapshot.isComplete());
         verify(dingTalkContactClient, never()).getUserDetail(anyString(), anyString());
     }
 
@@ -139,11 +167,13 @@ class DingTalkContactSyncServiceTest {
         when(dingTalkContactClient.getUserDetail("token", "userid-1")).thenReturn(
             new DingTalkContactClient.UserDetail("userid-1", "union-1", "张三", "13800000000", "zhang@example.com")
         );
+        when(dingTalkContactClient.fetchStatsSnapshot()).thenReturn(statsWithDeptListCalls(1));
         when(dingTalkContactClient.syncMetrics()).thenReturn(new DingTalkContactClient.SyncMetrics(3, 0));
 
         IdpOrganizationSnapshot snapshot = dingTalkContactSyncService.fetchSnapshot(request);
 
         assertEquals("union-1", snapshot.getMembers().getFirst().getUnionId());
+        assertTrue(snapshot.isComplete());
         verify(dingTalkContactClient).getUserDetail("token", "userid-1");
     }
 
