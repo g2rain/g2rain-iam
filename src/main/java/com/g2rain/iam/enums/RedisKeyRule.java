@@ -44,7 +44,27 @@ public enum RedisKeyRule {
     /**
      * 通行证绑定钉钉扫码 state，格式为 "auth:dingtalk:passport:bind:state:{opaqueState}"
      */
-    DINGTALK_PASSPORT_BIND_STATE("auth:dingtalk:passport:bind:state:%s");
+    DINGTALK_PASSPORT_BIND_STATE("auth:dingtalk:passport:bind:state:%s"),
+
+    /**
+     * 企业微信 OAuth 防 CSRF state。
+     */
+    WECOM_OAUTH_STATE("auth:wecom:oauth:state:%s"),
+
+    /**
+     * 企业微信第三方应用 suite_ticket。
+     */
+    WECOM_SUITE_TICKET("auth:wecom:suite:ticket:%s"),
+
+    /**
+     * 企业微信服务商 provider_access_token。
+     */
+    WECOM_PROVIDER_ACCESS_TOKEN("auth:wecom:provider:token:%s"),
+
+    /**
+     * 企业微信第三方应用 suite_access_token。
+     */
+    WECOM_SUITE_ACCESS_TOKEN("auth:wecom:suite:token:%s");
 
     /**
      * Redis 键的格式规则，使用占位符 %s。

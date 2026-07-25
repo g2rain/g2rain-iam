@@ -40,10 +40,11 @@
         </div>
 
         <div class="landing-panel action-panel landing-op-form landing-op-login"
-             th:with="hasDingTalk=${clientId != null and !#strings.isEmpty(clientId) and redirectUri != null and !#strings.isEmpty(redirectUri) and dingTalkBindMode != null and !#strings.isEmpty(dingTalkBindMode)}">
+             th:with="hasDingTalk=${clientId != null and !#strings.isEmpty(clientId) and redirectUri != null and !#strings.isEmpty(redirectUri) and dingTalkBindMode != null and !#strings.isEmpty(dingTalkBindMode)},
+                      hasWeCom=${clientId != null and !#strings.isEmpty(clientId) and redirectUri != null and !#strings.isEmpty(redirectUri) and weComBindMode != null and !#strings.isEmpty(weComBindMode)}">
             <h2 class="title">登录</h2>
-            <p class="login-panel-lead" th:if="${hasDingTalk}">使用账号密码或钉钉扫码完成身份认证</p>
-            <p class="login-panel-lead" th:unless="${hasDingTalk}">请输入账号密码登录</p>
+            <p class="login-panel-lead" th:if="${hasDingTalk or hasWeCom}">使用账号密码或企业扫码完成身份认证</p>
+            <p class="login-panel-lead" th:unless="${hasDingTalk or hasWeCom}">请输入账号密码登录</p>
 
             <div class="error-message login-error" th:if="${error != null and error != ''}" th:text="${error}" role="alert"></div>
 
@@ -80,6 +81,11 @@
                                class="btn btn-outline btn-lg">注册账号</a>
                         </div>
                     </form>
+                    <a th:if="${hasWeCom}"
+                       class="btn btn-outline btn-lg btn-block"
+                       th:href="@{/auth/wecom/authorize(bindMode=${weComBindMode},clientId=${clientId},redirectUri=${redirectUri},state=${state != null ? state : ''})}">
+                        企业微信扫码登录
+                    </a>
                 </div>
 
                 <div id="login-tab-panel-dingtalk"

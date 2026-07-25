@@ -4,6 +4,7 @@ package com.g2rain.iam.controller;
 import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.config.DingTalkIamProperties;
 import com.g2rain.iam.config.IamAccessProperties;
+import com.g2rain.iam.config.WeComIamProperties;
 import lombok.AllArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
@@ -49,6 +50,11 @@ public class PageController {
      * 登录页钉钉入口使用的 {@code bindMode} 等配置。
      */
     private DingTalkIamProperties dingTalkIamProperties;
+
+    /**
+     * 登录页企业微信入口配置。
+     */
+    private WeComIamProperties weComIamProperties;
 
     /**
      * 注册页面渲染方法，处理 /auth/register.html 路径。
@@ -129,6 +135,10 @@ public class PageController {
                 String m = dingTalkIamProperties.getLoginPageBindMode();
                 if (Strings.isNotBlank(m)) {
                     model.addAttribute("dingTalkBindMode", m.trim());
+                }
+                String weComMode = weComIamProperties.getLoginPageBindMode();
+                if (Strings.isNotBlank(weComMode)) {
+                    model.addAttribute("weComBindMode", weComMode.trim());
                 }
             }
             return new ModelAndView(filename);
