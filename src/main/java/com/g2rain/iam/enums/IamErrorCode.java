@@ -134,6 +134,11 @@ public enum IamErrorCode implements ErrorCode {
 
     WECOM_CALLBACK_INVALID("iam.40034", "企业微信授权回调验签或解密失败"),
 
+    /**
+     * Stream / 消息应用发码时企业微信账号未绑定通行证
+     */
+    WECOM_STREAM_USER_NOT_BOUND("iam.40035", "企业微信账号未绑定系统通行证"),
+
     WECOM_AUTHORIZATION_EXCHANGE_FAILED("iam.50232", "企业微信安装授权换取永久授权码失败"),
 
     WECOM_CREDENTIAL_ENCRYPTION_FAILED("iam.50233", "企业微信永久授权凭证加密失败");
