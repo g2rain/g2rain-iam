@@ -118,7 +118,30 @@ public enum IamErrorCode implements ErrorCode {
     /**
      * 通讯录同步请求的企业标识与 IAM 配置不一致
      */
-    DINGTALK_CONTACT_CORP_MISMATCH("iam.40024", "钉钉通讯录企业标识与 IAM 配置不一致");
+    DINGTALK_CONTACT_CORP_MISMATCH("iam.40024", "钉钉通讯录企业标识与 IAM 配置不一致"),
+
+    WECOM_OAUTH_INVALID_STATE("iam.40030", "企业微信登录 state 无效或已过期"),
+
+    WECOM_CREDENTIAL_MISSING("iam.40031", "企业微信应用凭证未配置"),
+
+    WECOM_TOKEN_EXCHANGE_FAILED("iam.50230", "企业微信换票失败"),
+
+    WECOM_USERINFO_FAILED("iam.50231", "企业微信用户信息获取失败"),
+
+    WECOM_ENTERPRISE_NOT_AUTHORIZED("iam.40032", "当前企业尚未安装或已取消企业微信第三方应用"),
+
+    WECOM_AGENT_MISMATCH("iam.40033", "企业微信登录应用与企业安装授权不一致"),
+
+    WECOM_CALLBACK_INVALID("iam.40034", "企业微信授权回调验签或解密失败"),
+
+    /**
+     * Stream / 消息应用发码时企业微信账号未绑定通行证
+     */
+    WECOM_STREAM_USER_NOT_BOUND("iam.40035", "企业微信账号未绑定系统通行证"),
+
+    WECOM_AUTHORIZATION_EXCHANGE_FAILED("iam.50232", "企业微信安装授权换取永久授权码失败"),
+
+    WECOM_CREDENTIAL_ENCRYPTION_FAILED("iam.50233", "企业微信永久授权凭证加密失败");
 
     private final String code;
 

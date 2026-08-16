@@ -117,3 +117,21 @@ g2rain:
       third-party:
         client-id: ${DINGTALK_THIRD_PARTY_CLIENT_ID:}
         client-secret: ${DINGTALK_THIRD_PARTY_CLIENT_SECRET:}
+    wecom:
+      callback-path: /auth/wecom/callback
+      authorization-callback-path: /auth/wecom/third-party/authorization/callback
+      login-page-bind-mode: ${IAM_WECOM_LOGIN_BIND_MODE:}
+      internal:
+        corp-id: ${WECOM_INTERNAL_CORP_ID:}
+        agent-id: ${WECOM_INTERNAL_AGENT_ID:}
+        secret: ${WECOM_INTERNAL_SECRET:}
+      third-party:
+        provider-corp-id: ${WECOM_PROVIDER_CORP_ID:}
+        provider-secret: ${WECOM_PROVIDER_SECRET:}
+        suite-id: ${WECOM_SUITE_ID:}
+        suite-secret: ${WECOM_SUITE_SECRET:}
+        token: ${WECOM_CALLBACK_TOKEN:}
+        encoding-aes-key: ${WECOM_CALLBACK_ENCODING_AES_KEY:}
+      credential:
+        encryption-key: ${WECOM_CREDENTIAL_ENCRYPTION_KEY:}
+        key-id: ${WECOM_CREDENTIAL_KEY_ID:default}
