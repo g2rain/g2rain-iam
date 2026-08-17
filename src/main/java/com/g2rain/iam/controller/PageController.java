@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.util.Objects;
 import java.util.Optional;
 
 
@@ -148,7 +147,7 @@ public class PageController {
                     return new ModelAndView(Constants.REDIRECT + buildLoginPageUrl(clientId, redirectUri, state));
                 }
                 applyLoggedInIndexModel(model, activeSession.get());
-                return new ModelAndView(filename);
+                return new ModelAndView(filename, model.asMap());
             }
 
             if ("login".equals(filename)) {
@@ -161,7 +160,7 @@ public class PageController {
                     return new ModelAndView(Constants.REDIRECT + "/auth/index.html");
                 }
                 applyLoginPageModel(model, clientId, redirectUri, state);
-                return new ModelAndView(filename);
+                return new ModelAndView(filename, model.asMap());
             }
 
             return new ModelAndView(filename);
@@ -177,16 +176,31 @@ public class PageController {
     private void applyLoggedInIndexModel(Model model, SessionDto session) {
         model.addAttribute("loggedIn", true);
         model.addAttribute("platformBaseUrl", resolvePlatformBaseUrl());
-        String accountName = Strings.isNotBlank(session.getName())
-            ? session.getName().trim()
-            : Objects.toString(session.getPassportId(), "");
+        String accountName = resolveAccountDisplayName(session);
         model.addAttribute("accountName", accountName);
-        model.addAttribute("passportId", Objects.toString(session.getPassportId(), ""));
+        model.addAttribute("passportId", resolvePassportDisplay(session.getPassportId()));
         model.addAttribute("loginMethod", resolveLoginMethod(session.getIdpType()));
         String bindModeLabel = resolveIdpBindModeLabel(session.getIdpBindMode());
         if (Strings.isNotBlank(bindModeLabel)) {
             model.addAttribute("idpBindModeLabel", bindModeLabel);
         }
+    }
+
+    private static String resolveAccountDisplayName(SessionDto session) {
+        if (Strings.isNotBlank(session.getName())) {
+            return session.getName().trim();
+        }
+        if (Strings.isNotBlank(session.getPassportId())) {
+            return "通行证 " + session.getPassportId().trim();
+        }
+        if (Strings.isNotBlank(session.getIdpSubject())) {
+            return session.getIdpSubject().trim();
+        }
+        return "当前用户";
+    }
+
+    private static String resolvePassportDisplay(String passportId) {
+        return Strings.isNotBlank(passportId) ? passportId.trim() : "—";
     }
 
     private void applyLoginPageModel(Model model, String clientId, String redirectUri, String state) {
