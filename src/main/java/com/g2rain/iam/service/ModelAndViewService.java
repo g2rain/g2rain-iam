@@ -4,6 +4,7 @@ import com.g2rain.common.exception.SystemErrorCode;
 import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.config.DingTalkIamProperties;
 import com.g2rain.iam.config.IamAccessProperties;
+import com.g2rain.iam.config.WeComIamProperties;
 import com.g2rain.iam.dto.SessionDto;
 import com.g2rain.iam.enums.IamErrorCode;
 import com.g2rain.iam.utils.AuthorizationState;
@@ -45,6 +46,9 @@ public class ModelAndViewService {
 
     @Resource
     private DingTalkIamProperties dingTalkIamProperties;
+
+    @Resource
+    private WeComIamProperties weComIamProperties;
 
     /**
      * 当客户端 ID 或重定向 URI 为空时，返回错误页面。
@@ -130,6 +134,10 @@ public class ModelAndViewService {
         if (bindMode != null) {
             model.addAttribute("dingTalkBindMode", bindMode);
         }
+        String weComBindMode = loginPageWeComBindModeOrNull();
+        if (weComBindMode != null) {
+            model.addAttribute("weComBindMode", weComBindMode);
+        }
         return modelAndView;
     }
 
@@ -139,6 +147,11 @@ public class ModelAndViewService {
     private String loginPageDingTalkBindModeOrNull() {
         String m = dingTalkIamProperties.getLoginPageBindMode();
         return Strings.isBlank(m) ? null : m.trim();
+    }
+
+    private String loginPageWeComBindModeOrNull() {
+        String mode = weComIamProperties.getLoginPageBindMode();
+        return Strings.isBlank(mode) ? null : mode.trim();
     }
 
     /**
