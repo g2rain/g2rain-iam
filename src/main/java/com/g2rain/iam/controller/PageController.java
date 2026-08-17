@@ -5,15 +5,26 @@ import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.config.DingTalkIamProperties;
 import com.g2rain.iam.config.IamAccessProperties;
 import com.g2rain.iam.config.WeComIamProperties;
+import com.g2rain.iam.dto.SessionDto;
+import com.g2rain.iam.service.ModelAndViewService;
+import com.g2rain.iam.service.SessionService;
+import com.g2rain.iam.utils.Constants;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import java.util.Objects;
+import java.util.Optional;
 
 
 /**
@@ -55,6 +66,10 @@ public class PageController {
      * 登录页企业微信入口配置。
      */
     private WeComIamProperties weComIamProperties;
+
+    private SessionService sessionService;
+
+    private ModelAndViewService modelAndViewService;
 
     /**
      * 注册页面渲染方法，处理 /auth/register.html 路径。
@@ -111,6 +126,8 @@ public class PageController {
                                     @RequestParam(name = "redirectUri", required = false) String redirectUri,
                                     @RequestParam(name = "clientId", required = false) String clientId,
                                     @RequestParam(name = "state", required = false) String state,
+                                    @CookieValue(name = Constants.SESSION_NAME, required = false) String sessionId,
+                                    HttpServletRequest request,
                                     Model model) {
         // 防止路径遍历攻击，确保文件名只包含合法字符
         if (filename == null || filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
@@ -124,49 +141,122 @@ public class PageController {
         Resource resource = resourceLoader.getResource(templatePath);
 
         if (resource.exists() && resource.isReadable()) {
-            // 模板存在，返回对应的视图
+            Optional<SessionDto> activeSession = resolveActiveSession(sessionId, request);
+
             if ("index".equals(filename)) {
-                applyIndexLoginRedirect(model, redirectUri);
+                if (activeSession.isEmpty()) {
+                    return new ModelAndView(Constants.REDIRECT + buildLoginPageUrl(clientId, redirectUri, state));
+                }
+                applyLoggedInIndexModel(model, activeSession.get());
+                return new ModelAndView(filename);
             }
+
             if ("login".equals(filename)) {
-                model.addAttribute("clientId", clientId != null ? clientId : "");
-                model.addAttribute("redirectUri", redirectUri != null ? redirectUri : "");
-                model.addAttribute("state", state != null ? state : "");
-                String m = dingTalkIamProperties.getLoginPageBindMode();
-                if (Strings.isNotBlank(m)) {
-                    model.addAttribute("dingTalkBindMode", m.trim());
+                if (activeSession.isPresent()) {
+                    SessionDto session = activeSession.get();
+                    if (Strings.isNotBlank(clientId) && Strings.isNotBlank(redirectUri)) {
+                        return modelAndViewService.redirectConsent(
+                            session.getSessionId(), clientId, redirectUri, state);
+                    }
+                    return new ModelAndView(Constants.REDIRECT + "/auth/index.html");
                 }
-                String weComMode = weComIamProperties.getLoginPageBindMode();
-                if (Strings.isNotBlank(weComMode)) {
-                    model.addAttribute("weComBindMode", weComMode.trim());
-                }
+                applyLoginPageModel(model, clientId, redirectUri, state);
+                return new ModelAndView(filename);
             }
+
             return new ModelAndView(filename);
-        } else {
-            // 模板不存在，返回错误页面
-            String requestPath = "/auth/" + filename + ".html";
-            model.addAttribute("error", "请求的页面不存在: " + requestPath);
-            model.addAttribute("redirectUri", "");
-            return new ModelAndView("error");
+        }
+
+        // 模板不存在，返回错误页面
+        String requestPath = "/auth/" + filename + ".html";
+        model.addAttribute("error", "请求的页面不存在: " + requestPath);
+        model.addAttribute("redirectUri", "");
+        return new ModelAndView("error");
+    }
+
+    private void applyLoggedInIndexModel(Model model, SessionDto session) {
+        model.addAttribute("loggedIn", true);
+        model.addAttribute("platformBaseUrl", resolvePlatformBaseUrl());
+        String accountName = Strings.isNotBlank(session.getName())
+            ? session.getName().trim()
+            : Objects.toString(session.getPassportId(), "");
+        model.addAttribute("accountName", accountName);
+        model.addAttribute("passportId", Objects.toString(session.getPassportId(), ""));
+        model.addAttribute("loginMethod", resolveLoginMethod(session.getIdpType()));
+        String bindModeLabel = resolveIdpBindModeLabel(session.getIdpBindMode());
+        if (Strings.isNotBlank(bindModeLabel)) {
+            model.addAttribute("idpBindModeLabel", bindModeLabel);
         }
     }
 
-    /**
-     * 首页「立即登录」跳转目标：
-     * <ul>
-     *     <li>若请求参数 {@code redirectUri} 非空且通过校验：跳转到该地址（由对方页面再重定向回 {@code /auth/authorize?...}）</li>
-     *     <li>若 {@code redirectUri} 为空或非法：由模板将 {@code platformBaseUrl} 与 {@code /main/home} 拼成绝对链接跳转</li>
-     * </ul>
-     */
-    private void applyIndexLoginRedirect(Model model, String redirectUri) {
-        model.addAttribute("platformBaseUrl", resolvePlatformBaseUrl());
-        String resolved = resolveIndexLoginRedirectUri(redirectUri);
-        if (resolved == null) {
-            model.addAttribute("loginViaRedirectUri", false);
-        } else {
-            model.addAttribute("loginViaRedirectUri", true);
-            model.addAttribute("loginRedirectUri", resolved);
+    private void applyLoginPageModel(Model model, String clientId, String redirectUri, String state) {
+        model.addAttribute("clientId", clientId != null ? clientId : "");
+        model.addAttribute("redirectUri", redirectUri != null ? redirectUri : "");
+        model.addAttribute("state", state != null ? state : "");
+        String m = dingTalkIamProperties.getLoginPageBindMode();
+        if (Strings.isNotBlank(m)) {
+            model.addAttribute("dingTalkBindMode", m.trim());
         }
+        String weComMode = weComIamProperties.getLoginPageBindMode();
+        if (Strings.isNotBlank(weComMode)) {
+            model.addAttribute("weComBindMode", weComMode.trim());
+        }
+    }
+
+    Optional<SessionDto> resolveActiveSession(String cookieSessionId, HttpServletRequest request) {
+        String resolvedSessionId = cookieSessionId;
+        if (Strings.isBlank(resolvedSessionId) && request != null) {
+            Cookie[] cookies = request.getCookies();
+            if (cookies != null) {
+                for (Cookie cookie : cookies) {
+                    if (Constants.SESSION_NAME.equals(cookie.getName())) {
+                        resolvedSessionId = cookie.getValue();
+                        break;
+                    }
+                }
+            }
+        }
+        if (Strings.isBlank(resolvedSessionId)) {
+            return Optional.empty();
+        }
+        SessionDto session = sessionService.getSession(resolvedSessionId.trim());
+        return session == null ? Optional.empty() : Optional.of(session);
+    }
+
+    String buildLoginPageUrl(String clientId, String redirectUri, String state) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromPath("/auth/login.html");
+        if (Strings.isNotBlank(clientId)) {
+            builder.queryParam("clientId", clientId.trim());
+        }
+        if (Strings.isNotBlank(redirectUri)) {
+            builder.queryParam("redirectUri", redirectUri.trim());
+        }
+        if (Strings.isNotBlank(state)) {
+            builder.queryParam("state", state);
+        }
+        return builder.build(true).toUriString();
+    }
+
+    private static String resolveLoginMethod(String idpType) {
+        if (Strings.isBlank(idpType)) {
+            return "账号密码";
+        }
+        return switch (idpType.trim()) {
+            case "DINGTALK" -> "钉钉";
+            case "WECHAT_WORK" -> "企业微信";
+            default -> idpType.trim();
+        };
+    }
+
+    private static String resolveIdpBindModeLabel(String bindMode) {
+        if (Strings.isBlank(bindMode)) {
+            return "";
+        }
+        return switch (bindMode.trim()) {
+            case "INTERNAL" -> "企业内部应用";
+            case "THIRD_PARTY" -> "第三方企业应用";
+            default -> bindMode.trim();
+        };
     }
 
     /**
@@ -174,25 +264,5 @@ public class PageController {
      */
     private String resolvePlatformBaseUrl() {
         return iamAccessProperties.resolvedPlatformBaseUrl();
-    }
-
-    /**
-     * @return 合法跳转地址；若应使用默认控制台则返回 null
-     */
-    private String resolveIndexLoginRedirectUri(String redirectUri) {
-        if (Strings.isBlank(redirectUri)) {
-            return null;
-        }
-        String trimmed = redirectUri.trim();
-        // 站内相对路径：必须以单个 / 开头，禁止 // 开头的协议相对 URL
-        if (trimmed.startsWith("/") && !trimmed.startsWith("//")) {
-            return trimmed;
-        }
-        // 绝对地址：仅允许 http(s)，禁止 javascript:、data: 等
-        String lower = trimmed.toLowerCase();
-        if (lower.startsWith("https://") || lower.startsWith("http://")) {
-            return trimmed;
-        }
-        return null;
     }
 }
