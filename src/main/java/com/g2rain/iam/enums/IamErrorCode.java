@@ -141,8 +141,7 @@ public enum IamErrorCode implements ErrorCode {
 
     WECOM_AUTHORIZATION_EXCHANGE_FAILED("iam.50232", "企业微信安装授权换取永久授权码失败"),
 
-    WECOM_CREDENTIAL_ENCRYPTION_FAILED("iam.50233", "企业微信永久授权凭证加密失败"),
-    DINGTALK_CONTACT_CORP_MISMATCH("iam.40024", "钉钉通讯录企业标识与 IAM 配置不一致");
+    WECOM_CREDENTIAL_ENCRYPTION_FAILED("iam.50233", "企业微信永久授权凭证加密失败");
 
     private final String code;
 
