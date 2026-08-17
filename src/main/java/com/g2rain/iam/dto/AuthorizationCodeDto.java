@@ -5,8 +5,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.List;
-
 /**
  * 授权码 DTO 类，用于在授权码授权流程中传递会话 ID、客户端 ID 和用户 ID 信息。
  * <p>

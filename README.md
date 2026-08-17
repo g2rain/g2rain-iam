@@ -16,7 +16,7 @@
 
 [官网](https://www.g2rain.com) · [Issues](https://github.com/g2rain/g2rain/issues) · [Discussions](https://github.com/g2rain/g2rain/discussions)
 
-## 目录
+在 G2rain“企业级 AI 原生开源 SaaS 平台”体系中，`g2rain-iam` 位于平台核心服务层，承担统一身份入口与安全令牌中心的角色。
 
 - 项目简介
 - 平台定位
@@ -74,7 +74,7 @@
 - 钉钉通行证绑定流程
 - 登出与会话清理流程
 
-## 功能概览
+## 4. 核心能力
 
 | 能力 | 说明 |
 | --- | --- |
@@ -123,7 +123,15 @@ flowchart TD
   L --> D
 ```
 
-## 技术栈
+- 语言与运行时：`Java 25`
+- 后端框架：`Spring Boot 4.0.5`、`Spring Cloud 2025.1.1`
+- 服务治理：`Nacos Discovery`、`Nacos Config`
+- 数据与缓存：`Redis`
+- 服务调用：`OpenFeign`、`LoadBalancer`
+- 安全与签名：`Nimbus JOSE JWT`、ECDSA、DPoP
+- 页面渲染：`Thymeleaf`
+- 可观测：`Actuator`、`OpenTelemetry`、`Micrometer Tracing`
+- 构建与交付：`Maven`、`Jib`、`Dockerfile`、`build.sh`
 
 | 类别 | 说明 |
 | --- | --- |
@@ -189,7 +197,7 @@ flowchart TD
 | `BASE_URL` | IAM 对外访问基地址，用于登录、授权回调与第三方身份接入场景。 |
 | `PLATFORM_BASE_URL` | 平台前端或控制台访问地址，用于认证完成后的页面跳转。 |
 
-## 构建与镜像
+#### 1. 标准登录与授权码主线
 
 | 目标 | 命令 | 产物 | 说明 |
 | --- | --- | --- | --- |
@@ -199,7 +207,11 @@ flowchart TD
 | Dockerfile 镜像 | `docker build .` | 自定义 Docker 镜像 | 仓库提供 Dockerfile，可按组织镜像规范封装部署。 |
 | 构建脚本 | `./build.sh` | 脚本定义的构建结果 | 仓库提供 build.sh，可承载组织内约定的镜像或发布流程。 |
 
-## 代码质量与测试
+- 客户端调用 `POST /auth/token` 时，`ClientDPoPAuthFilter` 会先校验客户端 `DPoP`。
+- `TokenService` 再解析客户端身份、原子消费授权码，并读取登录上下文。
+- 系统通过 `ApplicationClient` 获取平台登记的应用公钥，继续校验 `application-DPoP`。
+- 在客户端 DPoP 与应用 DPoP 都通过后，`TokenKeyManager` 才会加载激活密钥并签发 JWT。
+- 这一主线解决的是“请求来自哪个客户端实例、属于哪个应用、能否安全签发令牌”的企业级安全问题。
 
 | 检查项 | 命令 | 说明 |
 | --- | --- | --- |
@@ -300,7 +312,9 @@ flowchart TD
 | g2rain-gateway-webflux | 作为平台入口网关，协同完成请求转发、路由治理与入口安全控制。 |
 | g2rain-gateway-webmvc | 作为 MVC 形态入口网关，协同完成请求转发、路由治理与入口安全控制。 |
 
-## 参与贡献
+- `pom.xml` 已集成 `maven-enforcer-plugin`、`checkstyle`、`pmd`、`spotbugs`、`jacoco`。
+- 当前扫描未发现 `src/test/java` 测试源码，说明质量插件已接入，但自动化测试仍需补齐。
+- 建议后续优先补齐授权码流程、DPoP 校验、JWT 签发、Session/Cookie 策略、钉钉登录回调等关键链路测试。
 
 我们欢迎所有形式的贡献：Issue 反馈、文档改进、功能建议与代码提交。
 
@@ -314,7 +328,7 @@ flowchart TD
 
 代码贡献前请尽量补充必要的测试和文档，并确保构建、测试与静态检查通过。
 
-## 许可证
+## 12. 使用建议
 
 本项目基于 [Apache 2.0许可证](https://github.com/g2rain/g2rain-common/blob/main/LICENSE) 开源。
 
