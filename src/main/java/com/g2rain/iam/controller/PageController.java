@@ -125,6 +125,7 @@ public class PageController {
                                     @RequestParam(name = "redirectUri", required = false) String redirectUri,
                                     @RequestParam(name = "clientId", required = false) String clientId,
                                     @RequestParam(name = "state", required = false) String state,
+                                    @RequestParam(name = "from", required = false) String from,
                                     @CookieValue(name = Constants.SESSION_NAME, required = false) String sessionId,
                                     HttpServletRequest request,
                                     Model model) {
@@ -143,11 +144,18 @@ public class PageController {
             Optional<SessionDto> activeSession = resolveActiveSession(sessionId, request);
 
             if ("index".equals(filename)) {
-                if (activeSession.isEmpty()) {
+                if (activeSession.isPresent()) {
+                    applyLoggedInIndexModel(model, activeSession.get());
+                    return new ModelAndView(filename, model.asMap());
+                }
+                if ("logout".equals(from)) {
+                    applyGuestIndexModel(model, redirectUri);
+                    return new ModelAndView(filename, model.asMap());
+                }
+                if (Strings.isNotBlank(clientId) && Strings.isNotBlank(redirectUri)) {
                     return new ModelAndView(Constants.REDIRECT + buildLoginPageUrl(clientId, redirectUri, state));
                 }
-                applyLoggedInIndexModel(model, activeSession.get());
-                return new ModelAndView(filename, model.asMap());
+                return modelAndViewService.redirectPlatformMainHome();
             }
 
             if ("login".equals(filename)) {
@@ -158,6 +166,9 @@ public class PageController {
                             session.getSessionId(), clientId, redirectUri, state);
                     }
                     return new ModelAndView(Constants.REDIRECT + "/auth/index.html");
+                }
+                if (Strings.isBlank(clientId) || Strings.isBlank(redirectUri)) {
+                    return modelAndViewService.redirectPlatformMainHome();
                 }
                 applyLoginPageModel(model, clientId, redirectUri, state);
                 return new ModelAndView(filename, model.asMap());
@@ -171,6 +182,36 @@ public class PageController {
         model.addAttribute("error", "请求的页面不存在: " + requestPath);
         model.addAttribute("redirectUri", "");
         return new ModelAndView("error");
+    }
+
+    private void applyGuestIndexModel(Model model, String redirectUri) {
+        model.addAttribute("loggedIn", false);
+        model.addAttribute("platformBaseUrl", resolvePlatformBaseUrl());
+        String resolved = resolveGuestLoginRedirectUri(redirectUri);
+        if (resolved == null) {
+            model.addAttribute("loginViaRedirectUri", false);
+        } else {
+            model.addAttribute("loginViaRedirectUri", true);
+            model.addAttribute("loginRedirectUri", resolved);
+        }
+    }
+
+    /**
+     * @return 合法跳转地址；若应使用默认控制台则返回 null
+     */
+    private static String resolveGuestLoginRedirectUri(String redirectUri) {
+        if (Strings.isBlank(redirectUri)) {
+            return null;
+        }
+        String trimmed = redirectUri.trim();
+        if (trimmed.startsWith("/") && !trimmed.startsWith("//")) {
+            return trimmed;
+        }
+        String lower = trimmed.toLowerCase();
+        if (lower.startsWith("https://") || lower.startsWith("http://")) {
+            return trimmed;
+        }
+        return null;
     }
 
     private void applyLoggedInIndexModel(Model model, SessionDto session) {

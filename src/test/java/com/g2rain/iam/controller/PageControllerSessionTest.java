@@ -21,6 +21,7 @@ import org.springframework.ui.ExtendedModelMap;
 import org.springframework.web.servlet.ModelAndView;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -29,6 +30,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class PageControllerSessionTest {
+
+    private static final String PLATFORM_HOME = Constants.REDIRECT + "https://platform.example.com/main/home";
 
     @Mock
     private ResourceLoader resourceLoader;
@@ -62,14 +65,32 @@ class PageControllerSessionTest {
     }
 
     @Test
-    void indexWithoutSessionRedirectsToLogin() {
+    void indexWithoutSessionRedirectsToPlatformMainHome() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         ExtendedModelMap model = new ExtendedModelMap();
+        when(modelAndViewService.redirectPlatformMainHome())
+            .thenReturn(new ModelAndView(PLATFORM_HOME));
 
         ModelAndView view = pageController.dynamicPage(
-            "index", null, null, null, null, request, model);
+            "index", null, null, null, null, null, request, model);
 
-        assertEquals(Constants.REDIRECT + "/auth/login.html", view.getViewName());
+        assertEquals(PLATFORM_HOME, view.getViewName());
+        verify(modelAndViewService).redirectPlatformMainHome();
+    }
+
+    @Test
+    void indexWithoutSessionFromLogoutRendersGuestIndex() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        ExtendedModelMap model = new ExtendedModelMap();
+        when(iamAccessProperties.resolvedPlatformBaseUrl()).thenReturn("https://platform.example.com");
+
+        ModelAndView view = pageController.dynamicPage(
+            "index", null, null, null, "logout", null, request, model);
+
+        assertEquals("index", view.getViewName());
+        assertFalse((Boolean) model.get("loggedIn"));
+        assertEquals("https://platform.example.com", model.get("platformBaseUrl"));
+        assertFalse((Boolean) model.get("loginViaRedirectUri"));
     }
 
     @Test
@@ -85,7 +106,7 @@ class PageControllerSessionTest {
         ExtendedModelMap model = new ExtendedModelMap();
 
         ModelAndView view = pageController.dynamicPage(
-            "index", null, null, null, "session-1", request, model);
+            "index", null, null, null, null, "session-1", request, model);
 
         assertEquals("index", view.getViewName());
         assertEquals(true, model.get("loggedIn"));
@@ -104,7 +125,7 @@ class PageControllerSessionTest {
         ExtendedModelMap model = new ExtendedModelMap();
 
         ModelAndView view = pageController.dynamicPage(
-            "login", null, null, null, "session-2", request, model);
+            "login", null, null, null, null, "session-2", request, model);
 
         assertEquals(Constants.REDIRECT + "/auth/index.html", view.getViewName());
     }
@@ -126,6 +147,7 @@ class PageControllerSessionTest {
             "https://app.test/callback",
             "client-a",
             "state-x",
+            null,
             "session-3",
             request,
             model);
@@ -136,7 +158,7 @@ class PageControllerSessionTest {
     }
 
     @Test
-    void indexWithoutSessionPreservesOAuthQueryOnLoginRedirect() {
+    void indexWithoutSessionWithOAuthRedirectsToLogin() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         ExtendedModelMap model = new ExtendedModelMap();
 
@@ -146,6 +168,7 @@ class PageControllerSessionTest {
             "client-a",
             "state-x",
             null,
+            null,
             request,
             model);
 
@@ -153,5 +176,39 @@ class PageControllerSessionTest {
         assertTrue(view.getViewName().contains("clientId=client-a"));
         assertTrue(view.getViewName().contains("redirectUri="));
         assertTrue(view.getViewName().contains("state=state-x"));
+    }
+
+    @Test
+    void loginWithoutOAuthRedirectsToPlatformMainHome() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        ExtendedModelMap model = new ExtendedModelMap();
+        when(modelAndViewService.redirectPlatformMainHome())
+            .thenReturn(new ModelAndView(PLATFORM_HOME));
+
+        ModelAndView view = pageController.dynamicPage(
+            "login", null, null, null, null, null, request, model);
+
+        assertEquals(PLATFORM_HOME, view.getViewName());
+        verify(modelAndViewService).redirectPlatformMainHome();
+    }
+
+    @Test
+    void loginWithOAuthNoSessionRendersLoginPage() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        ExtendedModelMap model = new ExtendedModelMap();
+
+        ModelAndView view = pageController.dynamicPage(
+            "login",
+            "https://app.test/callback",
+            "client-a",
+            "state-x",
+            null,
+            null,
+            request,
+            model);
+
+        assertEquals("login", view.getViewName());
+        assertEquals("client-a", model.get("clientId"));
+        assertEquals("https://app.test/callback", model.get("redirectUri"));
     }
 }

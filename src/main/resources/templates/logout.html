@@ -39,7 +39,7 @@
                 <span id="countdown"><span class="pulse">1</span></span> 秒后跳转到首页...
             </div>
             <div style="margin-top: 18px;">
-                <a th:href="@{/auth/index.html}"
+                <a th:href="@{/auth/index.html(from='logout')}"
                    class="btn btn-outline btn-lg"
                    style="width: auto; padding: 12px 24px;">
                     立即跳转
@@ -64,7 +64,7 @@
             }
             if (countdown <= 0) {
                 clearInterval(timer);
-                window.location.href = '/auth/index.html';
+                window.location.href = '/auth/index.html?from=logout';
             }
         }, 1000);
     })();
