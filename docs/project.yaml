@@ -1,0 +1,106 @@
+schemaVersion: 1
+name: g2rain-iam
+repository: g2rain/g2rain-iam
+family: platform-singleton
+architectureType: identity-security-service
+role: G2rain 统一身份入口、授权服务与 Token 中心
+version: 1.0.0
+license: Apache-2.0
+
+centralRegistration:
+  repository: https://github.com/g2rain/g2rain
+  ref: ec69e77
+  document: docs/architecture/platform-services/g2rain-iam.md
+  status: registered
+  implementationPolicy: organization-singleton
+
+ownership:
+  owns:
+    - 登录、授权码、Token、刷新、交换和注销
+    - 浏览器认证会话、Cookie 和认证流程页面
+    - JWT、JOSE、DPoP 与签名密钥编排
+    - 钉钉、企业微信等 IdP 登录、回调、绑定和同步编排
+  excludes:
+    - Basis 拥有的 Passport、用户、组织、应用和 IdP 绑定主数据
+    - Gateway 的请求转发和业务请求最终鉴权
+    - Main Shell 的菜单、Tab 和子应用治理
+    - 领域服务的数据级和业务规则授权
+
+toolchain:
+  java: "25"
+  build: Maven
+  framework: Spring Boot 4.0.5
+  springCloud: 2025.1.1
+  discoveryAndConfig: Nacos
+  cacheAndSession: Redis
+  token: Nimbus JOSE JWT
+  view: Thymeleaf
+
+runtime:
+  applicationName: g2rain-iam
+  defaultPort: 8082
+  containerExposedPort: 8080
+  defaultProfile: dev
+  dependencies:
+    - Redis
+    - Nacos
+    - g2rain-basis API
+    - configured external identity providers
+
+commands:
+  verify: mvn test
+  package: mvn clean package
+  run: mvn spring-boot:run
+  validate: mvn validate
+  checkstyle: mvn checkstyle:check
+  pmd: mvn pmd:check
+  spotbugs: mvn spotbugs:check
+  coverage: mvn test jacoco:report
+  image: mvn compile jib:dockerBuild
+
+verification:
+  status: test-passed
+  verifiedAt: "2026-08-26"
+  command: mvn test
+  testsRun: 47
+  failures: 0
+  errors: 0
+  skipped: 0
+  coverageReport: skipped-missing-execution-data
+
+publicContracts:
+  - /auth/authorize
+  - /auth/authorize_selected
+  - /auth/token
+  - /auth/login
+  - /auth/logout
+  - /auth/passport_register
+  - /auth/dingtalk/**
+  - /auth/wecom/**
+internalContracts:
+  - /internal/tenant_provision/**
+  - /internal/idp_sync/**
+
+collaborators:
+  - repository: g2rain/g2rain-main-shell
+    role: 登录入口、回调承接和浏览器 Token 协调
+  - repository: g2rain/g2rain-gateway-webflux
+    role: 业务 API 入口、Token 验证和转发
+  - repository: g2rain/g2rain-basis
+    role: Passport、用户、应用和 IdP 绑定主数据
+
+documentation:
+  entry: docs/index.md
+  agentEntry: AGENTS.md
+  designs:
+    - docs/design/wecom-qr-login.md
+    - docs/design/wecom-customer-service-callback-verification.md
+
+aiCoding:
+  activeRequirement: null
+  requirementTemplate: docs/requirements/README.md
+  validation:
+    - 读取中央登记、本地边界、安全要求、偏差、设计和当前需求
+    - 检查 POM、配置、Controller、Service、IdP Adapter、测试和 Git Diff
+    - 执行 mvn test
+    - 协议变化联合 Main Shell、Gateway、Basis 和真实客户端验证
