@@ -12,4 +12,6 @@ public class WeComOAuthStateDto {
     private String clientId;
     private String redirectUri;
     private String state;
+    /** 登录意图：USER 或 ADMIN */
+    private String loginRole;
 }

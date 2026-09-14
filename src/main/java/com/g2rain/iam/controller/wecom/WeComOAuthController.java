@@ -1,14 +1,14 @@
-package com.g2rain.iam.controller;
+package com.g2rain.iam.controller.wecom;
 
 import com.g2rain.common.model.Result;
 import com.g2rain.iam.dto.WeComStreamAuthorizationDto;
-import com.g2rain.iam.wecom.WeComOAuthResult;
 import com.g2rain.iam.service.IamSessionCookieService;
 import com.g2rain.iam.service.ModelAndViewService;
 import com.g2rain.iam.service.WeComOAuthService;
 import com.g2rain.iam.service.WeComStreamAuthorizationService;
 import com.g2rain.iam.utils.Constants;
 import com.g2rain.iam.vo.WeComStreamAuthorizationVo;
+import com.g2rain.iam.wecom.WeComOAuthResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -43,11 +43,12 @@ public class WeComOAuthController {
         @RequestParam String bindMode,
         @RequestParam String clientId,
         @RequestParam String redirectUri,
-        @RequestParam(required = false) String state) {
+        @RequestParam(required = false) String state,
+        @RequestParam(required = false) String loginRole) {
         try {
             return new ModelAndView(Constants.REDIRECT
                 + oauthService.buildAuthorizeUrl(
-                    bindMode, clientId, redirectUri, state));
+                    bindMode, clientId, redirectUri, state, loginRole));
         } catch (Exception exception) {
             log.error("企业微信授权跳转失败 bindMode={}", bindMode, exception);
             return modelAndViewService.redirectLogin(

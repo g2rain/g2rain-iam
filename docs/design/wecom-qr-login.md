@@ -11,7 +11,8 @@
 **跨项目主文档**（数据模型、Basis API、登录与 Organ 规则、凭证脱敏）：  
 [`g2rain-basis/docs/design/wechat-work-authorization.md`](../../../g2rain-basis/docs/design/wechat-work-authorization.md)
 
-本文只描述 IAM 侧 OAuth、Adapter、配置与测试；与主文档冲突时**以主文档为准**。
+本文只描述 IAM 侧 OAuth、Adapter、配置与测试；与主文档冲突时**以主文档为准**。  
+HTTP 入口总览：[企业微信能力地图](./wecom-capability-map.md)。
 
 说明：Java 组件名和配置前缀可以继续使用产品英文名 `WeCom`/`WECOM`；凡表示 Basis 身份源枚举或持久化 `idpType` 的字段，必须使用 `WECHAT_WORK`。
 
@@ -271,9 +272,10 @@ service/
   WeComOAuthService.java
   WeComAuthorizationService.java
 
-controller/
+controller/wecom/
   WeComOAuthController.java
   WeComAuthorizationCallbackController.java
+  WeComCustomerServiceController.java
 
 dto/
   WeComOAuthStateDto.java
@@ -389,25 +391,18 @@ g2rain:
 2. 三方登录前调用 `resolve`；安装/取消回调调用 `upsert` / `revoke`。
 3. 不在 IAM 重复实现 Basis 授权表 CRUD 或管理端凭证展示。
 
-## 12. 自动开户与 Organ 映射（与钉钉一致）
+## 12. 自动开户与 Organ 映射（员工闸门）
 
-与 `DingTalkOAuthService` / `DingTalkIdpAuthService` 相同：
+与钉钉员工扫码对称，见 [IdP 员工扫码与租户开通闸门](./idp-employee-login-tenant-gate.md)。
 
 | 场景 | 行为 |
 |---|---|
-| IdP 扫码登录 | **不**校验 `idp_enterprise_organ`；默认 `autoProvisionMissingPassport=true` |
-| 已绑定 | 直接获得 `passportId` |
-| 未绑定 | 创建不可密码登录的 Passport 并写入 `passport_idp_binding` |
-| 三方额外条件 | 仅在企业 Suite 授权为 `ACTIVE` 且 AgentID 一致后才允许进入绑定/Session |
+| `loginRole=USER` 员工扫码 | **必须** `idp_enterprise_organ` resolve 成功；JIT passport/binding；`ensure` organ User（非 ADMIN） |
+| `loginRole=ADMIN` 管理员扫码 | 允许尚无 organ；断言企微/钉钉管理员；写入开通资格；有映射时同样 ensure User |
+| 企微 SSO `usertype=member` | 对应本平台 **USER**，**不是** `SessionType.MEMBER` |
+| Stream / `authorize_code` | 仍 `autoProvisionMissingPassport=false` |
 
-`idp_enterprise_organ` 仅在已登录用户执行 `/passport_idp_binding/bind`、租户同步、租户开通时使用，详见主文档 §10.2。
-
-建议配置（与钉钉对称）：
-
-```yaml
-g2rain.iam.wecom.internal.auto-provision-missing-passport: true
-g2rain.iam.wecom.third-party.auto-provision-missing-passport: true
-```
+租户开通：`provision_account` **一律**经 IAM `verify_create_organ`，仅 IdP 管理员资格通过。
 
 ## 13. 错误码
 

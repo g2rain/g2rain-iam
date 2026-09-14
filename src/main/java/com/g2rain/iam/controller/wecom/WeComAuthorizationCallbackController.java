@@ -1,4 +1,4 @@
-package com.g2rain.iam.controller;
+package com.g2rain.iam.controller.wecom;
 
 import com.g2rain.iam.service.WeComAuthorizationService;
 import com.g2rain.iam.wecom.WeComCallbackCrypto;

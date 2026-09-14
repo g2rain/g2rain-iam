@@ -22,6 +22,8 @@
 
 ## 设计资料
 
+- [企业微信能力地图（`/auth/wecom`）](design/wecom-capability-map.md)
+- [IdP 员工扫码与租户开通闸门](design/idp-employee-login-tenant-gate.md)
 - [企业微信扫码登录](design/wecom-qr-login.md)
 - [企业微信客服回调认证升级](design/wecom-customer-service-callback-verification.md)
 

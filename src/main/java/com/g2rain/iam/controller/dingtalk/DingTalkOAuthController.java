@@ -1,4 +1,4 @@
-package com.g2rain.iam.controller;
+package com.g2rain.iam.controller.dingtalk;
 
 import com.g2rain.common.model.Result;
 import com.g2rain.common.utils.Strings;
@@ -67,7 +67,8 @@ public class DingTalkOAuthController {
             dto.getBindMode(),
             dto.getClientId(),
             dto.getRedirectUri(),
-            dto.getState()
+            dto.getState(),
+            dto.getLoginRole()
         ));
     }
 
@@ -87,9 +88,11 @@ public class DingTalkOAuthController {
         @Parameter(description = "IdP 接入形态，IdpBindMode 枚举名", required = true) @RequestParam(name = "bindMode") String bindMode,
         @Parameter(description = "OAuth2 客户端 ID", required = true) @RequestParam(name = "clientId") String clientId,
         @Parameter(description = "OAuth2 回调地址", required = true) @RequestParam(name = "redirectUri") String redirectUri,
-        @Parameter(description = "业务系统 state") @RequestParam(name = "state", required = false) String state) {
+        @Parameter(description = "业务系统 state") @RequestParam(name = "state", required = false) String state,
+        @Parameter(description = "登录意图 USER|ADMIN，默认 USER") @RequestParam(name = "loginRole", required = false) String loginRole) {
         try {
-            String url = dingTalkOAuthService.buildDingTalkAuthorizeRedirectUrl(bindMode, clientId, redirectUri, state);
+            String url = dingTalkOAuthService.buildDingTalkAuthorizeRedirectUrl(
+                bindMode, clientId, redirectUri, state, loginRole);
             return new ModelAndView(Constants.REDIRECT + url);
         } catch (Exception e) {
             log.error("钉钉授权跳转失败 bindMode={} message={}", bindMode, e.getMessage(), e);

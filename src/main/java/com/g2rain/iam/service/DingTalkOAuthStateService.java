@@ -10,6 +10,7 @@ import com.g2rain.iam.dto.DingTalkOAuthStateDto;
 import com.g2rain.iam.dingtalk.DingTalkLoginAdapter;
 import com.g2rain.iam.dingtalk.DingTalkLoginAdapterRouter;
 import com.g2rain.iam.enums.RedisKeyRule;
+import com.g2rain.iam.enums.IdpLoginRole;
 import com.g2rain.iam.utils.IamUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -43,6 +44,11 @@ public class DingTalkOAuthStateService {
      */
     public String persistStateAndBuildAuthorizeUrl(String bindMode, String clientId, String redirectUri,
                                                    String state, boolean qrEmbedded) {
+        return persistStateAndBuildAuthorizeUrl(bindMode, clientId, redirectUri, state, qrEmbedded, null);
+    }
+
+    public String persistStateAndBuildAuthorizeUrl(String bindMode, String clientId, String redirectUri,
+                                                   String state, boolean qrEmbedded, String loginRole) {
         if (Strings.isBlank(clientId)) {
             throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "clientId");
         }
@@ -57,6 +63,7 @@ public class DingTalkOAuthStateService {
         payload.setRedirectUri(redirectUri);
         payload.setState(state);
         payload.setQrEmbedded(qrEmbedded);
+        payload.setLoginRole(IdpLoginRole.fromParam(loginRole).name());
         genericRedisHelper.set(
             RedisKeyRule.DINGTALK_OAUTH_STATE.format(opaqueState),
             payload,

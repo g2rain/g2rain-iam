@@ -20,11 +20,14 @@ ownership:
     - 浏览器认证会话、Cookie 和认证流程页面
     - JWT、JOSE、DPoP 与签名密钥编排
     - 钉钉、企业微信等 IdP 登录、回调、绑定和同步编排
+    - 企业微信客服 decrypt、memberResolveCode 与 SessionType=MEMBER Token（MemberAuthorizeController.token）
   excludes:
     - Basis 拥有的 Passport、用户、组织、应用和 IdP 绑定主数据
+    - Member 拥有的会员与会员身份主数据
     - Gateway 的请求转发和业务请求最终鉴权
     - Main Shell 的菜单、Tab 和子应用治理
     - 领域服务的数据级和业务规则授权
+    - 企业微信 sync_msg / 客服消息正文处理
 
 toolchain:
   java: "25"
@@ -72,11 +75,13 @@ publicContracts:
   - /auth/authorize
   - /auth/authorize_selected
   - /auth/token
+  - /auth/member/token
   - /auth/login
   - /auth/logout
   - /auth/passport_register
   - /auth/dingtalk/**
   - /auth/wecom/**
+  - /auth/wecom/customer_service/decrypt
 internalContracts:
   - /internal/tenant_provision/**
   - /internal/idp_sync/**
@@ -88,11 +93,15 @@ collaborators:
     role: 业务 API 入口、Token 验证和转发
   - repository: g2rain/g2rain-basis
     role: Passport、用户、应用和 IdP 绑定主数据
+  - repository: g2rain/g2rain-member
+    role: 会员与企业微信身份主数据；IAM 在受信服务网络内无鉴权直连 resolveOrCreate，Member 不得暴露到非受信网络
 
 documentation:
   entry: docs/index.md
   agentEntry: AGENTS.md
   designs:
+    - docs/design/wecom-capability-map.md
+    - docs/design/idp-employee-login-tenant-gate.md
     - docs/design/wecom-qr-login.md
     - docs/design/wecom-customer-service-callback-verification.md
 

@@ -515,6 +515,24 @@ public class TokenService {
      * @throws BusinessException 当未找到有效密钥或生成 JWT 失败时抛出
      */
     private TokenVo doGenerateToken(String applicationCode, TokenJWTPayload payload) {
+        return doGenerateToken(applicationCode, payload, true);
+    }
+
+    /**
+     * 签发 SessionType=MEMBER 访问令牌；不写入员工/通行证登录日志。
+     */
+    public TokenVo issueMemberAccessToken(TokenJWTPayload payload) {
+        if (payload == null || payload.getSessionType() != SessionType.MEMBER) {
+            throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "sessionType");
+        }
+        if (payload.getOrganId() == null || payload.getMemberId() == null) {
+            throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "memberId");
+        }
+        return doGenerateToken("member", payload, false);
+    }
+
+    private TokenVo doGenerateToken(
+        String applicationCode, TokenJWTPayload payload, boolean persistLoginToken) {
         Map<String, Object> payloadClaims = jsonCodec.obj2map(payload);
         ECKey ecKey = tokenKeyManager.getActiveKey();
         if (Objects.isNull(ecKey)) {
@@ -547,7 +565,9 @@ public class TokenService {
             TokenVo token = new TokenVo(signedJWT.serialize(), keyID);
 
             // 保存生成 Token 的日志记录
-            saveLoginToken(applicationCode, payload);
+            if (persistLoginToken) {
+                saveLoginToken(applicationCode, payload);
+            }
             // 返回 Token
             return token;
         } catch (Exception e) {

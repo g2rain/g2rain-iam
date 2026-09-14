@@ -16,6 +16,7 @@ public class WeComIamProperties {
     private final Internal internal = new Internal();
     private final ThirdParty thirdParty = new ThirdParty();
     private final Credential credential = new Credential();
+    private final CustomerService customerService = new CustomerService();
 
     public String fullCallbackUrl(String baseUrl) {
         return IamUrlUtils.joinAbsoluteUrl(baseUrl, callbackPath);
@@ -49,5 +50,27 @@ public class WeComIamProperties {
     public static class Credential {
         private String encryptionKey = "";
         private String keyId = "default";
+    }
+
+    @Getter
+    @Setter
+    public static class CustomerService {
+        private boolean enabled = false;
+        private long timestampSkewSeconds = 300;
+        private long replayTtlSeconds = 600;
+        private long memberResolveCodeTtlSeconds = 300;
+        private long memberTokenTtlSeconds = 1800;
+        private java.util.List<CustomerServiceBinding> bindings = new java.util.ArrayList<>();
+    }
+
+    @Getter
+    @Setter
+    public static class CustomerServiceBinding {
+        private String bindingCode = "";
+        private String token = "";
+        private String encodingAesKey = "";
+        private String expectedReceiver = "";
+        private String enterpriseId = "";
+        private String bindMode = "THIRD_PARTY";
     }
 }

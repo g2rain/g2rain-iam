@@ -8,6 +8,7 @@ import com.g2rain.iam.config.IamAccessProperties;
 import com.g2rain.iam.config.WeComIamProperties;
 import com.g2rain.iam.dto.WeComOAuthStateDto;
 import com.g2rain.iam.enums.IamErrorCode;
+import com.g2rain.iam.enums.IdpLoginRole;
 import com.g2rain.iam.enums.RedisKeyRule;
 import com.g2rain.iam.utils.IamUtils;
 import com.g2rain.iam.wecom.WeComLoginAdapter;
@@ -28,6 +29,11 @@ public class WeComOAuthStateService {
 
     public String persistAndBuildAuthorizeUrl(
         String bindMode, String clientId, String redirectUri, String state) {
+        return persistAndBuildAuthorizeUrl(bindMode, clientId, redirectUri, state, null);
+    }
+
+    public String persistAndBuildAuthorizeUrl(
+        String bindMode, String clientId, String redirectUri, String state, String loginRole) {
         if (Strings.isBlank(clientId)) {
             throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "clientId");
         }
@@ -36,16 +42,19 @@ public class WeComOAuthStateService {
         }
         WeComLoginAdapter adapter = weComLoginAdapterRouter.resolve(bindMode);
         String opaqueState = IamUtils.generateAuthorizationCode();
+        IdpLoginRole role = IdpLoginRole.fromParam(loginRole);
         WeComOAuthStateDto payload = new WeComOAuthStateDto();
         payload.setBindMode(adapter.bindMode().name());
         payload.setClientId(clientId.trim());
         payload.setRedirectUri(redirectUri.trim());
         payload.setState(state);
+        payload.setLoginRole(role.name());
         redis.set(RedisKeyRule.WECOM_OAUTH_STATE.format(opaqueState),
             payload, Duration.ofMinutes(10));
         String callback =
             properties.fullCallbackUrl(iamAccessProperties.normalizedBaseUrl());
-        return adapter.buildAuthorizeUrl(opaqueState, callback);
+        String weComUserType = role.isAdmin() ? "admin" : "member";
+        return adapter.buildAuthorizeUrl(opaqueState, callback, weComUserType);
     }
 
     public WeComOAuthStateDto consume(String opaqueState) {

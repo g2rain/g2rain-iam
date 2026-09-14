@@ -1,7 +1,6 @@
 package com.g2rain.iam.controller;
 
 import com.g2rain.basis.api.IdpSyncApi;
-import com.g2rain.basis.enums.IdpType;
 import com.g2rain.basis.idp.sync.dto.IdpFetchMemberRequest;
 import com.g2rain.basis.idp.sync.dto.IdpFetchSnapshotRequest;
 import com.g2rain.basis.idp.sync.dto.IdpMemberNode;
@@ -15,22 +14,22 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * IdP 通讯录同步内部接口。
+ * IdP 通讯录同步内部接口（按请求 idpType 路由渠道）。
  */
 @RestController
-@RequestMapping("/internal/idp_sync/dingtalk")
+@RequestMapping("/internal/idp_sync")
 public class IdpSyncInternalController implements IdpSyncApi {
 
     @Resource
     private IdpContactSyncRouter idpContactSyncRouter;
 
     @Override
-    public Result<IdpOrganizationSnapshot> fetchDingTalkSnapshot(@RequestBody @Validated IdpFetchSnapshotRequest request) {
-        return Result.success(idpContactSyncRouter.fetchSnapshot(IdpType.DINGTALK.name(), request));
+    public Result<IdpOrganizationSnapshot> fetchSnapshot(@RequestBody @Validated IdpFetchSnapshotRequest request) {
+        return Result.success(idpContactSyncRouter.fetchSnapshot(request.getIdpType(), request));
     }
 
     @Override
-    public Result<IdpMemberNode> fetchDingTalkMember(@RequestBody @Validated IdpFetchMemberRequest request) {
-        return Result.success(idpContactSyncRouter.fetchMember(IdpType.DINGTALK.name(), request));
+    public Result<IdpMemberNode> fetchMember(@RequestBody @Validated IdpFetchMemberRequest request) {
+        return Result.success(idpContactSyncRouter.fetchMember(request.getIdpType(), request));
     }
 }

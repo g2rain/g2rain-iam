@@ -4,6 +4,7 @@ package com.g2rain.iam.service;
 import com.g2rain.data.redis.GenericRedisHelper;
 import com.g2rain.iam.dto.SessionDto;
 import com.g2rain.iam.enums.RedisKeyRule;
+import com.g2rain.iam.enums.IdpLoginRole;
 import com.g2rain.iam.idp.IdpPrincipal;
 import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.utils.IamUtils;
@@ -41,6 +42,14 @@ public class SessionService {
      * 为 IdP 登录创建会话（写入 IdP 元数据）
      */
     public String createIdpSession(String passportId, IdpPrincipal principal) {
+        return createIdpSession(passportId, principal, IdpLoginRole.USER, false);
+    }
+
+    /**
+     * 为 IdP 员工扫码登录创建会话
+     */
+    public String createIdpSession(
+        String passportId, IdpPrincipal principal, IdpLoginRole loginRole, boolean idpAdmin) {
         String sessionId = IamUtils.generateSessionId();
         String idpApplicationCode = principal.idpApplicationCode() == null
             ? ""
@@ -54,7 +63,17 @@ public class SessionService {
         session.setIdpSubject(principal.idpSubject());
         session.setIdpBindMode(principal.bindMode());
         session.setIdpApplicationCode(idpApplicationCode);
+        session.setIdpUserId(principal.idpUserId());
+        session.setIdpLoginRole(loginRole == null ? IdpLoginRole.USER.name() : loginRole.name());
+        session.setIdpAdmin(idpAdmin);
         persist(session);
+        if (idpAdmin && Strings.isNotBlank(passportId)) {
+            genericRedisHelper.set(
+                RedisKeyRule.IDP_TENANT_PROVISION_ELIGIBLE.format(passportId.trim()),
+                "1",
+                SESSION_TTL
+            );
+        }
         return sessionId;
     }
 

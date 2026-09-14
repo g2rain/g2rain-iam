@@ -43,4 +43,10 @@ public class DingTalkQrBootstrapDto {
      */
     @Schema(description = "业务系统 state")
     private String state;
+
+    /**
+     * 登录意图 USER|ADMIN，默认 USER
+     */
+    @Schema(description = "登录意图 USER|ADMIN，默认 USER")
+    private String loginRole;
 }

@@ -64,7 +64,27 @@ public enum RedisKeyRule {
     /**
      * 企业微信第三方应用 suite_access_token。
      */
-    WECOM_SUITE_ACCESS_TOKEN("auth:wecom:suite:token:%s");
+    WECOM_SUITE_ACCESS_TOKEN("auth:wecom:suite:token:%s"),
+
+    /**
+     * 企业微信回调解密防重放指纹。
+     */
+    WECOM_CALLBACK_REPLAY("auth:wecom:callback:replay:%s"),
+
+    /**
+     * 客服 decrypt 签发的会员解析短时码。
+     */
+    MEMBER_RESOLVE_CODE("auth:member:resolve:code:%s"),
+
+    /**
+     * MEMBER 会话 Token 复用缓存，按 organId + externalUserId。
+     */
+    MEMBER_SESSION_TOKEN("auth:member:session:token:%s:%s"),
+
+    /**
+     * IdP 企业管理员开通租户资格（passportId），与 Session TTL 对齐。
+     */
+    IDP_TENANT_PROVISION_ELIGIBLE("auth:idp:tenant-provision:eligible:%s");
 
     /**
      * Redis 键的格式规则，使用占位符 %s。

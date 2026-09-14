@@ -12,6 +12,10 @@ import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.client.IdpEnterpriseApplicationAuthorizationClient;
 import com.g2rain.iam.dto.WeComOAuthStateDto;
 import com.g2rain.iam.enums.IamErrorCode;
+import com.g2rain.iam.enums.IdpLoginRole;
+import com.g2rain.iam.wecom.ThirdPartyWeComLoginAdapter;
+import com.g2rain.iam.wecom.WeComInternalAdminAsserter;
+import com.g2rain.iam.wecom.WeComLoginAdapter;
 import com.g2rain.iam.wecom.WeComLoginAdapterRouter;
 import com.g2rain.iam.wecom.WeComOAuthResult;
 import com.g2rain.iam.wecom.WeComPrincipal;
@@ -25,23 +29,42 @@ public class WeComOAuthService {
     private final WeComLoginAdapterRouter weComLoginAdapterRouter;
     private final IdpEnterpriseApplicationAuthorizationClient authorizationClient;
     private final AuthService authService;
+    private final WeComInternalAdminAsserter weComInternalAdminAsserter;
 
     public String buildAuthorizeUrl(
         String bindMode, String clientId, String redirectUri, String state) {
+        return buildAuthorizeUrl(bindMode, clientId, redirectUri, state, null);
+    }
+
+    public String buildAuthorizeUrl(
+        String bindMode, String clientId, String redirectUri, String state, String loginRole) {
         return stateService.persistAndBuildAuthorizeUrl(
-            bindMode, clientId, redirectUri, state);
+            bindMode, clientId, redirectUri, state, loginRole);
     }
 
     public WeComOAuthResult finishLogin(String authCode, String opaqueState) {
         WeComOAuthStateDto state = stateService.consume(opaqueState);
         IdpBindMode bindMode = IdpBindMode.valueOf(state.getBindMode());
-        WeComPrincipal principal = weComLoginAdapterRouter.resolve(bindMode.name())
-            .exchangeCodeForPrincipal(authCode);
-        if (bindMode == IdpBindMode.THIRD_PARTY) {
+        IdpLoginRole loginRole = IdpLoginRole.fromParam(state.getLoginRole());
+        WeComLoginAdapter adapter = weComLoginAdapterRouter.resolve(bindMode.name());
+
+        WeComPrincipal principal;
+        boolean idpAdmin = false;
+        if (bindMode == IdpBindMode.THIRD_PARTY && adapter instanceof ThirdPartyWeComLoginAdapter thirdParty) {
+            String expected = loginRole.isAdmin() ? "admin" : "member";
+            principal = thirdParty.exchangeCodeForPrincipal(authCode, expected);
+            idpAdmin = loginRole.isAdmin();
             validateThirdPartyAuthorization(principal);
+        } else {
+            principal = adapter.exchangeCodeForPrincipal(authCode);
+            if (loginRole.isAdmin()) {
+                weComInternalAdminAsserter.assertCorpAdmin(principal.userId());
+                idpAdmin = true;
+            }
         }
-        String sessionId =
-            authService.authenticateIdp(principal.toIdpPrincipal(), true);
+
+        String sessionId = authService.authenticateIdpEmployee(
+            principal.toIdpPrincipal(), loginRole, idpAdmin, true);
         return new WeComOAuthResult(
             sessionId,
             state.getClientId(),
