@@ -79,7 +79,8 @@
 | 公网企微回调 | 仅授权安装 callback；只回 `success` / 明文 echo |
 | 浏览器 OAuth | 仅扫码登录；可写 Cookie、可 302 |
 | 受信服务 | 仅 `decrypt`；需服务身份；返回 JSON，可含短时 code |
-| 会员换票 | 独立 `/auth/member/token`；不得塞进 `/auth/wecom` 回调类 |
+| 会员换票 | 独立 `/auth/member/token`；换票负载可不同，**Token 使用协议与 `/auth/token` 相同**（Client+Application DPoP） |
+| MEMBER Token 协议 | 与员工 Token **同一使用协议**（含 DPoP/摘要）；仅换票负载不同。见 [Token 签发双模式对齐](./member-token-issuance-alignment.md)（**已完成实施**） |
 
 白名单、限流与 Gateway 策略必须按上表分轨配置，避免把 `decrypt` 配成公网匿名，或把授权 callback 配成需登录 Session。
 

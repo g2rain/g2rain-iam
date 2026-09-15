@@ -104,6 +104,7 @@ documentation:
     - docs/design/idp-employee-login-tenant-gate.md
     - docs/design/wecom-qr-login.md
     - docs/design/wecom-customer-service-callback-verification.md
+    - docs/design/member-token-issuance-alignment.md
 
 aiCoding:
   activeRequirement: null

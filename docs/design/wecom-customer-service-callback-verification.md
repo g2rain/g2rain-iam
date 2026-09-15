@@ -209,9 +209,12 @@ POST /auth/wecom/customer_service/decrypt
 
 ```text
 POST /auth/member/token
+Headers:
+  DPoP: <Client DPoP Proof>
+  application-DPoP: <Application DPoP Proof>
 ```
 
-对齐 [`TokenController#token`](../../src/main/java/com/g2rain/iam/controller/TokenController.java)（`POST /auth/token`）的「获取 Token」语义；对客服暴露的是换票，不是 Member 领域的 `resolve_or_create`。
+对齐 [`TokenController#token`](../../src/main/java/com/g2rain/iam/controller/TokenController.java)（`POST /auth/token`）的「获取 Token」语义与 **Client + Application DPoP** 要求；对客服暴露的是换票负载差异，不是协议减免，也不是 Member 领域的 `resolve_or_create`。
 
 请求：
 
@@ -243,9 +246,10 @@ POST /auth/member/token
 
 约束：
 
+- 换票必须携带并校验 Client DPoP（`kid`/`acd`）与 Application DPoP；缺失或校验失败拒绝签发。
 - `organId` 以 `memberResolveCode` 绑定为准，拒绝请求体伪造租户。
 - IAM 通过服务发现无鉴权直连 Member `POST /internal/wechat_work_member/resolve_or_create`。约定调用方仅 IAM，Member 信任 IAM 传入的 `organId`；Member 服务不得暴露到公网、客户端网络或其他非受信网络。
-- 同一 `memberResolveCode` 可多次调用 `token`（一次回调多消息）；按 `msgid` 与 `(organId, externalUserId)` 幂等；同一会话复用未过期 MEMBER Token。
+- 同一 `memberResolveCode` 可多次调用 `token`（一次回调多消息）；按 `msgid` 与 `(organId, externalUserId)` 幂等；同一会话在 **同一客户端绑钥** 下复用未过期 MEMBER Token。
 - 解析失败（身份已删、会员冻结/删除等）时不签发 MEMBER Token，透传或映射业务错误。
 
 ### 8.3 `memberResolveCode` 规则
@@ -262,16 +266,21 @@ POST /auth/member/token
 
 | 项 | 规则 |
 |---|---|
-| 主体 | JWT claim `memberId`（写入 `BasePrincipal.memberId`；**不得**写入 `userId`）；不创建 `passport` |
-| 租户 | claims 含 code 绑定的可信 `organId` |
-| 使用方 | **仅**企业微信智能客服模块 |
-| 禁止 | 不下发终端微信用户；不作员工登录；不可用 code 冒充 |
-| 粒度 | 每个 `organId + external_userid` 会话复用一个短期 Token；未过期则复用，不每条消息新签 |
-| 签发时机 | Member resolve 成功且状态允许之后 |
+| 主体 | JWT claim `memberId`（写入 `BasePrincipal.memberId`；**不得**写入 `userId`/`passportId`）；不创建 `passport` |
+| 租户 | claims 含 code 绑定的可信 `organId`；`organType` 必须为租户类型（`OrganType.isTenant`） |
+| 协议字段 | 须含 `applicationScopes`（至少入口应用）、`clientId`/`clientPublicKey`、时间窗；与员工 Token **同一使用协议** |
+| Gateway | Token 验签 → DPoP → 请求摘要 → `MemberPerm` → 转发；**不得**因 `SessionType=MEMBER` 跳过 DPoP/摘要 |
+| 下游身份 | 业务侧只读 `PrincipalContextHolder.getMemberId()`；不得信任 Query/Body/Path 中的 `memberId`；对象级须校验 organ + member |
+| 使用方 | 企业微信智能客服模块等持票调用方（无调用方协议特例） |
+| 禁止 | 不下发终端微信用户；不作员工登录；不可用 code 冒充；无绑钥/无 scopes 的旧票拒绝 |
+| 粒度 | 每个 `organId + external_userid` 且同一客户端绑钥会话复用一个短期 Token；未过期则复用，不每条消息新签 |
+| 签发时机 | Member resolve 成功、状态允许、且 Client/Application DPoP 校验通过之后 |
 
 两类凭证分轨：`memberResolveCode` 与 MEMBER Token。IAM→Member 直连不使用这两类凭证，也不额外使用服务凭证。
 
 如果接入模块与 IAM 同进程部署，`decrypt` 可用内部 Java Service；换票与 Token 签发职责仍不变。
+
+协议对齐总方案见 [member-token-issuance-alignment.md](./member-token-issuance-alignment.md)。
 
 ## 9. 客服回调处理链路
 
@@ -281,8 +290,8 @@ POST /auth/member/token
 4. 使用对应企业的微信客服访问凭据调用 `/cgi-bin/kf/sync_msg`。
 5. 维护拉取游标并处理企业微信要求的重试。
 6. 按 `msgid` 幂等消费完整消息。
-7. 对每条需识别会员的消息，调用 IAM `POST /auth/member/token`。
-8. 持返回的 MEMBER Token 经 Gateway 处理咨询 / 下游业务。
+7. 对每条需识别会员的消息，调用 IAM `POST /auth/member/token`（携带 Client/Application DPoP）。
+8. 持返回的 MEMBER Token **按与员工相同的 Bearer + DPoP + 请求摘要协议** 经 Gateway 处理咨询 / 下游业务。
 
 步骤 2–6 属于客服模块；步骤 7–8 的会员数据与 Token 由 IAM / Member 分工完成。
 
@@ -308,7 +317,7 @@ POST /auth/member/token
 - 禁止记录回调 `Token`、`EncodingAESKey`、Secret、永久授权码、访问令牌、`memberResolveCode` 全文、MEMBER Token 全文和解密正文。
 - `decrypt` 与 `token` 接口实施限流、调用方认证和超时保护。
 - IAM 不长期保存解密后的回调正文。
-- Gateway 只处理客服模块持 `SessionType=MEMBER` Token 调用下游的鉴权；IAM→Member 内部解析不经过 Gateway。
+- Gateway 按统一 Token 使用协议处理客服模块持 `SessionType=MEMBER` Token 调用下游的鉴权（含 DPoP/摘要）；IAM→Member 内部解析不经过 Gateway。
 - Member 必须部署在受信服务网络，禁止暴露到公网、客户端网络或其他非受信网络；若该边界变化，须先引入调用方鉴权。
 
 ## 12. 兼容与迁移

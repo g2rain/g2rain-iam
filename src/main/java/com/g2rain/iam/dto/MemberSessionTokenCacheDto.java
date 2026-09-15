@@ -13,4 +13,8 @@ public class MemberSessionTokenCacheDto {
     private Long memberId;
     private String memberNo;
     private String memberStatus;
+    /** 换票时 Client DPoP kid，复用须与当前客户端一致 */
+    private String clientId;
+    /** 换票时 Client DPoP 公钥 JSON，复用须与当前客户端绑钥一致 */
+    private String clientPublicKey;
 }

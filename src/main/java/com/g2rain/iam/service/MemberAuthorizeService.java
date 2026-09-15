@@ -1,21 +1,17 @@
 package com.g2rain.iam.service;
 
-import com.g2rain.common.enums.SessionType;
 import com.g2rain.common.exception.BusinessException;
 import com.g2rain.common.exception.ExceptionConverter;
 import com.g2rain.common.model.Result;
 import com.g2rain.common.utils.Strings;
-import com.g2rain.common.web.TokenJWTPayload;
 import com.g2rain.data.redis.GenericRedisHelper;
 import com.g2rain.iam.client.WechatWorkMemberClient;
-import com.g2rain.iam.config.WeComIamProperties;
 import com.g2rain.iam.dto.MemberAuthorizeTokenRequest;
 import com.g2rain.iam.dto.MemberResolveCodeDto;
 import com.g2rain.iam.dto.MemberSessionTokenCacheDto;
 import com.g2rain.iam.enums.IamErrorCode;
 import com.g2rain.iam.enums.RedisKeyRule;
 import com.g2rain.iam.vo.MemberAuthorizeTokenVo;
-import com.g2rain.iam.vo.TokenVo;
 import com.g2rain.member.dto.WechatWorkMemberResolveRequest;
 import com.g2rain.member.vo.WechatWorkMemberResolveVo;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +22,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Objects;
 
 @Slf4j
 @Service
@@ -40,9 +37,9 @@ public class MemberAuthorizeService {
     private final WechatWorkMemberClient wechatWorkMemberClient;
     private final TokenService tokenService;
     private final GenericRedisHelper redis;
-    private final WeComIamProperties weComIamProperties;
 
-    public MemberAuthorizeTokenVo token(MemberAuthorizeTokenRequest request) {
+    public MemberAuthorizeTokenVo token(
+        String clientDPoP, String applicationDPoP, MemberAuthorizeTokenRequest request) {
         MemberResolveCodeDto codePayload =
             memberResolveCodeService.requireValid(request.getMemberResolveCode());
         String externalUserId = request.getExternalUserId().trim();
@@ -65,15 +62,22 @@ public class MemberAuthorizeService {
             throw new BusinessException(IamErrorCode.MEMBER_TOKEN_ISSUE_DENIED);
         }
 
-        MemberAuthorizeTokenVo reused = tryReuse(codePayload.getOrganId(), externalUserId, member);
+        TokenService.MemberClientProof clientProof =
+            tokenService.parseAndValidateMemberClientProof(clientDPoP, applicationDPoP);
+
+        MemberAuthorizeTokenVo reused = tryReuse(
+            codePayload.getOrganId(), externalUserId, member, clientProof);
         if (reused != null) {
             return reused;
         }
-        return issueNew(codePayload.getOrganId(), externalUserId, member);
+        return issueNew(codePayload.getOrganId(), externalUserId, member, clientProof);
     }
 
     private MemberAuthorizeTokenVo tryReuse(
-        Long organId, String externalUserId, WechatWorkMemberResolveVo member) {
+        Long organId,
+        String externalUserId,
+        WechatWorkMemberResolveVo member,
+        TokenService.MemberClientProof clientProof) {
         String key = RedisKeyRule.MEMBER_SESSION_TOKEN.format(
             String.valueOf(organId), externalUserId);
         MemberSessionTokenCacheDto cache = redis.get(key, MemberSessionTokenCacheDto.class);
@@ -82,6 +86,10 @@ public class MemberAuthorizeService {
         }
         long now = Instant.now().getEpochSecond();
         if (cache.getExpireAt() <= now + 30) {
+            return null;
+        }
+        if (!Objects.equals(clientProof.clientId(), cache.getClientId())
+            || !Objects.equals(clientProof.clientPublicKey(), cache.getClientPublicKey())) {
             return null;
         }
         MemberAuthorizeTokenVo vo = new MemberAuthorizeTokenVo();
@@ -96,29 +104,28 @@ public class MemberAuthorizeService {
     }
 
     private MemberAuthorizeTokenVo issueNew(
-        Long organId, String externalUserId, WechatWorkMemberResolveVo member) {
-        long ttlSeconds = Math.max(60L,
-            weComIamProperties.getCustomerService().getMemberTokenTtlSeconds());
-        long now = Instant.now().getEpochSecond();
-        long expireAt = now + ttlSeconds;
+        Long organId,
+        String externalUserId,
+        WechatWorkMemberResolveVo member,
+        TokenService.MemberClientProof clientProof) {
+        TokenService.IssuedMemberToken tokenVo = tokenService.issueMemberAccessToken(
+            clientProof,
+            organId,
+            member.getMemberId(),
+            member.getMemberNo()
+        );
 
-        TokenJWTPayload payload = new TokenJWTPayload();
-        payload.setSessionType(SessionType.MEMBER);
-        payload.setOrganId(organId);
-        payload.setMemberId(member.getMemberId());
-        payload.setName(member.getMemberNo());
-        payload.setIssuedAt(now);
-        payload.setExpireAt(expireAt);
-        payload.setRefreshExpireAt(expireAt);
-
-        TokenVo tokenVo = tokenService.issueMemberAccessToken(payload);
+        long expireAt = tokenVo.expireAt();
+        long ttlSeconds = Math.max(60L, expireAt - Instant.now().getEpochSecond());
 
         MemberSessionTokenCacheDto cache = new MemberSessionTokenCacheDto();
-        cache.setAccessToken(tokenVo.getToken());
+        cache.setAccessToken(tokenVo.token());
         cache.setExpireAt(expireAt);
         cache.setMemberId(member.getMemberId());
         cache.setMemberNo(member.getMemberNo());
         cache.setMemberStatus(member.getMemberStatus());
+        cache.setClientId(clientProof.clientId());
+        cache.setClientPublicKey(clientProof.clientPublicKey());
         redis.set(
             RedisKeyRule.MEMBER_SESSION_TOKEN.format(String.valueOf(organId), externalUserId),
             cache,
@@ -126,7 +133,7 @@ public class MemberAuthorizeService {
         );
 
         MemberAuthorizeTokenVo vo = new MemberAuthorizeTokenVo();
-        vo.setAccessToken(tokenVo.getToken());
+        vo.setAccessToken(tokenVo.token());
         vo.setTokenExpiresAt(formatEpoch(expireAt));
         vo.setMemberId(member.getMemberId());
         vo.setMemberNo(member.getMemberNo());

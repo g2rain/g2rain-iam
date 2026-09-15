@@ -26,5 +26,6 @@
 - [IdP 员工扫码与租户开通闸门](design/idp-employee-login-tenant-gate.md)
 - [企业微信扫码登录](design/wecom-qr-login.md)
 - [企业微信客服回调认证升级](design/wecom-customer-service-callback-verification.md)
+- [Token 签发双模式对齐（MEMBER 应用上下文）](design/member-token-issuance-alignment.md)（已完成实施）
 
 设计文档不自动等于开发指令；是否实施由 `aiCoding.activeRequirement` 或唯一 `开发中` 需求决定。

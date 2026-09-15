@@ -519,16 +519,108 @@ public class TokenService {
     }
 
     /**
-     * 签发 SessionType=MEMBER 访问令牌；不写入员工/通行证登录日志。
+     * 解析并校验会员换票的 Client / Application DPoP。
      */
-    public TokenVo issueMemberAccessToken(TokenJWTPayload payload) {
+    public MemberClientProof parseAndValidateMemberClientProof(String clientDPoP, String applicationDPoP) {
+        String clientId;
+        String applicationCode;
+        String publicKeyString;
+        try {
+            SignedJWT signedJWT = SignedJWT.parse(clientDPoP);
+            JWSHeader header = signedJWT.getHeader();
+
+            if (!Constants.DPoP_HEADER_TYPE.equalsIgnoreCase(header.getType().toString())) {
+                throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof typ");
+            }
+
+            JWK jwk = header.getJWK();
+            if (!(jwk instanceof ECKey ecKey)) {
+                throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWK");
+            }
+
+            JWSVerifier verifier = new ECDSAVerifier(ecKey.toECPublicKey());
+            if (!signedJWT.verify(verifier)) {
+                throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWS");
+            }
+
+            publicKeyString = jwk.toJSONString();
+            clientId = header.getKeyID();
+            if (Strings.isBlank(clientId)) {
+                throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof kid");
+            }
+
+            applicationCode = signedJWT.getJWTClaimsSet().getStringClaim("acd");
+            if (Strings.isBlank(applicationCode)) {
+                throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Application Code");
+            }
+        } catch (ParseException e) {
+            throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof");
+        } catch (JOSEException e) {
+            throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWS");
+        }
+
+        Result<PublicKeyDescriptorVo> applicationResult = applicationClient.getPublicKeyDescriptor(applicationCode);
+        if (!applicationResult.isSuccess()) {
+            throw ExceptionConverter.of(applicationResult);
+        }
+        validateApplicationDPoP(applicationDPoP, applicationResult.getData());
+
+        return new MemberClientProof(clientId, applicationCode, publicKeyString);
+    }
+
+    /**
+     * 会员换票签发：Basis 拉取 MEMBER 载荷骨架后填入 memberId 与客户端绑钥并签名。
+     */
+    public IssuedMemberToken issueMemberAccessToken(
+        MemberClientProof clientProof, Long organId, Long memberId, String memberName) {
+        if (clientProof == null) {
+            throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "clientProof");
+        }
+        if (organId == null || organId <= 0L) {
+            throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "organId");
+        }
+        if (memberId == null || memberId <= 0L) {
+            throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "memberId");
+        }
+
+        Result<TokenJWTPayload> result = loginTokenClient.fetchMemberTokenContext(
+            organId, clientProof.applicationCode());
+        if (!result.isSuccess()) {
+            throw ExceptionConverter.of(result);
+        }
+
+        TokenJWTPayload payload = result.getData();
         if (payload == null || payload.getSessionType() != SessionType.MEMBER) {
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "sessionType");
         }
-        if (payload.getOrganId() == null || payload.getMemberId() == null) {
-            throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "memberId");
+        if (Collections.isEmpty(payload.getApplicationScopes())) {
+            throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "applicationScopes");
         }
-        return doGenerateToken("member", payload, false);
+        if (payload.getExpireAt() == null) {
+            throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "expireAt");
+        }
+
+        payload.setMemberId(memberId);
+        payload.setName(memberName);
+        payload.setClientId(clientProof.clientId());
+        payload.setClientPublicKey(clientProof.clientPublicKey());
+        payload.setUserId(null);
+        payload.setPassportId(null);
+
+        TokenVo tokenVo = doGenerateToken(clientProof.applicationCode(), payload, false);
+        return new IssuedMemberToken(tokenVo.getToken(), tokenVo.getKeyId(), payload.getExpireAt());
+    }
+
+    /**
+     * 会员换票已校验的客户端证明。
+     */
+    public record MemberClientProof(String clientId, String applicationCode, String clientPublicKey) {
+    }
+
+    /**
+     * 已签发的 MEMBER 访问令牌及过期时间（epoch 秒）。
+     */
+    public record IssuedMemberToken(String token, String keyId, long expireAt) {
     }
 
     private TokenVo doGenerateToken(

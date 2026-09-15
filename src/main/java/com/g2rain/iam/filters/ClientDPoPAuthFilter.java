@@ -48,8 +48,8 @@ public record ClientDPoPAuthFilter(Tracer tracer) implements Filter {
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
         HttpServletRequest req = (HttpServletRequest) request;
 
-        // 下游继续执行
-        if (!"/auth/token".equalsIgnoreCase(req.getRequestURI())) {
+        // 仅令牌换票端点要求 Client DPoP（员工 /auth/token 与会员 /auth/member/token）
+        if (!isClientDPoPTokenEndpoint(req.getRequestURI())) {
             String requestId = UUID.randomUUID().toString();
             PrincipalContextHolder.setTraceId(resolveTraceId());
             PrincipalContextHolder.setRequestId(requestId);
@@ -76,6 +76,11 @@ public record ClientDPoPAuthFilter(Tracer tracer) implements Filter {
             // 下游继续执行
             chain.doFilter(request, response);
         }
+    }
+
+    private static boolean isClientDPoPTokenEndpoint(String requestUri) {
+        return "/auth/token".equalsIgnoreCase(requestUri)
+            || "/auth/member/token".equalsIgnoreCase(requestUri);
     }
 
     /**
