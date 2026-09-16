@@ -100,9 +100,15 @@ POST /auth/member/token
 | `organType` / `organName` | 来自 Basis 机构主数据；`organType` 必须满足 `OrganType.isTenant(...)`，非租户类型拒绝签发 |
 | `adminCompany` / `adminUser` | MEMBER 固定 false（除非产品另有定义） |
 | `clientId` / `clientPublicKey` | **必填**（换票时 Client DPoP 绑定）；供 Gateway 校验持有者 |
-| 时间窗 | `issuedAt` / `expireAt`（及平台约定的 refresh 字段策略） |
+| 时间窗 | `issuedAt` / `expireAt` / `refreshExpireAt`（应用 TTL） |
+| 刷新 | 允许 `grant_type=refresh_token`：**先复核** Member `NORMAL` 且 organ 一致，再重签 MEMBER（`persistLoginToken=false`）；**禁止**盲滑动旧 claims |
+| 交换 | **禁止** `exchange_token`（不得换 USER/PASSPORT） |
 
 签发前：Member 状态允许 + 应用/`acd` 合法 + 机构可用且为租户类型 + DPoP 校验通过。
+
+刷新前：JWT 仍为合法 MEMBER（正数 `memberId`/`organId`、租户 `organType`、无员工主体、绑钥齐全）+ Client DPoP 绑钥匹配 + Client DPoP `acd` **等于**原 Token `applicationScopes` 已绑定的 `applicationCode`（不得借刷新换应用）+ `refreshExpireAt` 未过期 + Member `requireActiveForToken` 通过。
+
+匿名会话仍禁止 refresh；MEMBER 与 ANONYMOUS 语义分轨。
 
 建议 Basis：`fetchMemberTokenContext(organId, applicationCode)` 产出与员工上下文同级的骨架（sessionType=MEMBER、organ*、scopes、TTL）；IAM 填 `memberId`/`name` 并写入绑钥字段后签名。
 
@@ -211,6 +217,9 @@ SessionType.isMember(sessionType)
 | 换票得到非租户 `organType` | 拒绝签发 |
 | Gateway MEMBER 无 DPoP | 拒绝（与员工无 DPoP 一致） |
 | Gateway MEMBER 完整协议 | `applicationId` 非空；`isBackEnd()==false`；MemberPerm 仍按 organ 生效 |
+| MEMBER `refresh_token` | 复核会员 NORMAL 后重签 MEMBER；冻结/删除拒绝 |
+| MEMBER `exchange_token` | 拒绝 |
+| ANONYMOUS `refresh_token` | 仍拒绝 |
 | Gateway scope 缺少/非法 applicationId | 在主体透传前拒绝，不进入下游 |
 | Gateway MEMBER 使用非租户 organType | 拒绝 |
 | Starter LoginGuard + 合法 MEMBER | `memberId > 0` 时放行 |

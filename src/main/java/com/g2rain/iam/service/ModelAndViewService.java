@@ -285,6 +285,21 @@ public class ModelAndViewService {
         if (Objects.isNull(session)) {
             return this.redirectLogin(clientId, redirectUri, state);
         }
+
+        if (Strings.isNotBlank(userId)) {
+            String selectedUserId = userId.trim();
+            boolean allowed = userService.listUserVos(session).stream()
+                .anyMatch(u -> Objects.equals(String.valueOf(u.getId()), selectedUserId));
+            if (!allowed) {
+                return redirectOAuthError(
+                    clientId,
+                    redirectUri,
+                    AuthorizationState.resolveCallbackState(state),
+                    "所选用户不属于当前登录账号"
+                );
+            }
+        }
+
         // 生成授权码（会话带 IdP 信息时视为外部身份源授权链路）
         boolean thirdPartyIdpLogin = Strings.isNotBlank(session.getIdpType());
         String code = authorizationService.generateAuthorizationCode(session, clientId, userId, thirdPartyIdpLogin);

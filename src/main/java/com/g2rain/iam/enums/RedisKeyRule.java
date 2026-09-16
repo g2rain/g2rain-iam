@@ -72,14 +72,14 @@ public enum RedisKeyRule {
     WECOM_CALLBACK_REPLAY("auth:wecom:callback:replay:%s"),
 
     /**
-     * 客服 decrypt 签发的会员解析短时码。
+     * 客服 decrypt 签发的会员解析短时码（TTL 内可复用校验，非单次消费）。
      */
     MEMBER_RESOLVE_CODE("auth:member:resolve:code:%s"),
 
     /**
-     * MEMBER 会话 Token 复用缓存，按 organId + externalUserId。
+     * MEMBER 会话 Token 复用缓存，按 organId + externalUserId + applicationCode。
      */
-    MEMBER_SESSION_TOKEN("auth:member:session:token:%s:%s"),
+    MEMBER_SESSION_TOKEN("auth:member:session:token:%s:%s:%s"),
 
     /**
      * IdP 企业管理员开通租户资格（passportId），与 Session TTL 对齐。

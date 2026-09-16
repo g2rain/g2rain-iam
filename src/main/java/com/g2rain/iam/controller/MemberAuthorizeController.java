@@ -26,7 +26,7 @@ public class MemberAuthorizeController {
     @PostMapping("/token")
     @Operation(
         summary = "会员换票",
-        description = "校验 decrypt 签发的短时码，经 Member resolveOrCreate，并按与 /auth/token 相同的 Client/Application DPoP 协议签发或复用 MEMBER Token"
+        description = "校验 decrypt 签发的短时可复用码（同回调可多次换票），经 Member resolveOrCreate，并按与 /auth/token 相同的 Client/Application DPoP 协议签发或复用 MEMBER Token"
     )
     public Result<MemberAuthorizeTokenVo> token(
         @Parameter(description = "客户端级 DPoP 证明", required = true) @RequestHeader(name = "DPoP") String clientDPoP,

@@ -44,6 +44,10 @@ public class MemberAuthorizeService {
             memberResolveCodeService.requireValid(request.getMemberResolveCode());
         String externalUserId = request.getExternalUserId().trim();
 
+        // Client/Application DPoP 须在任何 Member 写入前完成，避免无效证明仍创建会员
+        TokenService.MemberClientProof clientProof =
+            tokenService.parseAndValidateMemberClientProof(clientDPoP, applicationDPoP);
+
         WechatWorkMemberResolveRequest resolveRequest = new WechatWorkMemberResolveRequest();
         resolveRequest.setOrganId(codePayload.getOrganId());
         resolveRequest.setExternalUserId(externalUserId);
@@ -62,9 +66,6 @@ public class MemberAuthorizeService {
             throw new BusinessException(IamErrorCode.MEMBER_TOKEN_ISSUE_DENIED);
         }
 
-        TokenService.MemberClientProof clientProof =
-            tokenService.parseAndValidateMemberClientProof(clientDPoP, applicationDPoP);
-
         MemberAuthorizeTokenVo reused = tryReuse(
             codePayload.getOrganId(), externalUserId, member, clientProof);
         if (reused != null) {
@@ -78,8 +79,7 @@ public class MemberAuthorizeService {
         String externalUserId,
         WechatWorkMemberResolveVo member,
         TokenService.MemberClientProof clientProof) {
-        String key = RedisKeyRule.MEMBER_SESSION_TOKEN.format(
-            String.valueOf(organId), externalUserId);
+        String key = sessionCacheKey(organId, externalUserId, clientProof.applicationCode());
         MemberSessionTokenCacheDto cache = redis.get(key, MemberSessionTokenCacheDto.class);
         if (cache == null || Strings.isBlank(cache.getAccessToken()) || cache.getExpireAt() == null) {
             return null;
@@ -127,7 +127,7 @@ public class MemberAuthorizeService {
         cache.setClientId(clientProof.clientId());
         cache.setClientPublicKey(clientProof.clientPublicKey());
         redis.set(
-            RedisKeyRule.MEMBER_SESSION_TOKEN.format(String.valueOf(organId), externalUserId),
+            sessionCacheKey(organId, externalUserId, clientProof.applicationCode()),
             cache,
             Duration.ofSeconds(ttlSeconds)
         );
@@ -140,9 +140,14 @@ public class MemberAuthorizeService {
         vo.setMemberStatus(member.getMemberStatus());
         vo.setNewMember(member.getNewMember());
         vo.setIdentityVerified(member.getIdentityVerified());
-        log.info("member authorize token issued organId={} memberId={} externalUserIdLen={}",
-            organId, member.getMemberId(), externalUserId.length());
+        log.info("member authorize token issued organId={} memberId={} applicationCode={} externalUserIdLen={}",
+            organId, member.getMemberId(), clientProof.applicationCode(), externalUserId.length());
         return vo;
+    }
+
+    private static String sessionCacheKey(Long organId, String externalUserId, String applicationCode) {
+        return RedisKeyRule.MEMBER_SESSION_TOKEN.format(
+            String.valueOf(organId), externalUserId, applicationCode);
     }
 
     private static String formatEpoch(long epochSeconds) {

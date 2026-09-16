@@ -30,6 +30,9 @@ public class MemberResolveCodeService {
         return new IssuedCode(code, expiresAt);
     }
 
+    /**
+     * 校验短时可复用票据：只读 Redis，不做单次消费（批消息可重复换票）。
+     */
     public MemberResolveCodeDto requireValid(String code) {
         if (Strings.isBlank(code)) {
             throw new BusinessException(IamErrorCode.MEMBER_RESOLVE_CODE_INVALID);

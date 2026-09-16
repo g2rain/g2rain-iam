@@ -2,7 +2,7 @@
 
 ## 1. 文档目的
 
-本文定义 `g2rain-iam` 为企业微信智能客服回调提供渠道认证、短时授权码与 `SessionType=MEMBER` Token 能力所需的升级内容。本阶段以设计为准，实现时须与 Member / 客服模块联调。
+本文定义 `g2rain-iam` 为企业微信智能客服回调提供渠道认证、短时可复用 `memberResolveCode` 与 `SessionType=MEMBER` Token 能力所需的升级内容。本阶段以设计为准，实现时须与 Member / 客服模块联调。
 
 关联会员流程：[`g2rain-member` 企业微信客户接入会员](../../../g2rain-member/docs/design/wechat-work-customer-member-onboarding.md)。
 入口总览：[企业微信能力地图](./wecom-capability-map.md)。
@@ -12,7 +12,7 @@
 `g2rain-iam` 负责：
 
 1. 确认「回调密文确实来自企业微信，并属于哪个可信租户」（客服模块收回调，IAM 做验签解密）；
-2. 在 `decrypt` 成功时签发一次性 `memberResolveCode`；
+2. 在 `decrypt` 成功时签发短时、可复用的 `memberResolveCode`（供同一次回调内多消息换票，**非** OAuth 授权码式单次消费）；
 3. 在客服模块 `sync_msg` 之后，通过 `MemberAuthorizeController#token` 校验 code，并在受信服务网络内通过服务发现无鉴权直连 `g2rain-member` 的 `resolveOrCreate`；
 4. 在解析成功后签发或复用 `SessionType=MEMBER` 短期 Token，**仅**供企业微信智能客服模块经 Gateway 调用下游业务。
 
@@ -68,7 +68,7 @@ IAM **不**调用 `/cgi-bin/kf/sync_msg`，**不**持久化 `member` / `member_i
 | 调用方式 | 授权回调控制器内直接使用组件 | 向客服模块提供受保护的 `decrypt` 能力 |
 | 租户上下文 | 授权服务处理企业授权 | 解密后返回可信 `organId` 和企业标识 |
 | 会员换票 | 无 | `decrypt` 发 `memberResolveCode`；`token` 在受信服务网络内直连 Member |
-| MEMBER Token | 无或未覆盖该 SessionType | 按 `organId + external_userid` 会话复用短期 Token |
+| MEMBER Token | 无或未覆盖该 SessionType | 按 `organId + external_userid + applicationCode` 会话复用短期 Token |
 
 微信客服的回调通知只表示存在新消息或事件。`external_userid` 和具体消息内容由企业微信智能客服模块调用 `/cgi-bin/kf/sync_msg` 后取得，**不属于** IAM `decrypt` 结果，也**不能**在 `decrypt` 阶段创建会员。
 
@@ -166,7 +166,7 @@ verifyAndDecrypt(
 POST /auth/wecom/customer_service/decrypt
 ```
 
-挂在 `/auth/wecom/**` 下，与扫码 OAuth、授权 callback 同前缀。语义是**验签解密 + 定租户 + 签发短时 code**，不是企微直连回调入口，也不是仅返回布尔的「verify」。
+挂在 `/auth/wecom/**` 下，与扫码 OAuth、授权 callback 同前缀。语义是**验签解密 + 定租户 + 签发短时可复用 code**，不是企微直连回调入口，也不是仅返回布尔的「verify」。
 
 请求：
 
@@ -190,7 +190,7 @@ POST /auth/wecom/customer_service/decrypt
   "enterpriseId": "ww...",
   "callbackType": "CUSTOMER_SERVICE",
   "plainBody": "已解密 XML",
-  "memberResolveCode": "一次性短时票据",
+  "memberResolveCode": "短时、可复用票据",
   "codeExpiresAt": "2026-08-20T10:05:00+08:00",
   "verifiedAt": "2026-08-20T10:00:00+08:00"
 }
@@ -247,6 +247,7 @@ Headers:
 约束：
 
 - 换票必须携带并校验 Client DPoP（`kid`/`acd`）与 Application DPoP；缺失或校验失败拒绝签发。
+- **顺序**：`requireValid(code)` → Client/Application DPoP → 才调用 Member `resolveOrCreate`；DPoP 失败不得写入会员。
 - `organId` 以 `memberResolveCode` 绑定为准，拒绝请求体伪造租户。
 - IAM 通过服务发现无鉴权直连 Member `POST /internal/wechat_work_member/resolve_or_create`。约定调用方仅 IAM，Member 信任 IAM 传入的 `organId`；Member 服务不得暴露到公网、客户端网络或其他非受信网络。
 - 同一 `memberResolveCode` 可多次调用 `token`（一次回调多消息）；按 `msgid` 与 `(organId, externalUserId)` 幂等；同一会话在 **同一客户端绑钥** 下复用未过期 MEMBER Token。
@@ -259,8 +260,9 @@ Headers:
 | 签发时机 | `CUSTOMER_SERVICE` 的 `decrypt` 成功时（echostr 验证除外） |
 | 绑定 | `organId` + `bindingCode` / `enterpriseId` + 回调实例 |
 | 能力 | **仅**授权 `POST /auth/member/token` |
-| TTL | 短时（建议 1–5 分钟） |
-| 使用 | 同一 code 允许多次换票；过期或伪造一律拒绝 |
+| TTL | 短时（建议 1–5 分钟）；过期后 Redis key 失效即不可再用 |
+| 使用 | **短时、可复用**：同一 code 允许多次调用 `token`（一次回调多消息）；校验只读 Redis，**不**做 GETDEL / 单次原子消费；过期或伪造一律拒绝 |
+| 与 OAuth code 区别 | 不是授权码；不得按「读后即删」语义实现 |
 
 ### 8.4 `SessionType=MEMBER` Token 规则
 
@@ -273,8 +275,9 @@ Headers:
 | 下游身份 | 业务侧只读 `PrincipalContextHolder.getMemberId()`；不得信任 Query/Body/Path 中的 `memberId`；对象级须校验 organ + member |
 | 使用方 | 企业微信智能客服模块等持票调用方（无调用方协议特例） |
 | 禁止 | 不下发终端微信用户；不作员工登录；不可用 code 冒充；无绑钥/无 scopes 的旧票拒绝 |
-| 粒度 | 每个 `organId + external_userid` 且同一客户端绑钥会话复用一个短期 Token；未过期则复用，不每条消息新签 |
-| 签发时机 | Member resolve 成功、状态允许、且 Client/Application DPoP 校验通过之后 |
+| 粒度 | 每个 `organId + external_userid + applicationCode` 且同一客户端绑钥会话复用一个短期 Token；未过期则复用，不每条消息新签 |
+| 刷新 | 允许通用 `refresh_token`：Client DPoP `acd` 须等于原 Token 绑定的 `applicationCode`；IAM 调用 Member `GET /member/active_for_token` 复核后重签 MEMBER；禁止 `exchange_token` |
+| 签发时机 | Client/Application DPoP 校验通过，且 Member resolve 成功、状态允许之后 |
 
 两类凭证分轨：`memberResolveCode` 与 MEMBER Token。IAM→Member 直连不使用这两类凭证，也不额外使用服务凭证。
 
@@ -342,7 +345,8 @@ Headers:
 - `CUSTOMER_SERVICE` 不会误用 Suite 授权凭据。
 - XML 外部实体与 DTD 被拒绝。
 - `memberResolveCode` 过期、伪造、错绑 `organId` 时 `token` 被拒绝。
-- MEMBER Token 按 `organId + external_userid` 复用；失败路径不签发。
+- 同一未过期 `memberResolveCode` 可多次成功校验（批消息）；**不**按单次消费删除。
+- MEMBER Token 按 `organId + external_userid + applicationCode` 复用；失败路径不签发。
 
 ### 13.2 集成测试
 

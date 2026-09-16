@@ -156,6 +156,11 @@ public enum IamErrorCode implements ErrorCode {
     MEMBER_TOKEN_ISSUE_DENIED("iam.40041", "当前会员状态不允许签发访问令牌"),
 
     /**
+     * MEMBER Token 不允许通过 exchange_token 换取员工会话
+     */
+    MEMBER_EXCHANGE_NOT_ALLOWED("iam.40044", "会员令牌不允许交换为员工令牌"),
+
+    /**
      * 普通员工扫码时企业尚未映射到平台机构
      */
     IDP_ENTERPRISE_ORGAN_NOT_READY("iam.40042", "企业尚未在平台初始化，请联系管理员开通租户"),
