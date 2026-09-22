@@ -68,7 +68,8 @@ public class DingTalkOAuthController {
             dto.getClientId(),
             dto.getRedirectUri(),
             dto.getState(),
-            dto.getLoginRole()
+            dto.getLoginRole(),
+            dto.getApplicationCode()
         ));
     }
 
@@ -89,10 +90,11 @@ public class DingTalkOAuthController {
         @Parameter(description = "OAuth2 客户端 ID", required = true) @RequestParam(name = "clientId") String clientId,
         @Parameter(description = "OAuth2 回调地址", required = true) @RequestParam(name = "redirectUri") String redirectUri,
         @Parameter(description = "业务系统 state") @RequestParam(name = "state", required = false) String state,
+        @Parameter(description = "开放平台目标应用编码") @RequestParam(name = "applicationCode", required = false) String applicationCode,
         @Parameter(description = "登录意图 USER|ADMIN，默认 USER") @RequestParam(name = "loginRole", required = false) String loginRole) {
         try {
             String url = dingTalkOAuthService.buildDingTalkAuthorizeRedirectUrl(
-                bindMode, clientId, redirectUri, state, loginRole);
+                bindMode, clientId, redirectUri, state, loginRole, applicationCode);
             return new ModelAndView(Constants.REDIRECT + url);
         } catch (Exception e) {
             log.error("钉钉授权跳转失败 bindMode={} message={}", bindMode, e.getMessage(), e);
@@ -100,6 +102,7 @@ public class DingTalkOAuthController {
                 clientId,
                 redirectUri,
                 state != null ? state : "",
+                applicationCode,
                 "钉钉授权准备失败，请稍后重试或改用账号密码登录",
                 null
             );
@@ -125,7 +128,8 @@ public class DingTalkOAuthController {
             DingTalkOAuthResult result = dingTalkOAuthService.finishLogin(code, opaqueState);
             iamSessionCookieService.writeSessionCookie(response, result.sessionId());
             return modelAndViewService.redirectConsent(
-                result.sessionId(), result.clientId(), result.redirectUri(), result.state());
+                result.sessionId(), result.clientId(), result.redirectUri(), result.state(),
+                result.applicationCode());
         } catch (Exception e) {
             log.error(
                 "钉钉登录回调处理失败 codeLen={} stateLen={} exType={} message={}",
@@ -154,7 +158,8 @@ public class DingTalkOAuthController {
             String redirectUri = payload.getRedirectUri() == null ? "" : payload.getRedirectUri().trim();
             String oauthState = payload.getState() == null ? "" : payload.getState();
             if (Strings.isNotBlank(clientId) && Strings.isNotBlank(redirectUri)) {
-                return modelAndViewService.redirectLogin(clientId, redirectUri, oauthState, errorMessage, null);
+                return modelAndViewService.redirectLogin(
+                    clientId, redirectUri, oauthState, payload.getApplicationCode(), errorMessage, null);
             }
             ModelAndView mv = new ModelAndView("error");
             mv.addObject("error", errorMessage);

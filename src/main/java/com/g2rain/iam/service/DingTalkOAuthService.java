@@ -34,13 +34,18 @@ public class DingTalkOAuthService {
 
     public String buildDingTalkAuthorizeRedirectUrl(String bindMode, String clientId, String redirectUri,
                                                     String state) {
-        return buildDingTalkAuthorizeRedirectUrl(bindMode, clientId, redirectUri, state, null);
+        return buildDingTalkAuthorizeRedirectUrl(bindMode, clientId, redirectUri, state, null, null);
     }
 
     public String buildDingTalkAuthorizeRedirectUrl(String bindMode, String clientId, String redirectUri,
                                                     String state, String loginRole) {
+        return buildDingTalkAuthorizeRedirectUrl(bindMode, clientId, redirectUri, state, loginRole, null);
+    }
+
+    public String buildDingTalkAuthorizeRedirectUrl(String bindMode, String clientId, String redirectUri,
+                                                    String state, String loginRole, String applicationCode) {
         return dingTalkOAuthStateService.persistStateAndBuildAuthorizeUrl(
-            bindMode, clientId, redirectUri, state, false, loginRole);
+            bindMode, clientId, redirectUri, state, false, loginRole, applicationCode);
     }
 
     public Optional<DingTalkOAuthStateDto> peekOAuthState(String opaqueState) {
@@ -89,7 +94,8 @@ public class DingTalkOAuthService {
             sessionId,
             payload.getClientId(),
             payload.getRedirectUri(),
-            payload.getState()
+            payload.getState(),
+            payload.getApplicationCode()
         );
     }
 }

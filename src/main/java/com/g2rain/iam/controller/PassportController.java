@@ -46,7 +46,8 @@ public class PassportController {
      * @param passportDto 注册账号所需的信息，包含用户名、密码、真实姓名等字段
      * @param clientId    客户端 ID（从表单隐藏字段获取）
      * @param redirectUri 登录后重定向的 URI（从表单隐藏字段获取）
-     * @param state       请求的状态参数（从表单隐藏字段获取）
+     * @param state           请求的状态参数（从表单隐藏字段获取）
+     * @param applicationCode 目标应用编码（从表单隐藏字段获取，可选）
      * @return 注册成功：无 {@code clientId} 时重定向至平台 {@code /main/home}；有 {@code clientId} 时进入登录页并携带 OAuth 参数。失败则回到注册页
      */
     @PostMapping("/passport_register")
@@ -56,6 +57,7 @@ public class PassportController {
                                  @RequestParam(name = "clientId", required = false) String clientId,
                                  @RequestParam(name = "redirectUri", required = false) String redirectUri,
                                  @RequestParam(name = "state", required = false) String state,
+                                 @RequestParam(name = "applicationCode", required = false) String applicationCode,
                                  HttpServletRequest request) {
         // 1) 注册限流（同 IP）
         String rlError = registerCaptchaService.checkRegisterRateLimit(request);
@@ -65,6 +67,7 @@ public class PassportController {
             mv.addObject("clientId", clientId);
             mv.addObject("redirectUri", redirectUri);
             mv.addObject("state", state);
+            mv.addObject("applicationCode", applicationCode);
             mv.addObject("error", rlError);
             return mv;
         }
@@ -77,6 +80,7 @@ public class PassportController {
             mv.addObject("clientId", clientId);
             mv.addObject("redirectUri", redirectUri);
             mv.addObject("state", state);
+            mv.addObject("applicationCode", applicationCode);
             mv.addObject("error", captchaError);
             return mv;
         }
@@ -89,6 +93,7 @@ public class PassportController {
             mv.addObject("clientId", clientId);
             mv.addObject("redirectUri", redirectUri);
             mv.addObject("state", state);
+            mv.addObject("applicationCode", applicationCode);
             mv.addObject("result", result);
             mv.addObject("error", result.getErrorMessage());
             return mv;
@@ -98,7 +103,7 @@ public class PassportController {
         if (Strings.isBlank(clientId)) {
             return modelAndViewService.redirectPlatformMainHome();
         }
-        return modelAndViewService.redirectLogin(clientId, redirectUri, state);
+        return modelAndViewService.redirectLogin(clientId, redirectUri, state, applicationCode);
     }
 }
 

@@ -67,8 +67,9 @@ public class LoginController {
      * @param redirectUri 登录成功后的重定向 URI
      * @param username    用户名
      * @param password    密码
-     * @param state       请求的状态参数，通常用于防止 CSRF 攻击
-     * @return {@link ModelAndView}，重定向到授权页面或返回登录页面视图（如果登录失败）
+     * @param state           请求的状态参数，通常用于防止 CSRF 攻击
+     * @param applicationCode 目标应用编码（可选，OAuth 链路透传）
+     * @return {@link ModelAndView}，重定向到 consent 或返回登录页面视图（如果登录失败）
      */
     @PostMapping(value = "/login")
     public ModelAndView login(HttpServletResponse response,
@@ -76,7 +77,8 @@ public class LoginController {
                              @RequestParam(name = "redirectUri") String redirectUri,
                              @RequestParam(name = "username") String username,
                              @RequestParam(name = "password") String password,
-                             @RequestParam(name = "state", required = false) String state) {
+                             @RequestParam(name = "state", required = false) String state,
+                             @RequestParam(name = "applicationCode", required = false) String applicationCode) {
 
         try {
             // 调用认证服务验证用户名和密码，获取会话 ID
@@ -84,12 +86,13 @@ public class LoginController {
 
             iamSessionCookieService.writeSessionCookie(response, sessionId);
 
-            // 登录成功，使用 ModelAndViewService 重定向到授权页面
-            return modelAndViewService.redirectConsent(sessionId,clientId, redirectUri, state);
+            // 登录成功，进入统一 consent（不自动发码）
+            return modelAndViewService.redirectConsent(sessionId, clientId, redirectUri, state, applicationCode);
         } catch (Exception e) {
-            // 登录失败，使用 ModelAndViewService 返回登录页面并显示错误信息，同时回显用户名
+            // 登录失败，返回登录页并显示错误信息，同时回显用户名
             log.error("登录错误, message:{}", e.getMessage(), e);
-            return modelAndViewService.redirectLogin(clientId, redirectUri, state, "用户名或密码错误", username);
+            return modelAndViewService.redirectLogin(
+                clientId, redirectUri, state, applicationCode, "用户名或密码错误", username);
         }
     }
 

@@ -1,9 +1,11 @@
 package com.g2rain.iam.service;
 
 
+import com.g2rain.common.exception.BusinessException;
 import com.g2rain.data.redis.GenericRedisHelper;
 import com.g2rain.iam.dto.SessionDto;
 import com.g2rain.iam.enums.RedisKeyRule;
+import com.g2rain.iam.enums.IamErrorCode;
 import com.g2rain.iam.enums.IdpLoginRole;
 import com.g2rain.iam.idp.IdpPrincipal;
 import com.g2rain.common.utils.Strings;
@@ -97,11 +99,69 @@ public class SessionService {
         }
     }
 
+    /**
+     * 有 {@code applicationCode} 时将会话与待确认 OAuth 参数写入 {@link SessionDto} 并持久化到 Redis。
+     * <p>用于 consent 确认时防篡改：{@link #requireOAuthConsentMatching} 校验表单与绑定一致。</p>
+     */
+    public void bindOAuthConsent(
+        String sessionId, String clientId, String redirectUri, String applicationCode, String state) {
+        if (Strings.isBlank(applicationCode)) {
+            return;
+        }
+        SessionDto session = getSession(sessionId);
+        if (session == null) {
+            throw new BusinessException(IamErrorCode.OAUTH_CONSENT_SESSION_INVALID);
+        }
+        if (Strings.isBlank(clientId) || Strings.isBlank(redirectUri)) {
+            throw new BusinessException(IamErrorCode.OAUTH_CONSENT_SESSION_INVALID);
+        }
+        session.setOauthClientId(clientId.trim());
+        session.setOauthRedirectUri(redirectUri.trim());
+        session.setOauthApplicationCode(applicationCode.trim());
+        session.setOauthState(state);
+        persist(session);
+    }
+
+    /**
+     * 确认时校验会话绑定的 OAuth 参数与表单一致。
+     */
+    public SessionDto requireOAuthConsentMatching(
+        String sessionId, String clientId, String redirectUri, String applicationCode) {
+        SessionDto session = getSession(sessionId);
+        if (session == null
+            || Strings.isBlank(session.getOauthApplicationCode())
+            || !Objects.equals(blankToNull(session.getOauthClientId()), blankToNull(clientId))
+            || !Objects.equals(blankToNull(session.getOauthRedirectUri()), blankToNull(redirectUri))
+            || !Objects.equals(blankToNull(session.getOauthApplicationCode()), blankToNull(applicationCode))) {
+            throw new BusinessException(IamErrorCode.OAUTH_CONSENT_SESSION_INVALID);
+        }
+        return session;
+    }
+
+    /**
+     * 发码或拒绝后清空待确认 OAuth 绑定。
+     */
+    public void clearOAuthConsent(String sessionId) {
+        SessionDto session = getSession(sessionId);
+        if (session == null) {
+            return;
+        }
+        session.setOauthClientId(null);
+        session.setOauthRedirectUri(null);
+        session.setOauthApplicationCode(null);
+        session.setOauthState(null);
+        persist(session);
+    }
+
     private void persist(SessionDto session) {
         genericRedisHelper.set(
             RedisKeyRule.SESSION.format(session.getSessionId()),
             session,
             SESSION_TTL
         );
+    }
+
+    private static String blankToNull(String value) {
+        return Strings.isBlank(value) ? null : value.trim();
     }
 }

@@ -45,6 +45,12 @@ public class DingTalkQrBootstrapDto {
     private String state;
 
     /**
+     * 开放平台目标应用编码
+     */
+    @Schema(description = "开放平台目标应用编码")
+    private String applicationCode;
+
+    /**
      * 登录意图 USER|ADMIN，默认 USER
      */
     @Schema(description = "登录意图 USER|ADMIN，默认 USER")

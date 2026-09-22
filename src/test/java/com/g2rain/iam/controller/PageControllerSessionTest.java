@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -72,7 +73,7 @@ class PageControllerSessionTest {
             .thenReturn(new ModelAndView(PLATFORM_HOME));
 
         ModelAndView view = pageController.dynamicPage(
-            "index", null, null, null, null, null, request, model);
+            "index", null, null, null, null, null, null, request, model);
 
         assertEquals(PLATFORM_HOME, view.getViewName());
         verify(modelAndViewService).redirectPlatformMainHome();
@@ -85,7 +86,7 @@ class PageControllerSessionTest {
         when(iamAccessProperties.resolvedPlatformBaseUrl()).thenReturn("https://platform.example.com");
 
         ModelAndView view = pageController.dynamicPage(
-            "index", null, null, null, "logout", null, request, model);
+            "index", null, null, null, null, "logout", null, request, model);
 
         assertEquals("index", view.getViewName());
         assertFalse((Boolean) model.get("loggedIn"));
@@ -106,7 +107,7 @@ class PageControllerSessionTest {
         ExtendedModelMap model = new ExtendedModelMap();
 
         ModelAndView view = pageController.dynamicPage(
-            "index", null, null, null, null, "session-1", request, model);
+            "index", null, null, null, null, null, "session-1", request, model);
 
         assertEquals("index", view.getViewName());
         assertEquals(true, model.get("loggedIn"));
@@ -125,7 +126,7 @@ class PageControllerSessionTest {
         ExtendedModelMap model = new ExtendedModelMap();
 
         ModelAndView view = pageController.dynamicPage(
-            "login", null, null, null, null, "session-2", request, model);
+            "login", null, null, null, null, null, "session-2", request, model);
 
         assertEquals(Constants.REDIRECT + "/auth/index.html", view.getViewName());
     }
@@ -138,7 +139,7 @@ class PageControllerSessionTest {
         when(sessionService.getSession("session-3")).thenReturn(session);
         ModelAndView consentView = new ModelAndView("consent");
         when(modelAndViewService.redirectConsent(
-            eq("session-3"), eq("client-a"), eq("https://app.test/callback"), eq("state-x")))
+            eq("session-3"), eq("client-a"), eq("https://app.test/callback"), eq("state-x"), isNull()))
             .thenReturn(consentView);
         ExtendedModelMap model = new ExtendedModelMap();
 
@@ -148,13 +149,14 @@ class PageControllerSessionTest {
             "client-a",
             "state-x",
             null,
+            null,
             "session-3",
             request,
             model);
 
         assertEquals("consent", view.getViewName());
         verify(modelAndViewService).redirectConsent(
-            "session-3", "client-a", "https://app.test/callback", "state-x");
+            "session-3", "client-a", "https://app.test/callback", "state-x", null);
     }
 
     @Test
@@ -167,6 +169,7 @@ class PageControllerSessionTest {
             "https://app.test/callback",
             "client-a",
             "state-x",
+            null,
             null,
             null,
             request,
@@ -186,7 +189,7 @@ class PageControllerSessionTest {
             .thenReturn(new ModelAndView(PLATFORM_HOME));
 
         ModelAndView view = pageController.dynamicPage(
-            "login", null, null, null, null, null, request, model);
+            "login", null, null, null, null, null, null, request, model);
 
         assertEquals(PLATFORM_HOME, view.getViewName());
         verify(modelAndViewService).redirectPlatformMainHome();
@@ -202,6 +205,7 @@ class PageControllerSessionTest {
             "https://app.test/callback",
             "client-a",
             "state-x",
+            null,
             null,
             null,
             request,

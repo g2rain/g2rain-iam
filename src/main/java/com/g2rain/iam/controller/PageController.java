@@ -94,11 +94,12 @@ public class PageController {
     public ModelAndView registerPage(@RequestParam(name = "clientId", required = false) String clientId,
                                     @RequestParam(name = "redirectUri", required = false) String redirectUri,
                                     @RequestParam(name = "state", required = false) String state,
+                                    @RequestParam(name = "applicationCode", required = false) String applicationCode,
                                     Model model) {
-        // 将 URL 参数传递到视图，供注册表单使用
         model.addAttribute("clientId", clientId);
         model.addAttribute("redirectUri", redirectUri);
         model.addAttribute("state", state);
+        model.addAttribute("applicationCode", applicationCode != null ? applicationCode : "");
         return new ModelAndView("register");
     }
 
@@ -125,6 +126,7 @@ public class PageController {
                                     @RequestParam(name = "redirectUri", required = false) String redirectUri,
                                     @RequestParam(name = "clientId", required = false) String clientId,
                                     @RequestParam(name = "state", required = false) String state,
+                                    @RequestParam(name = "applicationCode", required = false) String applicationCode,
                                     @RequestParam(name = "from", required = false) String from,
                                     @CookieValue(name = Constants.SESSION_NAME, required = false) String sessionId,
                                     HttpServletRequest request,
@@ -153,7 +155,8 @@ public class PageController {
                     return new ModelAndView(filename, model.asMap());
                 }
                 if (Strings.isNotBlank(clientId) && Strings.isNotBlank(redirectUri)) {
-                    return new ModelAndView(Constants.REDIRECT + buildLoginPageUrl(clientId, redirectUri, state));
+                    return new ModelAndView(Constants.REDIRECT
+                        + buildLoginPageUrl(clientId, redirectUri, state, applicationCode));
                 }
                 return modelAndViewService.redirectPlatformMainHome();
             }
@@ -163,14 +166,14 @@ public class PageController {
                     SessionDto session = activeSession.get();
                     if (Strings.isNotBlank(clientId) && Strings.isNotBlank(redirectUri)) {
                         return modelAndViewService.redirectConsent(
-                            session.getSessionId(), clientId, redirectUri, state);
+                            session.getSessionId(), clientId, redirectUri, state, applicationCode);
                     }
                     return new ModelAndView(Constants.REDIRECT + "/auth/index.html");
                 }
                 if (Strings.isBlank(clientId) || Strings.isBlank(redirectUri)) {
                     return modelAndViewService.redirectPlatformMainHome();
                 }
-                applyLoginPageModel(model, clientId, redirectUri, state);
+                applyLoginPageModel(model, clientId, redirectUri, state, applicationCode);
                 return new ModelAndView(filename, model.asMap());
             }
 
@@ -244,10 +247,12 @@ public class PageController {
         return Strings.isNotBlank(passportId) ? passportId.trim() : "—";
     }
 
-    private void applyLoginPageModel(Model model, String clientId, String redirectUri, String state) {
+    private void applyLoginPageModel(Model model, String clientId, String redirectUri, String state,
+                                     String applicationCode) {
         model.addAttribute("clientId", clientId != null ? clientId : "");
         model.addAttribute("redirectUri", redirectUri != null ? redirectUri : "");
         model.addAttribute("state", state != null ? state : "");
+        model.addAttribute("applicationCode", applicationCode != null ? applicationCode : "");
         String m = dingTalkIamProperties.getLoginPageBindMode();
         if (Strings.isNotBlank(m)) {
             model.addAttribute("dingTalkBindMode", m.trim());
@@ -279,6 +284,10 @@ public class PageController {
     }
 
     String buildLoginPageUrl(String clientId, String redirectUri, String state) {
+        return buildLoginPageUrl(clientId, redirectUri, state, null);
+    }
+
+    String buildLoginPageUrl(String clientId, String redirectUri, String state, String applicationCode) {
         UriComponentsBuilder builder = UriComponentsBuilder.fromPath("/auth/login.html");
         if (Strings.isNotBlank(clientId)) {
             builder.queryParam("clientId", clientId.trim());
@@ -288,6 +297,9 @@ public class PageController {
         }
         if (Strings.isNotBlank(state)) {
             builder.queryParam("state", state);
+        }
+        if (Strings.isNotBlank(applicationCode)) {
+            builder.queryParam("applicationCode", applicationCode.trim());
         }
         return builder.build(true).toUriString();
     }

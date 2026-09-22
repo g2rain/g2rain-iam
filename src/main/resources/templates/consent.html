@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>选择用户</title>
+    <title>授权确认</title>
     <style th:replace="~{fragments/styles-common :: common}"></style>
 </head>
 <body class="landing-body">
@@ -20,52 +20,84 @@
 
     <section class="landing-grid">
         <div class="landing-panel feature-panel">
-            <h2 class="title">授权选择用户</h2>
-            <p class="desc">当应用请求授权时，需要在 IAM 中选择对应用户完成授权。</p>
-            <div class="feature-list">
+            <h2 class="title" th:text="${applicationCode != null and !#strings.isEmpty(applicationCode)} ? '应用授权确认' : '授权确认'">授权确认</h2>
+            <p class="desc"
+               th:text="${applicationCode != null and !#strings.isEmpty(applicationCode)}
+                 ? '请确认是否授权目标应用；确认后将自动开通该应用的自助能力。'
+                 : '请选择用户并确认授权，完成后将返回应用。'">请选择用户并确认授权。</p>
+            <div class="feature-list" th:if="${preview != null}">
                 <div class="feature-card">
-                    <div class="feature-title">清晰列表</div>
-                    <div class="feature-desc">按用户ID与用户名展示，便于快速定位目标用户。</div>
+                    <div class="feature-title">应用</div>
+                    <div class="feature-desc" th:text="${preview.applicationName}">应用名称</div>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-title">一键选择</div>
-                    <div class="feature-desc">点击行即可提交选择结果并继续授权流程。</div>
+                <div class="feature-card" th:if="${preview.description != null and !#strings.isEmpty(preview.description)}">
+                    <div class="feature-title">说明</div>
+                    <div class="feature-desc" th:text="${preview.description}">应用描述</div>
                 </div>
-                <div class="feature-card">
-                    <div class="feature-title">安全收敛</div>
-                    <div class="feature-desc">隐藏表单携带必要参数，避免页面直接暴露敏感信息。</div>
+<div class="feature-card" th:if="${preview.organName != null and !#strings.isEmpty(preview.organName)}">
+                    <div class="feature-title">租户</div>
+                    <div class="feature-desc" th:text="${preview.organName}">租户名称</div>
                 </div>
             </div>
         </div>
 
         <div class="landing-panel action-panel landing-op-table">
-            <h2 class="title">请选择用户</h2>
+            <h2 class="title">确认授权</h2>
 
-            <form id="authorizeForm" method="post" action="/auth/authorize_selected" class="form-group hidden">
-                <input type="hidden" id="userId" name="userId">
-                <input type="hidden" id="clientId" name="clientId" th:value="${clientId} ?: ''">
-                <input type="hidden" id="redirectUri" name="redirectUri" th:value="${redirectUri} ?: ''">
-                <input type="hidden" id="state" name="state" th:value="${state} ?: ''">
-            </form>
+            <div th:if="${previewError != null}" class="error-message" th:text="${previewError}">预览失败</div>
 
-            <div class="table-container">
-                <table>
-                    <thead>
-                    <tr>
-                        <th>用户ID</th>
-                        <th>用户名</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <tr th:if="${users == null or users.isEmpty()}">
-                        <td colspan="2" class="empty-message">暂无用户数据</td>
-                    </tr>
-                    <tr th:each="user : ${users}" th:attr="onclick=|selectUser('${user.id}', '${user.username}')|">
-                        <td th:text="${user.id}">用户ID</td>
-                        <td th:text="${user.username}">用户名</td>
-                    </tr>
-                    </tbody>
-                </table>
+            <!-- 多用户且尚未选定：先选用户 -->
+            <div th:if="${selectedUserId == null or selectedUserId == ''}">
+                <p class="desc">请选择用于授权的用户。</p>
+                <form id="selectUserForm" method="get" action="/auth/authorize">
+                    <input type="hidden" name="userId" id="selectUserId">
+                    <input type="hidden" name="clientId" th:value="${clientId} ?: ''">
+                    <input type="hidden" name="redirectUri" th:value="${redirectUri} ?: ''">
+                    <input type="hidden" name="state" th:value="${state} ?: ''">
+                    <input type="hidden" name="applicationCode" th:value="${applicationCode} ?: ''">
+                </form>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>用户ID</th>
+                            <th>用户名</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:if="${users == null or users.isEmpty()}">
+                            <td colspan="2" class="empty-message">暂无用户数据</td>
+                        </tr>
+                        <tr th:each="user : ${users}" th:attr="onclick=|selectUser('${user.id}')|">
+                            <td th:text="${user.id}">用户ID</td>
+                            <td th:text="${user.username}">用户名</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 已选定用户：确认 / 拒绝 -->
+            <div th:if="${selectedUserId != null and selectedUserId != ''}">
+                <p class="desc" th:if="${users != null and users.size() > 1}">
+                    当前用户：<span th:text="${selectedUserId}"></span>
+                </p>
+                <form id="authorizeForm" method="post" action="/auth/authorize_selected">
+                    <input type="hidden" name="userId" th:value="${selectedUserId}">
+                    <input type="hidden" name="clientId" th:value="${clientId} ?: ''">
+                    <input type="hidden" name="redirectUri" th:value="${redirectUri} ?: ''">
+                    <input type="hidden" name="state" th:value="${state} ?: ''">
+                    <input type="hidden" name="applicationCode" th:value="${applicationCode} ?: ''">
+                    <input type="hidden" name="denied" id="denied" value="false">
+
+                    <div class="form-actions landing-form-actions">
+                        <button type="submit" class="btn btn-primary btn-lg"
+                                th:disabled="${applicationCode != null and !#strings.isEmpty(applicationCode) and preview == null}">
+                            确认授权
+                        </button>
+                        <button type="button" class="btn btn-outline btn-lg" onclick="denyConsent()">拒绝</button>
+                    </div>
+                </form>
             </div>
         </div>
     </section>
@@ -76,12 +108,14 @@
 </main>
 
 <script>
-    function selectUser(userId, username) {
-        // 设置用户ID并提交表单
-        document.getElementById('userId').value = userId;
+    function selectUser(userId) {
+        document.getElementById('selectUserId').value = userId;
+        document.getElementById('selectUserForm').submit();
+    }
+    function denyConsent() {
+        document.getElementById('denied').value = 'true';
         document.getElementById('authorizeForm').submit();
     }
 </script>
 </body>
 </html>
-

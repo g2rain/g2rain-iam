@@ -74,16 +74,17 @@
                         <input type="hidden" id="clientId" name="clientId" th:value="${clientId} ?: ''">
                         <input type="hidden" id="redirectUri" name="redirectUri" th:value="${redirectUri} ?: ''">
                         <input type="hidden" id="state" name="state" th:value="${state} ?: ''">
+                        <input type="hidden" id="applicationCode" name="applicationCode" th:value="${applicationCode} ?: ''">
 
                         <div class="form-actions landing-form-actions">
                             <button type="submit" class="btn btn-primary btn-lg">登录</button>
-                            <a th:href="@{/auth/register.html(clientId=${clientId ?: ''}, redirectUri=${redirectUri ?: ''}, state=${state ?: ''})}"
+                            <a th:href="@{/auth/register.html(clientId=${clientId ?: ''}, redirectUri=${redirectUri ?: ''}, state=${state ?: ''}, applicationCode=${applicationCode ?: ''})}"
                                class="btn btn-outline btn-lg">注册账号</a>
                         </div>
                     </form>
                     <a th:if="${hasWeCom}"
                        class="btn btn-outline btn-lg btn-block"
-                       th:href="@{/auth/wecom/authorize(bindMode=${weComBindMode},clientId=${clientId},redirectUri=${redirectUri},state=${state != null ? state : ''})}">
+                       th:href="@{/auth/wecom/authorize(bindMode=${weComBindMode},clientId=${clientId},redirectUri=${redirectUri},state=${state != null ? state : ''},applicationCode=${applicationCode != null ? applicationCode : ''})}">
                         企业微信扫码登录
                     </a>
                 </div>
@@ -102,7 +103,7 @@
                         <div id="dingtalk-qr-container" class="dingtalk-qr-box" aria-label="钉钉扫码登录"></div>
                         <p class="dingtalk-qr-status" id="dingtalk-qr-status" aria-live="polite">切换到本标签后将加载钉钉扫码</p>
                         <a class="btn btn-outline btn-lg btn-block"
-                           th:href="@{/auth/dingtalk/authorize(bindMode=${dingTalkBindMode},clientId=${clientId},redirectUri=${redirectUri},state=${state != null ? state : ''})}">浏览器跳转钉钉登录</a>
+                           th:href="@{/auth/dingtalk/authorize(bindMode=${dingTalkBindMode},clientId=${clientId},redirectUri=${redirectUri},state=${state != null ? state : ''},applicationCode=${applicationCode != null ? applicationCode : ''})}">浏览器跳转钉钉登录</a>
                         <p class="dingtalk-fallback-note">无法扫码时可使用浏览器跳转方式</p>
                     </div>
                 </div>
@@ -162,7 +163,8 @@
                 bindMode: bindMode,
                 clientId: document.getElementById('clientId').value,
                 redirectUri: document.getElementById('redirectUri').value,
-                state: document.getElementById('state').value || ''
+                state: document.getElementById('state').value || '',
+                applicationCode: (document.getElementById('applicationCode') || {}).value || ''
             })
         }).then(function (r) { return r.json(); }).then(function (json) {
             if (!json || !json.data || !json.data.gotoUrl) {

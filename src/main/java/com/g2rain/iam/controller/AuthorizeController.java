@@ -2,7 +2,6 @@ package com.g2rain.iam.controller;
 
 
 import com.g2rain.common.utils.Strings;
-import com.g2rain.iam.service.AuthorizationService;
 import com.g2rain.iam.service.ModelAndViewService;
 import com.g2rain.iam.service.SessionService;
 import com.g2rain.iam.utils.AuthorizationState;
@@ -39,38 +38,39 @@ import org.springframework.web.servlet.ModelAndView;
 public class AuthorizeController {
 
     /**
-     * 授权服务，处理授权码的生成等业务逻辑。
+     * 会话服务，用于校验登录态与 OAuth consent 绑定。
      */
-    private AuthorizationService authorizationService;
-
     private SessionService sessionService;
+
     /**
-     * 服务用于处理 {@link ModelAndView} 对象的创建和管理。
-     * 该服务利用所提供的参数（如客户端 ID、重定向 URI 和状态）来生成适当的视图和重定向响应。
-     * 它支持诸如错误重定向和登录页面重定向等操作，
-     * 这些操作对于授权过程中的用户流程管理至关重要。
+     * 处理 {@link ModelAndView} 的创建与重定向（登录页、统一 consent、回调等）。
      */
     private ModelAndViewService modelAndViewService;
 
     /**
-     * 授权码请求页面，用户发起授权请求时的处理方法。
+     * 授权码请求入口：校验参数与会话后进入统一 consent（不自动发码）。
      * <p>
-     * 检查用户是否已登录，如果没有登录则重定向到登录页面；如果会话已过期，则重新登录；如果已登录，则跳转到确认授权页面。
+     * 未登录或会话失效则重定向登录页；已登录则进入 consent。携带 {@code applicationCode} 时由
+     * {@link ModelAndViewService#redirectConsent} 将会话与 OAuth 参数绑定并展示应用预览。
      * </p>
      *
-     * @param sessionId   当前用户会话 ID
-     * @param clientId    客户端 ID
-     * @param redirectUri 授权后重定向的 URI
-     * @param state       请求的状态参数，通常用于防止 CSRF 攻击
-     * @return {@link ModelAndView}，包含跳转到登录页或授权确认页的视图
+     * @param sessionId       当前用户会话 ID
+     * @param clientId        客户端 ID
+     * @param redirectUri     授权后重定向 URI
+     * @param state           状态参数，通常用于防 CSRF
+     * @param applicationCode 目标应用编码（可选）
+     * @param userId          预选用户 ID（可选，用于 consent 回显）
+     * @return 登录页、consent 页或错误页
      */
     @GetMapping(value = "/authorize")
     public ModelAndView authorize(@CookieValue(name = Constants.SESSION_NAME, required = false) String sessionId,
                                   @RequestParam(name = "clientId", required = false) String clientId,
                                   @RequestParam(name = "redirectUri", required = false) String redirectUri,
-                                  @RequestParam(name = "state", required = false) String state) {
+                                  @RequestParam(name = "state", required = false) String state,
+                                  @RequestParam(name = "applicationCode", required = false) String applicationCode,
+                                  @RequestParam(name = "userId", required = false) String userId) {
 
-        // 检查 clientId 和 redirectUri 是否为空，若为空则返回错误页面
+        // 检查 clientId 与 redirectUri，缺失则返回错误页
         if (Strings.isBlank(clientId) || Strings.isBlank(redirectUri)) {
             return modelAndViewService.redirectError(clientId, redirectUri, state);
         }
@@ -79,40 +79,54 @@ public class AuthorizeController {
             return modelAndViewService.redirectAnonymousCallback(clientId, redirectUri, state);
         }
 
-        // 检查 sessionId 是否为空，若为空说明未登录，跳转到登录页
+        // 未登录则跳转登录页
         if (Strings.isBlank(sessionId)) {
-            return modelAndViewService.redirectLogin(clientId, redirectUri, state);
+            return modelAndViewService.redirectLogin(clientId, redirectUri, state, applicationCode);
         }
 
-        // 检查会话是否过期，若会话已过期，跳转到登录页
+        // 会话过期则重新登录
         if (sessionService.isSessionExpired(sessionId)) {
-            return modelAndViewService.redirectLogin(clientId, redirectUri, state);
+            return modelAndViewService.redirectLogin(clientId, redirectUri, state, applicationCode);
         }
 
-        // 已登录但未确认授权，跳转到授权确认页
-        return modelAndViewService.redirectConsent(sessionId, clientId, redirectUri, state);
+        // 已登录：进入统一 consent（单用户也不自动发码）
+        return modelAndViewService.redirectConsent(
+            sessionId, clientId, redirectUri, state, applicationCode, userId);
     }
 
     /**
-     * 授权码确认页面，用户确认授权后生成授权码并重定向到客户端的回调地址。
+     * 用户确认或拒绝授权（POST {@code /authorize_selected}）。
      * <p>
-     * 检查用户的登录状态，发放授权码并跳转回客户端的指定 URI。
+     * 无 {@code applicationCode} 时走常规发码回调；有时先校验会话绑定、调用 Basis
+     * {@code activate_self} 开通 SELF 应用后再发码。拒绝时向客户端回调 {@code error=access_denied}。
      * </p>
      *
-     * @param sessionId   当前用户会话 ID
-     * @param clientId    客户端 ID
-     * @param redirectUri 授权后重定向的 URI
-     * @param state       请求的状态参数
-     * @param userId      用户 ID
-     * @return {@link ModelAndView}，包含跳转到客户端回调 URI 的视图
+     * @param sessionId       当前用户会话 ID
+     * @param clientId        客户端 ID
+     * @param redirectUri     授权后重定向 URI
+     * @param state           请求的状态参数
+     * @param userId          用户 ID
+     * @param applicationCode 目标应用编码（可选）
+     * @param denied          为 true 表示用户拒绝授权
+     * @return 客户端回调重定向或错误页
      */
     @PostMapping(value = "/authorize_selected")
     public ModelAndView consent(@CookieValue(name = Constants.SESSION_NAME, required = false) String sessionId,
                                 @RequestParam(name = "clientId") String clientId,
                                 @RequestParam(name = "redirectUri") String redirectUri,
                                 @RequestParam(name = "state", required = false) String state,
-                                @RequestParam(name = "userId", required = false) String userId) {
+                                @RequestParam(name = "userId", required = false) String userId,
+                                @RequestParam(name = "applicationCode", required = false) String applicationCode,
+                                @RequestParam(name = "denied", required = false) Boolean denied) {
 
-        return modelAndViewService.redirectCallback(sessionId, userId, clientId, redirectUri, state);
+        return modelAndViewService.confirmConsent(
+            sessionId,
+            userId,
+            clientId,
+            redirectUri,
+            state,
+            applicationCode,
+            Boolean.TRUE.equals(denied)
+        );
     }
 }

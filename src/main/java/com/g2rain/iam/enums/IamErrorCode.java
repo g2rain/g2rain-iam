@@ -51,6 +51,16 @@ public enum IamErrorCode implements ErrorCode {
     OAUTH_AUTHORIZATION_CODE_CLIENT_MISMATCH("iam.40015", "授权码与当前客户端不匹配"),
 
     /**
+     * 授权码绑定的应用与 Client DPoP acd 不匹配
+     */
+    OAUTH_AUTHORIZATION_CODE_APPLICATION_MISMATCH("iam.40046", "授权码与当前应用不匹配"),
+
+    /**
+     * 授权确认会话无效或跨会话篡改
+     */
+    OAUTH_CONSENT_SESSION_INVALID("iam.40047", "授权确认会话无效或已过期"),
+
+    /**
      * 通行证绑定钉钉 state 无效或已过期
      */
     DINGTALK_PASSPORT_BIND_INVALID_STATE("iam.40016", "绑定会话已失效，请重新发起绑定"),

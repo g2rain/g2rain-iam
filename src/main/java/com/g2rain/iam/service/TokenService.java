@@ -232,6 +232,11 @@ public class TokenService {
         if (Strings.isBlank(boundClientId) || !boundClientId.equals(clientId.trim())) {
             throw new BusinessException(IamErrorCode.OAUTH_AUTHORIZATION_CODE_CLIENT_MISMATCH);
         }
+        String boundApplicationCode = Strings.isBlank(codeDto.getApplicationCode())
+            ? null : codeDto.getApplicationCode().trim();
+        if (Strings.isNotBlank(boundApplicationCode) && !boundApplicationCode.equals(applicationCode.trim())) {
+            throw new BusinessException(IamErrorCode.OAUTH_AUTHORIZATION_CODE_APPLICATION_MISMATCH);
+        }
 
         // 校验应用 DPoP Proof
         Result<PublicKeyDescriptorVo> applicationResult = applicationClient.getPublicKeyDescriptor(applicationCode);

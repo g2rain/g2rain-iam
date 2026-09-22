@@ -29,11 +29,17 @@ public class WeComOAuthStateService {
 
     public String persistAndBuildAuthorizeUrl(
         String bindMode, String clientId, String redirectUri, String state) {
-        return persistAndBuildAuthorizeUrl(bindMode, clientId, redirectUri, state, null);
+        return persistAndBuildAuthorizeUrl(bindMode, clientId, redirectUri, state, null, null);
     }
 
     public String persistAndBuildAuthorizeUrl(
         String bindMode, String clientId, String redirectUri, String state, String loginRole) {
+        return persistAndBuildAuthorizeUrl(bindMode, clientId, redirectUri, state, loginRole, null);
+    }
+
+    public String persistAndBuildAuthorizeUrl(
+        String bindMode, String clientId, String redirectUri, String state, String loginRole,
+        String applicationCode) {
         if (Strings.isBlank(clientId)) {
             throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "clientId");
         }
@@ -48,6 +54,7 @@ public class WeComOAuthStateService {
         payload.setClientId(clientId.trim());
         payload.setRedirectUri(redirectUri.trim());
         payload.setState(state);
+        payload.setApplicationCode(Strings.isBlank(applicationCode) ? null : applicationCode.trim());
         payload.setLoginRole(role.name());
         redis.set(RedisKeyRule.WECOM_OAUTH_STATE.format(opaqueState),
             payload, Duration.ofMinutes(10));

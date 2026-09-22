@@ -105,9 +105,10 @@ documentation:
     - docs/design/wecom-qr-login.md
     - docs/design/wecom-customer-service-callback-verification.md
     - docs/design/member-token-issuance-alignment.md
+    - docs/design/open-platform-oauth-upgrade.md
 
 aiCoding:
-  activeRequirement: null
+  activeRequirement: docs/design/open-platform-oauth-upgrade.md
   requirementTemplate: docs/requirements/README.md
   validation:
     - 读取中央登记、本地边界、安全要求、偏差、设计和当前需求

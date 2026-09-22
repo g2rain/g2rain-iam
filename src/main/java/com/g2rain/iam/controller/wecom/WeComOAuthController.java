@@ -44,15 +44,16 @@ public class WeComOAuthController {
         @RequestParam String clientId,
         @RequestParam String redirectUri,
         @RequestParam(required = false) String state,
+        @RequestParam(required = false) String applicationCode,
         @RequestParam(required = false) String loginRole) {
         try {
             return new ModelAndView(Constants.REDIRECT
                 + oauthService.buildAuthorizeUrl(
-                    bindMode, clientId, redirectUri, state, loginRole));
+                    bindMode, clientId, redirectUri, state, loginRole, applicationCode));
         } catch (Exception exception) {
             log.error("企业微信授权跳转失败 bindMode={}", bindMode, exception);
             return modelAndViewService.redirectLogin(
-                clientId, redirectUri, state == null ? "" : state,
+                clientId, redirectUri, state == null ? "" : state, applicationCode,
                 "企业微信授权准备失败，请稍后重试", null);
         }
     }
@@ -71,7 +72,7 @@ public class WeComOAuthController {
             sessionCookieService.writeSessionCookie(response, result.sessionId());
             return modelAndViewService.redirectConsent(
                 result.sessionId(), result.clientId(),
-                result.redirectUri(), result.state());
+                result.redirectUri(), result.state(), result.applicationCode());
         } catch (Exception exception) {
             log.error("企业微信扫码登录失败 stateLen={}",
                 state == null ? 0 : state.length(), exception);

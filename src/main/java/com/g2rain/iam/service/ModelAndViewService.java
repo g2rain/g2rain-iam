@@ -1,10 +1,23 @@
 package com.g2rain.iam.service;
 
+import com.g2rain.basis.dto.ApplicationAuthorizationActivateSelfRequest;
+import com.g2rain.basis.dto.ApplicationSelectDto;
+import com.g2rain.basis.dto.OrganIdNameMapSelectDto;
+import com.g2rain.basis.vo.ApplicationAuthorizationActivateSelfVo;
+import com.g2rain.basis.vo.ApplicationVo;
+import com.g2rain.basis.vo.OrganIdNameVo;
+import com.g2rain.basis.vo.UserVo;
+import com.g2rain.common.exception.BusinessException;
 import com.g2rain.common.exception.SystemErrorCode;
+import com.g2rain.common.model.Result;
 import com.g2rain.common.utils.Strings;
+import com.g2rain.iam.client.ApplicationAuthorizationClient;
+import com.g2rain.iam.client.ApplicationClient;
+import com.g2rain.iam.client.OrganClient;
 import com.g2rain.iam.config.DingTalkIamProperties;
 import com.g2rain.iam.config.IamAccessProperties;
 import com.g2rain.iam.config.WeComIamProperties;
+import com.g2rain.iam.dto.ConsentPreviewDto;
 import com.g2rain.iam.dto.SessionDto;
 import com.g2rain.iam.enums.IamErrorCode;
 import com.g2rain.iam.utils.AuthorizationState;
@@ -13,16 +26,20 @@ import com.g2rain.iam.utils.IamUrlUtils;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.ui.ModelMap;
-import org.springframework.util.CollectionUtils;
 import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
- * ModelAndView 服务类，用于处理视图重定向和错误页面的逻辑。
+ * ModelAndView 服务类，用于处理视图重定向、错误页面及 OAuth 授权确认编排。
+ * <p>
+ * 统一 consent 流程：无论是否携带 {@code applicationCode}、是否为单用户，均不在本层自动发码；
+ * 有 {@code applicationCode} 时将 OAuth 参数绑定到 {@link SessionDto}，确认时调用 Basis 开通后再发码。
+ * </p>
  */
 @Service
 public class ModelAndViewService {
@@ -32,6 +49,7 @@ public class ModelAndViewService {
      */
     @Resource
     private AuthorizationService authorizationService;
+
     /**
      * 用户服务，提供与用户相关的业务逻辑。
      */
@@ -51,18 +69,27 @@ public class ModelAndViewService {
     private WeComIamProperties weComIamProperties;
 
     /**
+     * Basis 应用授权（SELF 开通）；consent 预览由 IAM 本地拼装。
+     */
+    @Resource
+    private ApplicationAuthorizationClient applicationAuthorizationClient;
+
+    @Resource
+    private ApplicationClient applicationClient;
+
+    @Resource
+    private OrganClient organClient;
+
+    /**
      * 当客户端 ID 或重定向 URI 为空时，返回错误页面。
-     * <p>
-     * 该方法会检查客户端 ID 和重定向 URI 是否为空。如果为空，则构造一个错误页面并设置相应的错误信息。
-     * </p>
      *
      * @param clientId    客户端 ID
-     * @param redirectUri 登录后重定向的 URI
-     * @param state       防止 CSRF 攻击的状态参数
-     * @return {@link ModelAndView}，包含错误信息和重定向 URI 的视图模型
+     * @param redirectUri 登录后重定向 URI
+     * @param state       防止 CSRF 的状态参数
+     * @return 错误视图；参数齐全时返回 {@code null}
      */
     public ModelAndView redirectError(String clientId, String redirectUri, String state) {
-        // 验证 clientId 和 redirectUri 是否为空
+        // 验证 clientId 与 redirectUri 是否为空
         if (Strings.isBlank(clientId) || Strings.isBlank(redirectUri)) {
             // 如果为空，返回 error.html 页面
             ModelAndView modelAndView = new ModelAndView("error");
@@ -84,10 +111,8 @@ public class ModelAndViewService {
             // 如果 redirectUri 为空，设置为空字符串，前端会跳转到 index.html
             model.addAttribute("redirectUri", Strings.isBlank(redirectUri) ? "" : redirectUri);
             model.addAttribute("state", state != null ? state : "");
-
             return modelAndView;
         }
-
         return null;
     }
 
@@ -103,27 +128,22 @@ public class ModelAndViewService {
         return modelAndView;
     }
 
+    public ModelAndView redirectLogin(String clientId, String redirectUri, String state, String error, String username) {
+        return redirectLogin(clientId, redirectUri, state, null, error, username);
+    }
 
     /**
-     * 构造并返回登录页面的视图。
-     * <p>
-     * 该方法会根据客户端 ID、重定向 URI 和状态值生成登录页面视图。
-     * </p>
-     *
-     * @param clientId    客户端 ID
-     * @param redirectUri 登录后重定向的 URI
-     * @param state       防止 CSRF 攻击的状态参数
-     * @param error       错误信息（可选），如果提供则会在登录页面显示
-     * @param username    用户名（可选），如果提供则会在登录页面回显
-     * @return {@link ModelAndView}，包含登录页面视图
+     * 构造并返回登录页面视图（可携带 {@code applicationCode} 与错误、用户名回显）。
      */
-    public ModelAndView redirectLogin(String clientId, String redirectUri, String state, String error, String username) {
+    public ModelAndView redirectLogin(String clientId, String redirectUri, String state,
+                                      String applicationCode, String error, String username) {
         ModelAndView modelAndView = new ModelAndView("login");
         ModelMap model = modelAndView.getModelMap();
         // 将参数传递到视图
         model.addAttribute("clientId", clientId);
         model.addAttribute("redirectUri", redirectUri);
         model.addAttribute("state", state);
+        model.addAttribute("applicationCode", Strings.isBlank(applicationCode) ? "" : applicationCode.trim());
         if (Strings.isNotBlank(error)) {
             model.addAttribute("error", error);
         }
@@ -155,34 +175,14 @@ public class ModelAndViewService {
     }
 
     /**
-     * 构造并返回登录页面的视图（带错误信息）。
-     * <p>
-     * 该方法会根据客户端 ID、重定向 URI 和状态值生成登录页面视图。
-     * </p>
-     *
-     * @param clientId    客户端 ID
-     * @param redirectUri 登录后重定向的 URI
-     * @param state       防止 CSRF 攻击的状态参数
-     * @param error       错误信息（可选），如果提供则会在登录页面显示
-     * @return {@link ModelAndView}，包含登录页面视图
-     */
-    public ModelAndView redirectLogin(String clientId, String redirectUri, String state, String error) {
-        return redirectLogin(clientId, redirectUri, state, error, null);
-    }
-
-    /**
-     * 构造并返回登录页面的视图（无错误信息版本）。
-     * <p>
-     * 该方法会根据客户端 ID、重定向 URI 和状态值生成登录页面视图。
-     * </p>
-     *
-     * @param clientId    客户端 ID
-     * @param redirectUri 登录后重定向的 URI
-     * @param state       防止 CSRF 攻击的状态参数
-     * @return {@link ModelAndView}，包含登录页面视图
+     * 构造并返回登录页面视图（无错误信息）。
      */
     public ModelAndView redirectLogin(String clientId, String redirectUri, String state) {
-        return redirectLogin(clientId, redirectUri, state, null, null);
+        return redirectLogin(clientId, redirectUri, state, null, null, null);
+    }
+
+    public ModelAndView redirectLogin(String clientId, String redirectUri, String state, String applicationCode) {
+        return redirectLogin(clientId, redirectUri, state, applicationCode, null, null);
     }
 
     /**
@@ -196,18 +196,14 @@ public class ModelAndViewService {
         return new ModelAndView(Constants.REDIRECT + url);
     }
 
-    /**
-     * 重定向到授权页面。
-     * <p>
-     * 该方法会构造授权页面的重定向 URL，包含客户端 ID、重定向 URI 和状态参数。
-     * </p>
-     *
-     * @param clientId    客户端 ID
-     * @param redirectUri 授权后重定向的 URI
-     * @param state       防止 CSRF 攻击的状态参数
-     * @return {@link ModelAndView}，包含重定向到授权页面的视图
-     */
     public ModelAndView redirectAuthorize(String clientId, String redirectUri, String state) {
+        return redirectAuthorize(clientId, redirectUri, state, null);
+    }
+
+    /**
+     * 重定向到 {@code /auth/authorize}，携带 OAuth 参数及可选 {@code applicationCode}。
+     */
+    public ModelAndView redirectAuthorize(String clientId, String redirectUri, String state, String applicationCode) {
         UriComponentsBuilder authorizeUrl = UriComponentsBuilder.fromPath("/auth/authorize")
             .queryParam(Constants.CLIENT_ID, clientId)
             .queryParam(Constants.REDIRECT_URI, redirectUri);
@@ -215,75 +211,221 @@ public class ModelAndViewService {
         if (Strings.isNotBlank(state)) {
             authorizeUrl.queryParam(Constants.STATE, state);
         }
+        if (Strings.isNotBlank(applicationCode)) {
+            authorizeUrl.queryParam(Constants.APPLICATION_CODE, applicationCode.trim());
+        }
 
         return new ModelAndView(Constants.REDIRECT + authorizeUrl.build().toUriString());
     }
 
+    public ModelAndView redirectConsent(String sessionId, String clientId, String redirectUri, String state) {
+        return redirectConsent(sessionId, clientId, redirectUri, state, null);
+    }
+
+    public ModelAndView redirectConsent(String sessionId, String clientId, String redirectUri,
+                                        String state, String applicationCode) {
+        return redirectConsent(sessionId, clientId, redirectUri, state, applicationCode, null);
+    }
+
     /**
-     * 重定向到授权同意页面（consent 页面）。
+     * 重定向到授权同意页面（consent）。
      * <p>
-     * 该方法首先验证用户会话的有效性。如果会话 ID 为空或会话已过期，则重定向到登录页面；
-     * 如果会话有效，则获取用户列表并返回授权同意页面，供用户选择授权。
-     * </p>
-     * <p>
-     * 使用流程：
-     * <ol>
-     *     <li>检查 sessionId 是否为空，如果为空则重定向到登录页面</li>
-     *     <li>验证会话是否有效，如果会话无效或已过期则重定向到登录页面</li>
-     *     <li>获取当前会话关联的用户列表</li>
-     *     <li>返回授权同意页面视图，包含用户列表和授权参数</li>
-     * </ol>
+     * 验证会话后返回 consent 视图；有 {@code applicationCode} 时绑定会话 OAuth 字段并拉取预览。
+     * 单用户仅预选 {@code selectedUserId}，不自动发码。
      * </p>
      *
-     * @param sessionId   当前用户会话 ID，用于验证用户登录状态
-     * @param clientId    客户端 ID，标识发起授权请求的客户端应用
-     * @param redirectUri 授权后重定向的 URI，用于 OAuth2 回调
-     * @param state       请求的状态参数，通常用于防止 CSRF 攻击
-     * @return {@link ModelAndView}，包含授权同意页面的视图。如果会话无效，则返回登录页面的重定向视图
+     * @param sessionId       当前用户会话 ID
+     * @param clientId        客户端 ID
+     * @param redirectUri     授权后重定向 URI
+     * @param state           状态参数
+     * @param applicationCode 目标应用编码（可选）
+     * @param selectedUserId  预选用户 ID（可选）
      */
-    public ModelAndView redirectConsent(String sessionId, String clientId, String redirectUri, String state) {
+    public ModelAndView redirectConsent(String sessionId, String clientId, String redirectUri,
+                                        String state, String applicationCode, String selectedUserId) {
         // 如果 sessionId 为空，则跳转到登录页面
         if (Strings.isBlank(sessionId)) {
-            return this.redirectLogin(clientId, redirectUri, state);
+            return this.redirectLogin(clientId, redirectUri, state, applicationCode);
         }
 
         // 获取当前会话，若会话为空，则跳转到登录页面
         SessionDto session = sessionService.getSession(sessionId);
         if (Objects.isNull(session)) {
-            return this.redirectLogin(clientId, redirectUri, state);
+            return this.redirectLogin(clientId, redirectUri, state, applicationCode);
+        }
+
+        if (Strings.isNotBlank(applicationCode)) {
+            sessionService.bindOAuthConsent(sessionId, clientId, redirectUri, applicationCode.trim(), state);
         }
 
         // 获取用户列表
-        List<Map<String, String>> maps = userService.listUsers(session);
-        if (CollectionUtils.isEmpty(maps) || maps.size() == 1) {
-            String userId = null;
-            if (!CollectionUtils.isEmpty(maps)) {
-                userId = maps.getFirst().get("id");
-            }
-
-            return redirectCallback(sessionId, userId, clientId, redirectUri, state);
-        }
+        List<UserVo> users = userService.listUserVos(session);
+        List<Map<String, String>> userMaps = users.stream()
+            .map(u -> Map.of(
+                "id", String.valueOf(u.getId()),
+                "username", u.getRealName() == null ? "" : u.getRealName()
+            ))
+            .toList();
 
         ModelAndView modelAndView = new ModelAndView("consent");
         ModelMap model = modelAndView.getModelMap();
         // 将数据添加到模型中
-        model.addAttribute("users", maps);
+        model.addAttribute("users", userMaps);
         model.addAttribute("clientId", clientId);
         model.addAttribute("redirectUri", redirectUri);
-        model.addAttribute("state", state);
+        model.addAttribute("state", state != null ? state : "");
+        model.addAttribute("applicationCode",
+            Strings.isBlank(applicationCode) ? "" : applicationCode.trim());
+
+        String resolvedUserId = selectedUserId;
+        if (Strings.isBlank(resolvedUserId) && users.size() == 1) {
+            resolvedUserId = String.valueOf(users.getFirst().getId());
+        }
+        if (Strings.isNotBlank(resolvedUserId)) {
+            String trimmed = resolvedUserId.trim();
+            boolean allowed = users.stream()
+                .anyMatch(u -> Objects.equals(String.valueOf(u.getId()), trimmed));
+            if (allowed) {
+                model.addAttribute("selectedUserId", trimmed);
+                if (Strings.isNotBlank(applicationCode)) {
+                    UserVo selected = users.stream()
+                        .filter(u -> Objects.equals(String.valueOf(u.getId()), trimmed))
+                        .findFirst()
+                        .orElse(null);
+                    populatePreview(model, selected, applicationCode.trim());
+                }
+            } else {
+                model.addAttribute("previewError", "所选用户不属于当前登录账号");
+            }
+        }
         return modelAndView;
     }
 
-    public ModelAndView redirectCallback(String sessionId, String userId, String clientId, String redirectUri, String state) {
+    /**
+     * 用户确认或拒绝授权：拒绝则客户端 {@code access_denied}；确认则发码或先 {@code activate_self} 再发码。
+     */
+    public ModelAndView confirmConsent(
+        String sessionId,
+        String userId,
+        String clientId,
+        String redirectUri,
+        String state,
+        String applicationCode,
+        boolean denied) {
+        if (Strings.isBlank(sessionId)) {
+            return redirectLogin(clientId, redirectUri, state, applicationCode);
+        }
+        SessionDto session = sessionService.getSession(sessionId);
+        if (session == null) {
+            return redirectLogin(clientId, redirectUri, state, applicationCode);
+        }
+
+        String callbackState = AuthorizationState.resolveCallbackState(state);
+        if (denied) {
+            if (Strings.isNotBlank(applicationCode)) {
+                sessionService.clearOAuthConsent(sessionId);
+            }
+            return redirectClientError(clientId, redirectUri, callbackState, "access_denied");
+        }
+
+        if (Strings.isBlank(userId)) {
+            return redirectOAuthError(
+                clientId, redirectUri, callbackState,
+                SystemErrorCode.PARAM_REQUIRED.getMessage("userId"));
+        }
+        String selectedUserId = userId.trim();
+        boolean allowed = userService.listUserVos(session).stream()
+            .anyMatch(u -> Objects.equals(String.valueOf(u.getId()), selectedUserId));
+        if (!allowed) {
+            return redirectOAuthError(
+                clientId, redirectUri, callbackState, "所选用户不属于当前登录账号");
+        }
+
+        if (Strings.isBlank(applicationCode)) {
+            return redirectCallback(sessionId, selectedUserId, clientId, redirectUri, state, null);
+        }
+
+        try {
+            sessionService.requireOAuthConsentMatching(sessionId, clientId, redirectUri, applicationCode);
+        } catch (BusinessException ex) {
+            return redirectOAuthError(clientId, redirectUri, callbackState, ex.getMessage());
+        }
+
+        Long parsedUserId;
+        try {
+            parsedUserId = Long.valueOf(selectedUserId);
+        } catch (NumberFormatException ex) {
+            return redirectOAuthError(
+                clientId, redirectUri, callbackState,
+                SystemErrorCode.PARAM_VAL_INVALID.getMessage("userId"));
+        }
+
+        ApplicationAuthorizationActivateSelfRequest request = new ApplicationAuthorizationActivateSelfRequest();
+        request.setApplicationCode(applicationCode.trim());
+        request.setUserId(parsedUserId);
+
+        Result<ApplicationAuthorizationActivateSelfVo> result;
+        try {
+            result = applicationAuthorizationClient.activateSelf(request);
+        } catch (Exception ex) {
+            return redirectOAuthError(clientId, redirectUri, callbackState, "开通应用失败，请稍后重试");
+        }
+        if (!result.isSuccess() || result.getData() == null) {
+            String message = result.getErrorMessage();
+            return redirectOAuthError(
+                clientId,
+                redirectUri,
+                callbackState,
+                Strings.isBlank(message) ? "开通应用失败" : message
+            );
+        }
+
+        ApplicationAuthorizationActivateSelfVo activated = result.getData();
+        boolean thirdPartyIdpLogin = Strings.isNotBlank(session.getIdpType());
+        String code = authorizationService.generateAuthorizationCode(
+            session,
+            clientId,
+            selectedUserId,
+            thirdPartyIdpLogin,
+            applicationCode.trim(),
+            activated.getApplicationId(),
+            activated.getOrganId()
+        );
+        sessionService.clearOAuthConsent(sessionId);
+
+        // 构造重定向 URL
+        UriComponentsBuilder redirectUrl = UriComponentsBuilder.fromUriString(redirectUri)
+            .queryParam(Constants.CLIENT_ID, clientId)
+            .queryParam(Constants.CODE, code);
+        if (Strings.isNotBlank(callbackState)) {
+            redirectUrl.queryParam(Constants.STATE, callbackState);
+        }
+        return new ModelAndView(Constants.REDIRECT + redirectUrl.build().toUriString());
+    }
+
+    public ModelAndView redirectCallback(String sessionId, String userId, String clientId,
+                                         String redirectUri, String state) {
+        return redirectCallback(sessionId, userId, clientId, redirectUri, state, null);
+    }
+
+    /**
+     * 常规 OAuth 确认后发码并重定向到客户端（不含 {@code applicationCode} 绑定流程）。
+     */
+    public ModelAndView redirectCallback(String sessionId, String userId, String clientId,
+                                         String redirectUri, String state, String applicationCode) {
+        if (Strings.isNotBlank(applicationCode)) {
+            throw new IllegalStateException("带 applicationCode 的确认必须经应用授权确认后发码");
+        }
+
         // 如果 sessionId 为空，则跳转到登录页面
         if (Strings.isBlank(sessionId)) {
-            return this.redirectLogin(clientId, redirectUri, state);
+            return this.redirectLogin(clientId, redirectUri, state, applicationCode);
         }
 
         // 获取当前会话，若会话为空，则跳转到登录页面
         SessionDto session = sessionService.getSession(sessionId);
         if (Objects.isNull(session)) {
-            return this.redirectLogin(clientId, redirectUri, state);
+            return this.redirectLogin(clientId, redirectUri, state, applicationCode);
         }
 
         if (Strings.isNotBlank(userId)) {
@@ -300,7 +442,7 @@ public class ModelAndViewService {
             }
         }
 
-        // 生成授权码（会话带 IdP 信息时视为外部身份源授权链路）
+        // 生成授权码（会话含 IdP 信息时视为外部身份源授权链路）
         boolean thirdPartyIdpLogin = Strings.isNotBlank(session.getIdpType());
         String code = authorizationService.generateAuthorizationCode(session, clientId, userId, thirdPartyIdpLogin);
 
@@ -345,6 +487,66 @@ public class ModelAndViewService {
             redirectUrl.queryParam(Constants.STATE, callbackState);
         }
 
+        return new ModelAndView(Constants.REDIRECT + redirectUrl.build().toUriString());
+    }
+
+    /**
+     * 由 IAM 拼装 consent 预览：查应用名称/描述，并用所选用户的 organId 解析租户名。
+     */
+    private void populatePreview(ModelMap model, UserVo selectedUser, String applicationCode) {
+        try {
+            ApplicationSelectDto selectDto = new ApplicationSelectDto();
+            selectDto.setApplicationCode(applicationCode);
+            Result<List<ApplicationVo>> appResult = applicationClient.selectList(selectDto);
+            if (!appResult.isSuccess() || appResult.getData() == null || appResult.getData().isEmpty()) {
+                model.addAttribute("previewError",
+                    appResult.getErrorMessage() == null ? "无法加载应用信息" : appResult.getErrorMessage());
+                return;
+            }
+            ApplicationVo application = appResult.getData().getFirst();
+
+            ConsentPreviewDto preview = new ConsentPreviewDto();
+            preview.setApplicationName(application.getApplicationName());
+            preview.setDescription(application.getDescription());
+            preview.setOrganName(resolveOrganName(selectedUser == null ? null : selectedUser.getOrganId()));
+            model.addAttribute("preview", preview);
+        } catch (Exception ex) {
+            model.addAttribute("previewError", "无法加载应用信息，请稍后重试");
+        }
+    }
+
+    /**
+     * 通过 Basis {@code /organ/id_name_map} 解析机构名称；失败时返回空串（模板可隐藏）。
+     */
+    private String resolveOrganName(Long organId) {
+        if (organId == null) {
+            return "";
+        }
+        try {
+            OrganIdNameMapSelectDto dto = new OrganIdNameMapSelectDto();
+            dto.setIds(Set.of(organId));
+            Result<List<OrganIdNameVo>> result = organClient.selectOrganIdNameMap(dto);
+            if (result.isSuccess() && result.getData() != null && !result.getData().isEmpty()) {
+                String name = result.getData().getFirst().getOrganName();
+                return name == null ? "" : name;
+            }
+        } catch (Exception ignored) {
+            // 预览降级：机构名缺失不阻断确认页
+        }
+        return "";
+    }
+
+    /**
+     * 向客户端回调地址重定向 OAuth 标准 {@code error} 参数。
+     */
+    private ModelAndView redirectClientError(
+        String clientId, String redirectUri, String state, String error) {
+        UriComponentsBuilder redirectUrl = UriComponentsBuilder.fromUriString(redirectUri)
+            .queryParam(Constants.CLIENT_ID, clientId)
+            .queryParam("error", error);
+        if (Strings.isNotBlank(state)) {
+            redirectUrl.queryParam(Constants.STATE, state);
+        }
         return new ModelAndView(Constants.REDIRECT + redirectUrl.build().toUriString());
     }
 }

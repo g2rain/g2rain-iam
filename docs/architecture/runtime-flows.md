@@ -2,7 +2,9 @@
 
 ## 登录与授权码
 
-进入 `/auth/authorize` → 校验客户端、回调和会话 → 登录或 IdP → 建立 HttpOnly 会话 → 用户确认 → 生成短期授权码 → 仅回调允许的 `redirect_uri`。
+进入 `/auth/authorize` → 校验客户端、回调和会话 → 登录或 IdP → 建立 HttpOnly 会话 → 用户确认 → 生成短期授权码 → 回调调用方传入的 `redirectUri`（本轮不做白名单）。
+
+携带 `applicationCode` 时，进入统一 `consent` 前将 OAuth 参数绑定到会话；IAM 本地查询应用与机构信息展示预览；确认后校验会话绑定，再调用 Basis `activate_self` 开通全部 `SELF` 控制域并发码（5 分钟 TTL）。未携带 `applicationCode` 时同样进入 `consent` 确认/拒绝（禁止单用户自动发码），确认时走原回调发码、不写开通。
 
 ## Token
 

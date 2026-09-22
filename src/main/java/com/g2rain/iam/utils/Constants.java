@@ -55,6 +55,11 @@ public class Constants {
     public static final String STATE = "state";
 
     /**
+     * 开放平台目标应用编码参数名。
+     */
+    public static final String APPLICATION_CODE = "applicationCode";
+
+    /**
      * 匿名 OAuth 授权的 state 标识值。
      */
     public static final String STATE_ANONYMOUS = "anonymous";

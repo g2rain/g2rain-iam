@@ -7,6 +7,7 @@ public record WeComOAuthResult(
     String sessionId,
     String clientId,
     String redirectUri,
-    String state
+    String state,
+    String applicationCode
 ) {
 }
