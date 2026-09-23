@@ -22,6 +22,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -33,7 +34,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 统一 consent：单用户不自动发码、拒绝不发码、有 applicationCode 时 activate_self、无 code 走原 callback。
+ * 无 applicationCode 走原发码逻辑；有 applicationCode 须确认并 activate_self。
  */
 class ModelAndViewServiceConsentTest {
 
@@ -66,18 +67,49 @@ class ModelAndViewServiceConsentTest {
     }
 
     @Test
-    void redirectConsent_withoutApplicationCode_doesNotAutoIssueCodeForSingleUser() {
+    void redirectConsent_withoutApplicationCode_autoIssuesCodeForSingleUser() {
         SessionDto session = session("s1");
         when(sessionService.getSession("s1")).thenReturn(session);
         when(userService.listUserVos(session)).thenReturn(List.of(user(7L)));
+        when(authorizationService.generateAuthorizationCode(session, "client", "7", false))
+            .thenReturn("legacy-code");
+
+        ModelAndView mv = service.redirectConsent("s1", "client", "https://cb.example/cb", "st");
+
+        assertTrue(String.valueOf(mv.getViewName()).contains("code=legacy-code"));
+        verify(authorizationService).generateAuthorizationCode(session, "client", "7", false);
+        verify(sessionService, never()).bindOAuthConsent(any(), any(), any(), any(), any());
+        verify(applicationClient, never()).selectList(any());
+    }
+
+    @Test
+    void redirectConsent_withoutApplicationCode_multiUserWithoutSelection_showsSelectPage() {
+        SessionDto session = session("s1");
+        when(sessionService.getSession("s1")).thenReturn(session);
+        when(userService.listUserVos(session)).thenReturn(List.of(user(7L), user(8L)));
 
         ModelAndView mv = service.redirectConsent("s1", "client", "https://cb.example/cb", "st");
 
         assertEquals("consent", mv.getViewName());
-        assertEquals("7", mv.getModel().get("selectedUserId"));
+        assertNull(mv.getModel().get("selectedUserId"));
+        assertEquals("", mv.getModel().get("applicationCode"));
         verify(authorizationService, never()).generateAuthorizationCode(any(), any(), any(), anyBoolean());
         verify(sessionService, never()).bindOAuthConsent(any(), any(), any(), any(), any());
-        verify(applicationClient, never()).selectList(any());
+    }
+
+    @Test
+    void redirectConsent_withoutApplicationCode_multiUserWithSelection_issuesCode() {
+        SessionDto session = session("s1");
+        when(sessionService.getSession("s1")).thenReturn(session);
+        when(userService.listUserVos(session)).thenReturn(List.of(user(7L), user(8L)));
+        when(authorizationService.generateAuthorizationCode(session, "client", "8", false))
+            .thenReturn("picked-code");
+
+        ModelAndView mv = service.redirectConsent(
+            "s1", "client", "https://cb.example/cb", "st", null, "8");
+
+        assertTrue(String.valueOf(mv.getViewName()).contains("code=picked-code"));
+        verify(authorizationService).generateAuthorizationCode(session, "client", "8", false);
     }
 
     @Test

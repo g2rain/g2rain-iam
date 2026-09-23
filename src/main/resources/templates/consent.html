@@ -20,11 +20,11 @@
 
     <section class="landing-grid">
         <div class="landing-panel feature-panel">
-            <h2 class="title" th:text="${applicationCode != null and !#strings.isEmpty(applicationCode)} ? '应用授权确认' : '授权确认'">授权确认</h2>
+            <h2 class="title" th:text="${applicationCode != null and !#strings.isEmpty(applicationCode)} ? '应用授权确认' : '选择用户'">授权确认</h2>
             <p class="desc"
                th:text="${applicationCode != null and !#strings.isEmpty(applicationCode)}
                  ? '请确认是否授权目标应用；确认后将自动开通该应用的自助能力。'
-                 : '请选择用户并确认授权，完成后将返回应用。'">请选择用户并确认授权。</p>
+                 : '请选择用于授权的用户，选择后将返回应用。'">请选择用户。</p>
             <div class="feature-list" th:if="${preview != null}">
                 <div class="feature-card">
                     <div class="feature-title">应用</div>
@@ -34,7 +34,7 @@
                     <div class="feature-title">说明</div>
                     <div class="feature-desc" th:text="${preview.description}">应用描述</div>
                 </div>
-<div class="feature-card" th:if="${preview.organName != null and !#strings.isEmpty(preview.organName)}">
+                <div class="feature-card" th:if="${preview.organName != null and !#strings.isEmpty(preview.organName)}">
                     <div class="feature-title">租户</div>
                     <div class="feature-desc" th:text="${preview.organName}">租户名称</div>
                 </div>
@@ -42,11 +42,13 @@
         </div>
 
         <div class="landing-panel action-panel landing-op-table">
-            <h2 class="title">确认授权</h2>
+            <h2 class="title"
+                th:text="${applicationCode != null and !#strings.isEmpty(applicationCode) and selectedUserId != null and selectedUserId != ''}
+                  ? '确认授权' : '选择用户'">选择用户</h2>
 
             <div th:if="${previewError != null}" class="error-message" th:text="${previewError}">预览失败</div>
 
-            <!-- 多用户且尚未选定：先选用户 -->
+            <!-- 尚未选定用户：选用户（无 applicationCode 选后直接发码；有则进入确认） -->
             <div th:if="${selectedUserId == null or selectedUserId == ''}">
                 <p class="desc">请选择用于授权的用户。</p>
                 <form id="selectUserForm" method="get" action="/auth/authorize">
@@ -77,8 +79,8 @@
                 </div>
             </div>
 
-            <!-- 已选定用户：确认 / 拒绝 -->
-            <div th:if="${selectedUserId != null and selectedUserId != ''}">
+            <!-- 有 applicationCode 且已选定用户：确认 / 拒绝 -->
+            <div th:if="${applicationCode != null and !#strings.isEmpty(applicationCode) and selectedUserId != null and selectedUserId != ''}">
                 <p class="desc" th:if="${users != null and users.size() > 1}">
                     当前用户：<span th:text="${selectedUserId}"></span>
                 </p>
@@ -92,7 +94,7 @@
 
                     <div class="form-actions landing-form-actions">
                         <button type="submit" class="btn btn-primary btn-lg"
-                                th:disabled="${applicationCode != null and !#strings.isEmpty(applicationCode) and preview == null}">
+                                th:disabled="${preview == null}">
                             确认授权
                         </button>
                         <button type="button" class="btn btn-outline btn-lg" onclick="denyConsent()">拒绝</button>

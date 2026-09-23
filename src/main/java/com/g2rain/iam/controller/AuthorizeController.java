@@ -43,15 +43,15 @@ public class AuthorizeController {
     private SessionService sessionService;
 
     /**
-     * 处理 {@link ModelAndView} 的创建与重定向（登录页、统一 consent、回调等）。
+     * 处理 {@link ModelAndView} 的创建与重定向（登录页、选用户、应用授权 consent、回调等）。
      */
     private ModelAndViewService modelAndViewService;
 
     /**
-     * 授权码请求入口：校验参数与会话后进入统一 consent（不自动发码）。
+     * 授权码请求入口：校验参数与会话后按是否携带 {@code applicationCode} 分流。
      * <p>
-     * 未登录或会话失效则重定向登录页；已登录则进入 consent。携带 {@code applicationCode} 时由
-     * {@link ModelAndViewService#redirectConsent} 将会话与 OAuth 参数绑定并展示应用预览。
+     * 未登录或会话失效则重定向登录页。已登录时：无 {@code applicationCode} 走原逻辑
+     *（单用户直接发码、多用户先选）；有 {@code applicationCode} 进入应用授权 consent。
      * </p>
      *
      * @param sessionId       当前用户会话 ID
@@ -59,8 +59,8 @@ public class AuthorizeController {
      * @param redirectUri     授权后重定向 URI
      * @param state           状态参数，通常用于防 CSRF
      * @param applicationCode 目标应用编码（可选）
-     * @param userId          预选用户 ID（可选，用于 consent 回显）
-     * @return 登录页、consent 页或错误页
+     * @param userId          预选用户 ID（可选）
+     * @return 登录页、选用户页、consent 页、发码回调或错误页
      */
     @GetMapping(value = "/authorize")
     public ModelAndView authorize(@CookieValue(name = Constants.SESSION_NAME, required = false) String sessionId,
@@ -89,7 +89,7 @@ public class AuthorizeController {
             return modelAndViewService.redirectLogin(clientId, redirectUri, state, applicationCode);
         }
 
-        // 已登录：进入统一 consent（单用户也不自动发码）
+        // 已登录：无 applicationCode 走原发码逻辑；有则进入应用授权 consent
         return modelAndViewService.redirectConsent(
             sessionId, clientId, redirectUri, state, applicationCode, userId);
     }

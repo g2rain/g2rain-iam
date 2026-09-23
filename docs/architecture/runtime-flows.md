@@ -2,9 +2,12 @@
 
 ## 登录与授权码
 
-进入 `/auth/authorize` → 校验客户端、回调和会话 → 登录或 IdP → 建立 HttpOnly 会话 → 用户确认 → 生成短期授权码 → 回调调用方传入的 `redirectUri`（本轮不做白名单）。
+进入 `/auth/authorize` → 校验客户端、回调和会话 → 登录或 IdP → 建立 HttpOnly 会话 → 按是否携带 `applicationCode` 分流：
 
-携带 `applicationCode` 时，进入统一 `consent` 前将 OAuth 参数绑定到会话；IAM 本地查询应用与机构信息展示预览；确认后校验会话绑定，再调用 Basis `activate_self` 开通全部 `SELF` 控制域并发码（5 分钟 TTL）。未携带 `applicationCode` 时同样进入 `consent` 确认/拒绝（禁止单用户自动发码），确认时走原回调发码、不写开通。
+- 未携带 `applicationCode`：单用户直接发码并回调调用方 `redirectUri`；多用户先选用户，选定后发码（10 分钟 TTL，不写开通）。
+- 携带 `applicationCode`：进入 `consent` 前将 OAuth 参数绑定到会话；IAM 本地查询应用与机构信息展示预览；确认后校验会话绑定，再调用 Basis `activate_self` 开通全部 `SELF` 控制域并发码（5 分钟 TTL）。拒绝则 `access_denied`，不开通、不发码。
+
+本轮不做回调白名单。
 
 ## Token
 

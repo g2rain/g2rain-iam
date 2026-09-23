@@ -86,7 +86,7 @@ public class LoginController {
 
             iamSessionCookieService.writeSessionCookie(response, sessionId);
 
-            // 登录成功，进入统一 consent（不自动发码）
+            // 登录成功：无 applicationCode 走原发码逻辑；有则进入应用授权 consent
             return modelAndViewService.redirectConsent(sessionId, clientId, redirectUri, state, applicationCode);
         } catch (Exception e) {
             // 登录失败，返回登录页并显示错误信息，同时回显用户名

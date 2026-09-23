@@ -1,19 +1,22 @@
 # 应用授权确认（OAuth 统一确认）
 
-状态：**已实施（统一确认，无勾选分叉）**  
-范围：复用现有 `clientId + Client DPoP + Application DPoP + authorization_code` 链路；所有应用共用同一套确认发码流程；Basis 复用 `application_authorization` 做目标应用开通事实；Gateway 保持现有 Token/DPoP 消费职责。
+状态：**已实施（有 applicationCode 须确认；无则原发码逻辑）**  
+范围：复用现有 `clientId + Client DPoP + Application DPoP + authorization_code` 链路；Basis 复用 `application_authorization` 做目标应用开通事实；Gateway 保持现有 Token/DPoP 消费职责。
 
 本轮明确不做回调地址白名单：`redirectUri` 接受任意地址。P2 其余项（DPoP `jti`/`htu` 重放保护、撤销/审计/配额）仍未做。
 
 ## 1. 背景
 
-当前 IAM 已有浏览器授权码主线：`GET /auth/authorize` → 授权确认 → `POST /auth/authorize_selected` → `POST /auth/token`。授权码存入 Redis，默认有效期十分钟；换票时原子读取并删除，并校验发码时绑定的 `clientId`。
+当前 IAM 已有浏览器授权码主线：`GET /auth/authorize` →（按参数分流）→ `POST /auth/token`。授权码存入 Redis，默认有效期十分钟；换票时原子读取并删除，并校验发码时绑定的 `clientId`。
 
-该链路服务于平台与外部应用登录。`applicationCode` 表示本次授权的目标应用（不再区分「是否开放平台」）；有该参数时确认后自动开通目标应用全部 `SELF` 控制域，再发码。
+该链路服务于平台与外部应用登录。`applicationCode` 表示本次授权的目标应用（不再区分「是否开放平台」）；有该参数时须用户确认，确认后自动开通目标应用全部 `SELF` 控制域，再发码。无该参数时保持原 Main Shell / 常规 OAuth 发码体验。
 
 ## 2. 目标与边界
 
-目标：用户在统一 `consent` 页确认或拒绝；带 `applicationCode` 时展示应用名称与描述，确认后自动开通全部 `SELF` 并发放 code；无 `applicationCode`（Main Shell）同样需确认，但不写开通。
+目标：
+
+- 无 `applicationCode`：单用户直接选中并发码回调；多用户先选用户，选定后发码（不强制确认页）。
+- 有 `applicationCode`：统一 `consent` 页确认或拒绝；展示应用名称与描述；确认后自动开通全部 `SELF` 并发放 code。
 
 非目标：
 
@@ -46,12 +49,14 @@
 
 ```text
 Client → GET /auth/authorize
-IAM → 登录后一律进入统一 consent（禁止单用户自动发码）
-  有 applicationCode → Basis preview（名称/描述）→ 用户确认或拒绝
-  无 applicationCode → 仅选用户并确认或拒绝
+IAM → 登录后按 applicationCode 分流
+  无 applicationCode
+    单用户 → 直接发码 → redirectUri?code=...
+    多用户 → 选用户 → 选定后发码
+  有 applicationCode → consent 预览 → 用户确认或拒绝
 拒绝 → 错误回调，不写开通、不发 code
 确认 + applicationCode → Basis 自动开通全部 SELF → 发码（5 分钟 TTL，绑定 applicationCode）
-确认无 applicationCode → 按既有逻辑发码（10 分钟 TTL）
+无 applicationCode 发码 → 按既有逻辑（10 分钟 TTL）
 ```
 
 ## 5. 协议要点
@@ -75,7 +80,8 @@ consent 页预览由 IAM 调用既有 `/application/list`、`/organ/id_name_map`
 
 ## 7. 验收清单
 
-- 单用户有/无 `applicationCode` 均不自动发码，须点确认。
+- 无 `applicationCode`：单用户自动发码；多用户选后发码，不强制确认/拒绝页。
+- 有 `applicationCode`：须点确认才发码；拒绝不发码、不写开通。
 - 确认页不勾选控制域；有 `applicationCode` 时仅展示名称与描述。
 - 确认自动开通全部 `SELF`；无 `SELF` 仍可发码。
-- 拒绝不发码、不写开通；`acd` 不匹配失败；无 `applicationCode` 路径保持兼容。
+- `acd` 不匹配失败；无 `applicationCode` 路径与原 Main Shell 体验兼容。

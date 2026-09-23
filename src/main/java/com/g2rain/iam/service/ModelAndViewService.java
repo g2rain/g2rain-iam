@@ -37,8 +37,8 @@ import java.util.Set;
 /**
  * ModelAndView 服务类，用于处理视图重定向、错误页面及 OAuth 授权确认编排。
  * <p>
- * 统一 consent 流程：无论是否携带 {@code applicationCode}、是否为单用户，均不在本层自动发码；
- * 有 {@code applicationCode} 时将 OAuth 参数绑定到 {@link SessionDto}，确认时调用 Basis 开通后再发码。
+ * 无 {@code applicationCode}：沿用原逻辑——单用户直接发码回调；多用户先选用户，选定后发码。
+ * 有 {@code applicationCode}：进入应用授权 consent，确认后调用 Basis 开通再发码。
  * </p>
  */
 @Service
@@ -228,10 +228,11 @@ public class ModelAndViewService {
     }
 
     /**
-     * 重定向到授权同意页面（consent）。
+     * 登录后授权编排入口。
      * <p>
-     * 验证会话后返回 consent 视图；有 {@code applicationCode} 时绑定会话 OAuth 字段并拉取预览。
-     * 单用户仅预选 {@code selectedUserId}，不自动发码。
+     * 无 {@code applicationCode}：单用户或已选用户直接 {@link #redirectCallback} 发码；
+     * 多用户未选则渲染选用户页。有 {@code applicationCode}：绑定会话、展示 consent 预览，
+     * 须用户确认后才发码。
      * </p>
      *
      * @param sessionId       当前用户会话 ID
@@ -254,50 +255,75 @@ public class ModelAndViewService {
             return this.redirectLogin(clientId, redirectUri, state, applicationCode);
         }
 
-        if (Strings.isNotBlank(applicationCode)) {
-            sessionService.bindOAuthConsent(sessionId, clientId, redirectUri, applicationCode.trim(), state);
+        List<UserVo> users = userService.listUserVos(session);
+
+        // 无 applicationCode：原逻辑——有确定用户则直接发码，否则仅选用户
+        if (Strings.isBlank(applicationCode)) {
+            String legacyUserId = resolveSelectedUserId(users, selectedUserId);
+            if (Strings.isNotBlank(legacyUserId)) {
+                return redirectCallback(sessionId, legacyUserId, clientId, redirectUri, state, null);
+            }
+            if (Strings.isNotBlank(selectedUserId)) {
+                return redirectOAuthError(
+                    clientId,
+                    redirectUri,
+                    AuthorizationState.resolveCallbackState(state),
+                    "所选用户不属于当前登录账号"
+                );
+            }
+            return buildConsentView(clientId, redirectUri, state, "", users);
         }
 
-        // 获取用户列表
-        List<UserVo> users = userService.listUserVos(session);
-        List<Map<String, String>> userMaps = users.stream()
+        sessionService.bindOAuthConsent(sessionId, clientId, redirectUri, applicationCode.trim(), state);
+
+        ModelAndView modelAndView = buildConsentView(clientId, redirectUri, state, applicationCode.trim(), users);
+        ModelMap model = modelAndView.getModelMap();
+
+        String resolvedUserId = resolveSelectedUserId(users, selectedUserId);
+        if (Strings.isNotBlank(resolvedUserId)) {
+            model.addAttribute("selectedUserId", resolvedUserId);
+            UserVo selected = users.stream()
+                .filter(u -> Objects.equals(String.valueOf(u.getId()), resolvedUserId))
+                .findFirst()
+                .orElse(null);
+            populatePreview(model, selected, applicationCode.trim());
+        } else if (Strings.isNotBlank(selectedUserId)) {
+            model.addAttribute("previewError", "所选用户不属于当前登录账号");
+        }
+        return modelAndView;
+    }
+
+    private static String resolveSelectedUserId(List<UserVo> users, String selectedUserId) {
+        if (Strings.isNotBlank(selectedUserId)) {
+            String trimmed = selectedUserId.trim();
+            boolean allowed = users.stream()
+                .anyMatch(u -> Objects.equals(String.valueOf(u.getId()), trimmed));
+            return allowed ? trimmed : null;
+        }
+        if (users.size() == 1) {
+            return String.valueOf(users.getFirst().getId());
+        }
+        return null;
+    }
+
+    private static List<Map<String, String>> toUserMaps(List<UserVo> users) {
+        return users.stream()
             .map(u -> Map.of(
                 "id", String.valueOf(u.getId()),
                 "username", u.getRealName() == null ? "" : u.getRealName()
             ))
             .toList();
+    }
 
+    private ModelAndView buildConsentView(
+        String clientId, String redirectUri, String state, String applicationCode, List<UserVo> users) {
         ModelAndView modelAndView = new ModelAndView("consent");
         ModelMap model = modelAndView.getModelMap();
-        // 将数据添加到模型中
-        model.addAttribute("users", userMaps);
+        model.addAttribute("users", toUserMaps(users));
         model.addAttribute("clientId", clientId);
         model.addAttribute("redirectUri", redirectUri);
         model.addAttribute("state", state != null ? state : "");
-        model.addAttribute("applicationCode",
-            Strings.isBlank(applicationCode) ? "" : applicationCode.trim());
-
-        String resolvedUserId = selectedUserId;
-        if (Strings.isBlank(resolvedUserId) && users.size() == 1) {
-            resolvedUserId = String.valueOf(users.getFirst().getId());
-        }
-        if (Strings.isNotBlank(resolvedUserId)) {
-            String trimmed = resolvedUserId.trim();
-            boolean allowed = users.stream()
-                .anyMatch(u -> Objects.equals(String.valueOf(u.getId()), trimmed));
-            if (allowed) {
-                model.addAttribute("selectedUserId", trimmed);
-                if (Strings.isNotBlank(applicationCode)) {
-                    UserVo selected = users.stream()
-                        .filter(u -> Objects.equals(String.valueOf(u.getId()), trimmed))
-                        .findFirst()
-                        .orElse(null);
-                    populatePreview(model, selected, applicationCode.trim());
-                }
-            } else {
-                model.addAttribute("previewError", "所选用户不属于当前登录账号");
-            }
-        }
+        model.addAttribute("applicationCode", applicationCode == null ? "" : applicationCode);
         return modelAndView;
     }
 
