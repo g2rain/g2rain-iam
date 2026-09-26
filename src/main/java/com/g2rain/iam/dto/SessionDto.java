@@ -87,24 +87,4 @@ public class SessionDto {
      * 当前会话是否已断言为钉钉/企微企业管理员（用于租户开通校验）
      */
     private Boolean idpAdmin;
-
-    /**
-     * 待确认 OAuth：客户端 ID（有 applicationCode 时绑定）
-     */
-    private String oauthClientId;
-
-    /**
-     * 待确认 OAuth：回调地址
-     */
-    private String oauthRedirectUri;
-
-    /**
-     * 待确认 OAuth：目标应用编码
-     */
-    private String oauthApplicationCode;
-
-    /**
-     * 待确认 OAuth：state
-     */
-    private String oauthState;
 }

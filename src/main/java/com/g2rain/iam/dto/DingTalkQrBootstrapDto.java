@@ -7,9 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * 钉钉内嵌扫码引导请求 DTO
- *
- * @author Alpha
+ * 钉钉内嵌扫码引导请求 DTO：须在授权事务内发起。
  */
 @Getter
 @Setter
@@ -25,30 +23,11 @@ public class DingTalkQrBootstrapDto {
     private String bindMode;
 
     /**
-     * OAuth2 客户端 ID
+     * 授权事务 ID；服务端从事务还原 clientId/redirectUri 等。
      */
     @NotBlank
-    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "OAuth2 客户端 ID")
-    private String clientId;
-
-    /**
-     * OAuth2 客户端回调地址
-     */
-    @NotBlank
-    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "OAuth2 回调地址")
-    private String redirectUri;
-
-    /**
-     * 业务系统传入的 state
-     */
-    @Schema(description = "业务系统 state")
-    private String state;
-
-    /**
-     * 开放平台目标应用编码
-     */
-    @Schema(description = "开放平台目标应用编码")
-    private String applicationCode;
+    @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "授权事务 tid")
+    private String tid;
 
     /**
      * 登录意图 USER|ADMIN，默认 USER

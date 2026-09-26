@@ -44,8 +44,14 @@ public class WeComOAuthService {
     public String buildAuthorizeUrl(
         String bindMode, String clientId, String redirectUri, String state, String loginRole,
         String applicationCode) {
+        return buildAuthorizeUrl(bindMode, clientId, redirectUri, state, loginRole, applicationCode, null);
+    }
+
+    public String buildAuthorizeUrl(
+        String bindMode, String clientId, String redirectUri, String state, String loginRole,
+        String applicationCode, String transactionId) {
         return stateService.persistAndBuildAuthorizeUrl(
-            bindMode, clientId, redirectUri, state, loginRole, applicationCode);
+            bindMode, clientId, redirectUri, state, loginRole, applicationCode, transactionId);
     }
 
     public WeComOAuthResult finishLogin(String authCode, String opaqueState) {
@@ -76,7 +82,8 @@ public class WeComOAuthService {
             state.getClientId(),
             state.getRedirectUri(),
             state.getState(),
-            state.getApplicationCode()
+            state.getApplicationCode(),
+            state.getTransactionId()
         );
     }
 

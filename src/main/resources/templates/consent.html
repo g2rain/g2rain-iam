@@ -53,10 +53,7 @@
                 <p class="desc">请选择用于授权的用户。</p>
                 <form id="selectUserForm" method="get" action="/auth/authorize">
                     <input type="hidden" name="userId" id="selectUserId">
-                    <input type="hidden" name="clientId" th:value="${clientId} ?: ''">
-                    <input type="hidden" name="redirectUri" th:value="${redirectUri} ?: ''">
-                    <input type="hidden" name="state" th:value="${state} ?: ''">
-                    <input type="hidden" name="applicationCode" th:value="${applicationCode} ?: ''">
+                    <input type="hidden" name="tid" th:value="${tid} ?: ''">
                 </form>
                 <div class="table-container">
                     <table>
@@ -86,10 +83,7 @@
                 </p>
                 <form id="authorizeForm" method="post" action="/auth/authorize_selected">
                     <input type="hidden" name="userId" th:value="${selectedUserId}">
-                    <input type="hidden" name="clientId" th:value="${clientId} ?: ''">
-                    <input type="hidden" name="redirectUri" th:value="${redirectUri} ?: ''">
-                    <input type="hidden" name="state" th:value="${state} ?: ''">
-                    <input type="hidden" name="applicationCode" th:value="${applicationCode} ?: ''">
+                    <input type="hidden" name="tid" th:value="${tid} ?: ''">
                     <input type="hidden" name="denied" id="denied" value="false">
 
                     <div class="form-actions landing-form-actions">

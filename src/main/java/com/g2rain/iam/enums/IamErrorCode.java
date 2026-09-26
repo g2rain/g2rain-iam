@@ -61,6 +61,16 @@ public enum IamErrorCode implements ErrorCode {
     OAUTH_CONSENT_SESSION_INVALID("iam.40047", "授权确认会话无效或已过期"),
 
     /**
+     * 授权事务无效、过期或流程 Cookie 不匹配
+     */
+    AUTH_TRANSACTION_INVALID("iam.40048", "授权流程无效或已过期，请从业务侧重新发起"),
+
+    /**
+     * 授权事务状态不允许当前操作
+     */
+    AUTH_TRANSACTION_STATE_INVALID("iam.40049", "授权流程状态不正确，请刷新后重试"),
+
+    /**
      * 通行证绑定钉钉 state 无效或已过期
      */
     DINGTALK_PASSPORT_BIND_INVALID_STATE("iam.40016", "绑定会话已失效，请重新发起绑定"),

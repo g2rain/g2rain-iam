@@ -37,6 +37,21 @@ public enum RedisKeyRule {
     AUTHORIZATION_CODE("auth:authorization:%s"),
 
     /**
+     * 授权事务，格式为 "auth:authorization:txn:{tid}"
+     */
+    AUTHORIZATION_TRANSACTION("auth:authorization:txn:%s"),
+
+    /**
+     * 流程 Cookie 下未完成 tid 集合，格式为 "auth:authorization:flow:{flowCookieHash}"
+     */
+    AUTHORIZATION_FLOW_INDEX("auth:authorization:flow:%s"),
+
+    /**
+     * 事务去重键，格式为 "auth:authorization:dedup:{mode}:{applicationCode}:{clientId}:{stateHash}"
+     */
+    AUTHORIZATION_DEDUP("auth:authorization:dedup:%s:%s:%s:%s"),
+
+    /**
      * 钉钉 OAuth 防 CSRF 的 state，格式为 "auth:dingtalk:oauth:state:{state}"
      */
     DINGTALK_OAUTH_STATE("auth:dingtalk:oauth:state:%s"),

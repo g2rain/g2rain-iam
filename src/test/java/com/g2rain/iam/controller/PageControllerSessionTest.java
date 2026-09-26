@@ -1,9 +1,10 @@
 package com.g2rain.iam.controller;
 
-import com.g2rain.iam.config.DingTalkIamProperties;
 import com.g2rain.iam.config.IamAccessProperties;
-import com.g2rain.iam.config.WeComIamProperties;
 import com.g2rain.iam.dto.SessionDto;
+import com.g2rain.iam.service.AuthFlowCookieService;
+import com.g2rain.iam.service.AuthorizationFlowService;
+import com.g2rain.iam.service.AuthorizationTransactionService;
 import com.g2rain.iam.service.ModelAndViewService;
 import com.g2rain.iam.service.SessionService;
 import com.g2rain.iam.utils.Constants;
@@ -24,8 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -44,25 +44,28 @@ class PageControllerSessionTest {
     private IamAccessProperties iamAccessProperties;
 
     @Mock
-    private DingTalkIamProperties dingTalkIamProperties;
-
-    @Mock
-    private WeComIamProperties weComIamProperties;
-
-    @Mock
     private SessionService sessionService;
 
     @Mock
     private ModelAndViewService modelAndViewService;
+
+    @Mock
+    private AuthorizationTransactionService transactionService;
+
+    @Mock
+    private AuthFlowCookieService authFlowCookieService;
+
+    @Mock
+    private AuthorizationFlowService authorizationFlowService;
 
     @InjectMocks
     private PageController pageController;
 
     @BeforeEach
     void setUpResource() {
-        when(resourceLoader.getResource(anyString())).thenReturn(resource);
-        when(resource.exists()).thenReturn(true);
-        when(resource.isReadable()).thenReturn(true);
+        lenient().when(resourceLoader.getResource(anyString())).thenReturn(resource);
+        lenient().when(resource.exists()).thenReturn(true);
+        lenient().when(resource.isReadable()).thenReturn(true);
     }
 
     @Test
@@ -73,7 +76,18 @@ class PageControllerSessionTest {
             .thenReturn(new ModelAndView(PLATFORM_HOME));
 
         ModelAndView view = pageController.dynamicPage(
-            "index", null, null, null, null, null, null, request, model);
+            "index", null, null, null, null, null, null, null, request, model);
+
+        assertEquals(PLATFORM_HOME, view.getViewName());
+        verify(modelAndViewService).redirectPlatformMainHome();
+    }
+
+    @Test
+    void platformEndpointRedirectsThroughServerSidePlatformResolver() {
+        when(modelAndViewService.redirectPlatformMainHome())
+            .thenReturn(new ModelAndView(PLATFORM_HOME));
+
+        ModelAndView view = pageController.redirectToPlatform();
 
         assertEquals(PLATFORM_HOME, view.getViewName());
         verify(modelAndViewService).redirectPlatformMainHome();
@@ -86,7 +100,7 @@ class PageControllerSessionTest {
         when(iamAccessProperties.resolvedPlatformBaseUrl()).thenReturn("https://platform.example.com");
 
         ModelAndView view = pageController.dynamicPage(
-            "index", null, null, null, null, "logout", null, request, model);
+            "index", null, null, null, null, null, "logout", null, request, model);
 
         assertEquals("index", view.getViewName());
         assertFalse((Boolean) model.get("loggedIn"));
@@ -107,7 +121,7 @@ class PageControllerSessionTest {
         ExtendedModelMap model = new ExtendedModelMap();
 
         ModelAndView view = pageController.dynamicPage(
-            "index", null, null, null, null, null, "session-1", request, model);
+            "index", null, null, null, null, null, null, "session-1", request, model);
 
         assertEquals("index", view.getViewName());
         assertEquals(true, model.get("loggedIn"));
@@ -126,21 +140,17 @@ class PageControllerSessionTest {
         ExtendedModelMap model = new ExtendedModelMap();
 
         ModelAndView view = pageController.dynamicPage(
-            "login", null, null, null, null, null, "session-2", request, model);
+            "login", null, null, null, null, null, null, "session-2", request, model);
 
         assertEquals(Constants.REDIRECT + "/auth/index.html", view.getViewName());
     }
 
     @Test
-    void loginWithSessionAndOAuthUsesConsentFlow() {
+    void loginWithSessionAndOAuthRedirectsToAuthorize() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         SessionDto session = new SessionDto();
         session.setSessionId("session-3");
         when(sessionService.getSession("session-3")).thenReturn(session);
-        ModelAndView consentView = new ModelAndView("consent");
-        when(modelAndViewService.redirectConsent(
-            eq("session-3"), eq("client-a"), eq("https://app.test/callback"), eq("state-x"), isNull()))
-            .thenReturn(consentView);
         ExtendedModelMap model = new ExtendedModelMap();
 
         ModelAndView view = pageController.dynamicPage(
@@ -150,17 +160,20 @@ class PageControllerSessionTest {
             "state-x",
             null,
             null,
+            null,
             "session-3",
             request,
             model);
 
-        assertEquals("consent", view.getViewName());
-        verify(modelAndViewService).redirectConsent(
-            "session-3", "client-a", "https://app.test/callback", "state-x", null);
+        assertTrue(view.getViewName().startsWith(Constants.REDIRECT));
+        assertTrue(view.getViewName().contains("/auth/authorize"));
+        assertTrue(view.getViewName().contains("clientId=client-a"));
+        assertTrue(view.getViewName().contains("redirectUri="));
+        assertTrue(view.getViewName().contains("state=state-x"));
     }
 
     @Test
-    void indexWithoutSessionWithOAuthRedirectsToLogin() {
+    void indexWithoutSessionWithOAuthRedirectsToAuthorize() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         ExtendedModelMap model = new ExtendedModelMap();
 
@@ -172,10 +185,12 @@ class PageControllerSessionTest {
             null,
             null,
             null,
+            null,
             request,
             model);
 
         assertTrue(view.getViewName().startsWith(Constants.REDIRECT));
+        assertTrue(view.getViewName().contains("/auth/authorize"));
         assertTrue(view.getViewName().contains("clientId=client-a"));
         assertTrue(view.getViewName().contains("redirectUri="));
         assertTrue(view.getViewName().contains("state=state-x"));
@@ -189,14 +204,14 @@ class PageControllerSessionTest {
             .thenReturn(new ModelAndView(PLATFORM_HOME));
 
         ModelAndView view = pageController.dynamicPage(
-            "login", null, null, null, null, null, null, request, model);
+            "login", null, null, null, null, null, null, null, request, model);
 
         assertEquals(PLATFORM_HOME, view.getViewName());
         verify(modelAndViewService).redirectPlatformMainHome();
     }
 
     @Test
-    void loginWithOAuthNoSessionRendersLoginPage() {
+    void loginWithOAuthNoSessionRedirectsToAuthorize() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         ExtendedModelMap model = new ExtendedModelMap();
 
@@ -208,11 +223,12 @@ class PageControllerSessionTest {
             null,
             null,
             null,
+            null,
             request,
             model);
 
-        assertEquals("login", view.getViewName());
-        assertEquals("client-a", model.get("clientId"));
-        assertEquals("https://app.test/callback", model.get("redirectUri"));
+        assertTrue(view.getViewName().startsWith(Constants.REDIRECT));
+        assertTrue(view.getViewName().contains("/auth/authorize"));
+        assertTrue(view.getViewName().contains("clientId=client-a"));
     }
 }

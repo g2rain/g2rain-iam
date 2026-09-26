@@ -17,11 +17,12 @@
 
     <section class="landing-grid">
         <div class="landing-panel feature-panel">
-            <h1 class="title">退出登录成功</h1>
-            <p class="desc">
+            <h1 class="title" th:text="${confirmLogout} ? '确认退出' : (${error != null and error != ''} ? '退出未完成' : '退出登录成功')">退出登录成功</h1>
+            <p class="desc" th:if="${error != null and error != ''}" th:text="${error}">错误</p>
+            <p class="desc" th:unless="${error != null and error != ''}">
                 为了保障账号安全，你的会话已被清理。你可以稍后返回首页继续操作。
             </p>
-            <div class="feature-list">
+            <div class="feature-list" th:unless="${confirmLogout}">
                 <div class="feature-card">
                     <div class="feature-title">安全保障</div>
                     <div class="feature-desc">退出后将终止当前登录会话，降低账号被滥用风险。</div>
@@ -34,11 +35,15 @@
         </div>
 
         <div class="landing-panel action-panel landing-op-links">
-            <h2 class="title">已退出</h2>
-            <div class="countdown">
+            <h2 class="title" th:text="${confirmLogout} ? '请确认' : '已退出'">已退出</h2>
+            <form th:if="${confirmLogout}" method="post" action="/auth/logout">
+                <button type="submit" class="btn btn-primary btn-lg">确认退出</button>
+                <a th:href="@{/auth/index.html}" class="btn btn-outline btn-lg">取消</a>
+            </form>
+            <div th:unless="${confirmLogout}" class="countdown">
                 <span id="countdown"><span class="pulse">1</span></span> 秒后跳转到首页...
             </div>
-            <div style="margin-top: 18px;">
+            <div th:unless="${confirmLogout}" style="margin-top: 18px;">
                 <a th:href="@{/auth/index.html(from='logout')}"
                    class="btn btn-outline btn-lg"
                    style="width: auto; padding: 12px 24px;">

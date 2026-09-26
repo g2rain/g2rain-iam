@@ -41,10 +41,7 @@
         <div class="landing-panel action-panel landing-op-form">
             <h2 class="title">注册账号</h2>
             <form method="POST" action="/auth/passport_register">
-                <input type="hidden" id="clientId" name="clientId" th:value="${clientId} ?: ''">
-                <input type="hidden" id="redirectUri" name="redirectUri" th:value="${redirectUri} ?: ''">
-                <input type="hidden" id="state" name="state" th:value="${state} ?: ''">
-                <input type="hidden" id="applicationCode" name="applicationCode" th:value="${applicationCode} ?: ''">
+                <input type="hidden" id="tid" name="tid" th:value="${tid} ?: ''">
 
                 <div class="form-group">
                     <label for="username">用户名<span class="required-asterisk" aria-hidden="true">*</span></label>
@@ -122,7 +119,8 @@
 
                 <div class="form-actions landing-form-actions">
                     <button type="submit" class="btn btn-primary btn-lg">注册</button>
-                    <a th:href="@{/auth/login.html(clientId=${clientId ?: ''}, redirectUri=${redirectUri ?: ''}, state=${state ?: ''})}"
+                    <a th:if="${tid != null and !#strings.isEmpty(tid)}"
+                       th:href="@{/auth/authorize(tid=${tid})}"
                        class="btn btn-outline btn-lg">已有账号？立即登录</a>
                 </div>
             </form>

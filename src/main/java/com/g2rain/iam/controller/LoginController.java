@@ -1,10 +1,15 @@
 package com.g2rain.iam.controller;
 
+import com.g2rain.common.exception.BusinessException;
 import com.g2rain.common.utils.Strings;
+import com.g2rain.iam.dto.AuthorizationTransactionDto;
+import com.g2rain.iam.enums.IamErrorCode;
+import com.g2rain.iam.service.AuthFlowCookieService;
 import com.g2rain.iam.service.AuthService;
+import com.g2rain.iam.service.AuthorizationFlowService;
+import com.g2rain.iam.service.AuthorizationTransactionService;
 import com.g2rain.iam.service.IamSessionCookieService;
 import com.g2rain.iam.service.SessionService;
-import com.g2rain.iam.service.ModelAndViewService;
 import com.g2rain.iam.utils.Constants;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -20,23 +25,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.ModelAndView;
 
 /**
- * 登录控制器，处理用户登录请求。
- * <p>
- * 该控制器处理登录请求，通过用户名和密码验证用户身份。如果验证通过，将创建会话并将会话 ID 设置为 HttpOnly Cookie，然后重定向到授权页面。
- * </p>
- * <p>
- * 使用示例：
- * <pre>{@code
- * // 通过 POST 请求进行用户登录
- * POST /auth/login
- * Content-Type: application/x-www-form-urlencoded
- *
- * username=user123&password=secret&clientId=client123&redirectUri=http://example.com/callback&state=xyz
- * }</pre>
- * </p>
- *
- * @author alpha
- * @since 2025/10/10
+ * 登录 / 退出：登录只收 tid；退出取消未完成授权事务。
  */
 @Slf4j
 @Controller
@@ -44,76 +33,87 @@ import org.springframework.web.servlet.ModelAndView;
 @RequestMapping(value = "/auth")
 public class LoginController {
 
-    /**
-     * 认证服务，用于验证用户名和密码并创建会话。
-     */
     private final AuthService authService;
-
     private final SessionService sessionService;
-
-    private final ModelAndViewService modelAndViewService;
-
     private final IamSessionCookieService iamSessionCookieService;
+    private final AuthorizationTransactionService transactionService;
+    private final AuthFlowCookieService authFlowCookieService;
+    private final AuthorizationFlowService authorizationFlowService;
 
-    /**
-     * 用户登录接口，接收用户名和密码进行身份验证。
-     * <p>
-     * 如果身份验证成功，会生成一个会话 ID，并将其存储为 HttpOnly 的 Cookie，然后重定向到授权页面。
-     * 如果身份验证失败，会返回登录页面视图并显示错误信息。
-     * </p>
-     *
-     * @param response    {@link HttpServletResponse}，用于向客户端添加 Cookie
-     * @param clientId    客户端 ID
-     * @param redirectUri 登录成功后的重定向 URI
-     * @param username    用户名
-     * @param password    密码
-     * @param state           请求的状态参数，通常用于防止 CSRF 攻击
-     * @param applicationCode 目标应用编码（可选，OAuth 链路透传）
-     * @return {@link ModelAndView}，重定向到 consent 或返回登录页面视图（如果登录失败）
-     */
     @PostMapping(value = "/login")
-    public ModelAndView login(HttpServletResponse response,
-                             @RequestParam(name = "clientId") String clientId,
-                             @RequestParam(name = "redirectUri") String redirectUri,
-                             @RequestParam(name = "username") String username,
-                             @RequestParam(name = "password") String password,
-                             @RequestParam(name = "state", required = false) String state,
-                             @RequestParam(name = "applicationCode", required = false) String applicationCode) {
+    public ModelAndView login(
+        HttpServletRequest request,
+        HttpServletResponse response,
+        @RequestParam(name = Constants.TID) String tid,
+        @RequestParam(name = "username") String username,
+        @RequestParam(name = "password") String password) {
+
+        if (Strings.isBlank(tid)) {
+            return authorizationFlowService.renderFlowError(
+                null, IamErrorCode.AUTH_TRANSACTION_INVALID.getMessage());
+        }
 
         try {
-            // 调用认证服务验证用户名和密码，获取会话 ID
+            String flowHash = authFlowCookieService.hash(authFlowCookieService.readRaw(request));
+            AuthorizationTransactionDto txn = transactionService.requireActive(tid.trim(), flowHash);
             String sessionId = authService.authenticate(username, password);
-
             iamSessionCookieService.writeSessionCookie(response, sessionId);
-
-            // 登录成功：无 applicationCode 走原发码逻辑；有则进入应用授权 consent
-            return modelAndViewService.redirectConsent(sessionId, clientId, redirectUri, state, applicationCode);
+            return authorizationFlowService.afterPasswordLogin(txn, sessionId);
+        } catch (BusinessException ex) {
+            try {
+                String flowHash = authFlowCookieService.hash(authFlowCookieService.readRaw(request));
+                AuthorizationTransactionDto txn = transactionService.requireReadable(tid.trim(), flowHash);
+                return authorizationFlowService.renderLogin(txn, ex.getMessage(), username);
+            } catch (BusinessException ignored) {
+                return authorizationFlowService.renderFlowError(null, ex.getMessage());
+            }
         } catch (Exception e) {
-            // 登录失败，返回登录页并显示错误信息，同时回显用户名
             log.error("登录错误, message:{}", e.getMessage(), e);
-            return modelAndViewService.redirectLogin(
-                clientId, redirectUri, state, applicationCode, "用户名或密码错误", username);
+            try {
+                String flowHash = authFlowCookieService.hash(authFlowCookieService.readRaw(request));
+                AuthorizationTransactionDto txn = transactionService.requireReadable(tid.trim(), flowHash);
+                return authorizationFlowService.renderLogin(txn, "用户名或密码错误", username);
+            } catch (BusinessException ex) {
+                return authorizationFlowService.renderFlowError(null, ex.getMessage());
+            }
         }
     }
 
-    /**
-     * 用户登出接口，清除 Cookie 和 Redis 中的会话信息。
-     * <p>
-     * 该接口支持 GET 和 POST 请求，会从 Cookie 中读取会话 ID，删除 Redis 中的会话缓存，
-     * 并清除客户端的 Cookie，然后重定向到首页。
-     * </p>
-     *
-     * @param request  {@link HttpServletRequest}，用于获取 Cookie
-     * @param response {@link HttpServletResponse}，用于清除 Cookie
-     * @param sessionId 会话 ID（从 Cookie 中获取，可选）
-     * @return {@link ModelAndView}，重定向到首页
-     */
     @GetMapping(value = "/logout")
+    public ModelAndView logoutGet() {
+        ModelAndView mv = new ModelAndView("logout");
+        mv.getModelMap().addAttribute("confirmLogout", true);
+        mv.getModelMap().addAttribute("error", "请确认退出当前登录");
+        return mv;
+    }
+
     @PostMapping(value = "/logout")
-    public ModelAndView logout(HttpServletRequest request,
-                               HttpServletResponse response,
-                               @CookieValue(name = Constants.SESSION_NAME, required = false) String sessionId) {
-        // 如果 Cookie 中没有 sessionId，尝试从请求中获取
+    public ModelAndView logout(
+        HttpServletRequest request,
+        HttpServletResponse response,
+        @CookieValue(name = Constants.SESSION_NAME, required = false) String sessionId) {
+
+        String origin = request.getHeader("Origin");
+        String referer = request.getHeader("Referer");
+        if (!isSameOrigin(request, origin, referer)) {
+            ModelAndView mv = new ModelAndView("logout");
+            mv.getModelMap().addAttribute("error", "非法来源，退出被拒绝");
+            return mv;
+        }
+
+        String flowRaw = authFlowCookieService.readRaw(request);
+        String flowHash = authFlowCookieService.hash(flowRaw);
+        boolean failed = false;
+
+        try {
+            if (Strings.isNotBlank(flowHash)) {
+                transactionService.cancelAllByFlowHash(flowHash);
+            }
+        } catch (Exception e) {
+            failed = true;
+            log.warn("取消授权事务失败: {}", e.getMessage());
+        }
+
         if (Strings.isBlank(sessionId)) {
             Cookie[] cookies = request.getCookies();
             if (cookies != null) {
@@ -126,19 +126,36 @@ public class LoginController {
             }
         }
 
-        // 删除 Redis 中的会话缓存
         if (Strings.isNotBlank(sessionId)) {
             try {
                 sessionService.logout(sessionId);
-                log.debug("用户登出成功, sessionId: {}", sessionId);
             } catch (Exception e) {
+                failed = true;
                 log.warn("删除会话缓存失败, sessionId: {}, error: {}", sessionId, e.getMessage());
             }
         }
 
         iamSessionCookieService.clearSessionCookie(response);
+        authFlowCookieService.clear(response);
 
-        // 返回前端跳转页：前端负责跳转到首页
-        return new ModelAndView("logout");
+        ModelAndView mv = new ModelAndView("logout");
+        if (failed) {
+            mv.getModelMap().addAttribute("error", "退出未完全成功，请重试");
+        }
+        return mv;
+    }
+
+    private static boolean isSameOrigin(HttpServletRequest request, String origin, String referer) {
+        String host = request.getHeader("Host");
+        if (Strings.isBlank(host)) {
+            return true;
+        }
+        if (Strings.isNotBlank(origin)) {
+            return origin.contains(host);
+        }
+        if (Strings.isNotBlank(referer)) {
+            return referer.contains(host);
+        }
+        return true;
     }
 }

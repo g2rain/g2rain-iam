@@ -54,7 +54,7 @@
         </div>
         <div class="landing-header-links" th:unless="${loggedIn}">
             <a th:if="${loginViaRedirectUri}" th:href="${loginRedirectUri}" class="link-muted">立即登录</a>
-            <a th:unless="${loginViaRedirectUri}" th:href="|${platformBaseUrl}/main/home|" class="link-muted">立即登录</a>
+            <a th:unless="${loginViaRedirectUri}" th:href="@{/auth/platform}" class="link-muted">前往业务侧登录</a>
         </div>
     </header>
 
@@ -103,7 +103,10 @@
                 </div>
             </div>
             <div class="action-links">
-                <a th:href="@{/auth/logout}" class="btn btn-outline btn-lg">退出当前登录</a>
+                <a th:href="@{/auth/platform}" class="btn btn-primary btn-lg">进入业务平台</a>
+                <form method="post" action="/auth/logout" style="display:inline;">
+                    <button type="submit" class="btn btn-outline btn-lg">退出当前登录</button>
+                </form>
             </div>
         </div>
     </section>
@@ -136,7 +139,7 @@
             <p class="desc">选择一个操作继续：登录系统或注册账号。</p>
             <div class="action-links">
                 <a th:if="${loginViaRedirectUri}" th:href="${loginRedirectUri}" class="btn btn-primary btn-lg">立即登录</a>
-                <a th:unless="${loginViaRedirectUri}" th:href="|${platformBaseUrl}/main/home|" class="btn btn-primary btn-lg">立即登录</a>
+                <a th:unless="${loginViaRedirectUri}" th:href="@{/auth/platform}" class="btn btn-primary btn-lg">前往业务侧登录</a>
                 <a th:href="@{/auth/register.html}" class="btn btn-outline btn-lg">注册账号</a>
             </div>
         </div>

@@ -55,6 +55,13 @@ public class DingTalkOAuthStateService {
     public String persistStateAndBuildAuthorizeUrl(String bindMode, String clientId, String redirectUri,
                                                    String state, boolean qrEmbedded, String loginRole,
                                                    String applicationCode) {
+        return persistStateAndBuildAuthorizeUrl(
+            bindMode, clientId, redirectUri, state, qrEmbedded, loginRole, applicationCode, null);
+    }
+
+    public String persistStateAndBuildAuthorizeUrl(String bindMode, String clientId, String redirectUri,
+                                                   String state, boolean qrEmbedded, String loginRole,
+                                                   String applicationCode, String transactionId) {
         if (Strings.isBlank(clientId)) {
             throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "clientId");
         }
@@ -69,6 +76,7 @@ public class DingTalkOAuthStateService {
         payload.setRedirectUri(redirectUri);
         payload.setState(state);
         payload.setApplicationCode(Strings.isBlank(applicationCode) ? null : applicationCode.trim());
+        payload.setTransactionId(Strings.isBlank(transactionId) ? null : transactionId.trim());
         payload.setQrEmbedded(qrEmbedded);
         payload.setLoginRole(IdpLoginRole.fromParam(loginRole).name());
         genericRedisHelper.set(

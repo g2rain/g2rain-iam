@@ -41,6 +41,11 @@ public class DingTalkOAuthStateDto {
     private String applicationCode;
 
     /**
+     * 授权事务 ID
+     */
+    private String transactionId;
+
+    /**
      * 是否内嵌扫码登录[true:方式二 sns_authorize, false:方式一浏览器 OAuth]
      */
     private Boolean qrEmbedded;

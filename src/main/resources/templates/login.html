@@ -40,8 +40,9 @@
         </div>
 
         <div class="landing-panel action-panel landing-op-form landing-op-login"
-             th:with="hasDingTalk=${clientId != null and !#strings.isEmpty(clientId) and redirectUri != null and !#strings.isEmpty(redirectUri) and dingTalkBindMode != null and !#strings.isEmpty(dingTalkBindMode)},
-                      hasWeCom=${clientId != null and !#strings.isEmpty(clientId) and redirectUri != null and !#strings.isEmpty(redirectUri) and weComBindMode != null and !#strings.isEmpty(weComBindMode)}">
+             th:with="hasTid=${tid != null and !#strings.isEmpty(tid)},
+                      hasDingTalk=${hasTid and dingTalkBindMode != null and !#strings.isEmpty(dingTalkBindMode)},
+                      hasWeCom=${hasTid and weComBindMode != null and !#strings.isEmpty(weComBindMode)}">
             <h2 class="title">登录</h2>
             <p class="login-panel-lead" th:if="${hasDingTalk or hasWeCom}">使用账号密码或企业扫码完成身份认证</p>
             <p class="login-panel-lead" th:unless="${hasDingTalk or hasWeCom}">请输入账号密码登录</p>
@@ -71,20 +72,18 @@
                             <input type="password" id="password" name="password" required>
                         </div>
 
-                        <input type="hidden" id="clientId" name="clientId" th:value="${clientId} ?: ''">
-                        <input type="hidden" id="redirectUri" name="redirectUri" th:value="${redirectUri} ?: ''">
-                        <input type="hidden" id="state" name="state" th:value="${state} ?: ''">
-                        <input type="hidden" id="applicationCode" name="applicationCode" th:value="${applicationCode} ?: ''">
+                        <input type="hidden" id="tid" name="tid" th:value="${tid} ?: ''">
 
                         <div class="form-actions landing-form-actions">
                             <button type="submit" class="btn btn-primary btn-lg">登录</button>
-                            <a th:href="@{/auth/register.html(clientId=${clientId ?: ''}, redirectUri=${redirectUri ?: ''}, state=${state ?: ''}, applicationCode=${applicationCode ?: ''})}"
+                            <a th:if="${hasTid}"
+                               th:href="@{/auth/register.html(tid=${tid})}"
                                class="btn btn-outline btn-lg">注册账号</a>
                         </div>
                     </form>
                     <a th:if="${hasWeCom}"
                        class="btn btn-outline btn-lg btn-block"
-                       th:href="@{/auth/wecom/authorize(bindMode=${weComBindMode},clientId=${clientId},redirectUri=${redirectUri},state=${state != null ? state : ''},applicationCode=${applicationCode != null ? applicationCode : ''})}">
+                       th:href="@{/auth/wecom/authorize(bindMode=${weComBindMode},tid=${tid})}">
                         企业微信扫码登录
                     </a>
                 </div>
@@ -103,7 +102,7 @@
                         <div id="dingtalk-qr-container" class="dingtalk-qr-box" aria-label="钉钉扫码登录"></div>
                         <p class="dingtalk-qr-status" id="dingtalk-qr-status" aria-live="polite">切换到本标签后将加载钉钉扫码</p>
                         <a class="btn btn-outline btn-lg btn-block"
-                           th:href="@{/auth/dingtalk/authorize(bindMode=${dingTalkBindMode},clientId=${clientId},redirectUri=${redirectUri},state=${state != null ? state : ''},applicationCode=${applicationCode != null ? applicationCode : ''})}">浏览器跳转钉钉登录</a>
+                           th:href="@{/auth/dingtalk/authorize(bindMode=${dingTalkBindMode},tid=${tid})}">浏览器跳转钉钉登录</a>
                         <p class="dingtalk-fallback-note">无法扫码时可使用浏览器跳转方式</p>
                     </div>
                 </div>
@@ -115,7 +114,7 @@
         G2Rain IAM
     </footer>
 </main>
-<th:block th:if="${clientId != null and !#strings.isEmpty(clientId) and redirectUri != null and !#strings.isEmpty(redirectUri) and dingTalkBindMode != null and !#strings.isEmpty(dingTalkBindMode)}">
+<th:block th:if="${dingTalkBindMode != null and !#strings.isEmpty(dingTalkBindMode) and tid != null and !#strings.isEmpty(tid)}">
 <script>
 /*<![CDATA[*/
 (function () {
@@ -155,17 +154,16 @@
     }
 
     function runQrBootstrap() {
+        var tidEl = document.getElementById('tid');
+        var body = {
+            bindMode: bindMode,
+            tid: tidEl ? (tidEl.value || '') : ''
+        };
         return fetch(bootstrapUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             credentials: 'same-origin',
-            body: JSON.stringify({
-                bindMode: bindMode,
-                clientId: document.getElementById('clientId').value,
-                redirectUri: document.getElementById('redirectUri').value,
-                state: document.getElementById('state').value || '',
-                applicationCode: (document.getElementById('applicationCode') || {}).value || ''
-            })
+            body: JSON.stringify(body)
         }).then(function (r) { return r.json(); }).then(function (json) {
             if (!json || !json.data || !json.data.gotoUrl) {
                 setStatus('无法准备钉钉扫码，请使用「浏览器跳转钉钉登录」。', false);

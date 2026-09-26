@@ -2,10 +2,12 @@ package com.g2rain.iam.controller;
 
 
 import com.g2rain.common.utils.Strings;
-import com.g2rain.iam.config.DingTalkIamProperties;
 import com.g2rain.iam.config.IamAccessProperties;
-import com.g2rain.iam.config.WeComIamProperties;
+import com.g2rain.iam.dto.AuthorizationTransactionDto;
 import com.g2rain.iam.dto.SessionDto;
+import com.g2rain.iam.service.AuthFlowCookieService;
+import com.g2rain.iam.service.AuthorizationFlowService;
+import com.g2rain.iam.service.AuthorizationTransactionService;
 import com.g2rain.iam.service.ModelAndViewService;
 import com.g2rain.iam.service.SessionService;
 import com.g2rain.iam.utils.Constants;
@@ -56,19 +58,29 @@ public class PageController {
      */
     private IamAccessProperties iamAccessProperties;
 
-    /**
-     * 登录页钉钉入口使用的 {@code bindMode} 等配置。
-     */
-    private DingTalkIamProperties dingTalkIamProperties;
-
-    /**
-     * 登录页企业微信入口配置。
-     */
-    private WeComIamProperties weComIamProperties;
-
     private SessionService sessionService;
 
     private ModelAndViewService modelAndViewService;
+
+    private AuthorizationTransactionService transactionService;
+
+    private AuthFlowCookieService authFlowCookieService;
+
+    private AuthorizationFlowService authorizationFlowService;
+
+    /**
+     * 跳转至默认业务侧入口。
+     * <p>
+     * 页面不直接拼接业务平台地址，统一由服务端根据
+     * {@code g2rain.iam.platform-base-url} 生成跳转目标。业务侧负责生成
+     * Client DPoP 上下文（包括 {@code clientId}），再携带完整 OAuth 参数回到
+     * {@code /auth/authorize}，IAM 不接受无客户端上下文的直接登录。
+     * </p>
+     */
+    @GetMapping(value = "/auth/platform")
+    public ModelAndView redirectToPlatform() {
+        return modelAndViewService.redirectPlatformMainHome();
+    }
 
     /**
      * 注册页面渲染方法，处理 /auth/register.html 路径。
@@ -91,16 +103,20 @@ public class PageController {
      * @return {@link ModelAndView}，包含注册页面视图
      */
     @GetMapping(value = "/auth/register.html")
-    public ModelAndView registerPage(@RequestParam(name = "clientId", required = false) String clientId,
-                                    @RequestParam(name = "redirectUri", required = false) String redirectUri,
-                                    @RequestParam(name = "state", required = false) String state,
-                                    @RequestParam(name = "applicationCode", required = false) String applicationCode,
-                                    Model model) {
-        model.addAttribute("clientId", clientId);
-        model.addAttribute("redirectUri", redirectUri);
-        model.addAttribute("state", state);
-        model.addAttribute("applicationCode", applicationCode != null ? applicationCode : "");
-        return new ModelAndView("register");
+    public ModelAndView registerPage(
+        HttpServletRequest request,
+        @RequestParam(name = Constants.TID, required = false) String tid) {
+        if (Strings.isBlank(tid)) {
+            return authorizationFlowService.renderFlowError(
+                null, "请从业务侧重新发起授权后再注册");
+        }
+        try {
+            String flowHash = authFlowCookieService.hash(authFlowCookieService.readRaw(request));
+            AuthorizationTransactionDto txn = transactionService.requireActive(tid.trim(), flowHash);
+            return authorizationFlowService.renderRegister(txn);
+        } catch (Exception ex) {
+            return authorizationFlowService.renderFlowError(null, ex.getMessage());
+        }
     }
 
     /**
@@ -127,6 +143,7 @@ public class PageController {
                                     @RequestParam(name = "clientId", required = false) String clientId,
                                     @RequestParam(name = "state", required = false) String state,
                                     @RequestParam(name = "applicationCode", required = false) String applicationCode,
+                                    @RequestParam(name = Constants.TID, required = false) String tid,
                                     @RequestParam(name = "from", required = false) String from,
                                     @CookieValue(name = Constants.SESSION_NAME, required = false) String sessionId,
                                     HttpServletRequest request,
@@ -156,25 +173,32 @@ public class PageController {
                 }
                 if (Strings.isNotBlank(clientId) && Strings.isNotBlank(redirectUri)) {
                     return new ModelAndView(Constants.REDIRECT
-                        + buildLoginPageUrl(clientId, redirectUri, state, applicationCode));
+                        + buildAuthorizePageUrl(clientId, redirectUri, state, applicationCode));
                 }
                 return modelAndViewService.redirectPlatformMainHome();
             }
 
             if ("login".equals(filename)) {
-                if (activeSession.isPresent()) {
-                    SessionDto session = activeSession.get();
-                    if (Strings.isNotBlank(clientId) && Strings.isNotBlank(redirectUri)) {
-                        return modelAndViewService.redirectConsent(
-                            session.getSessionId(), clientId, redirectUri, state, applicationCode);
+                if (Strings.isNotBlank(tid)) {
+                    try {
+                        String flowHash = authFlowCookieService.hash(authFlowCookieService.readRaw(request));
+                        AuthorizationTransactionDto txn = transactionService.requireActive(tid.trim(), flowHash);
+                        if (activeSession.isPresent()) {
+                            return authorizationFlowService.continueFlow(txn, activeSession.get().getSessionId());
+                        }
+                        return authorizationFlowService.renderLogin(txn, null, null);
+                    } catch (Exception ex) {
+                        return authorizationFlowService.renderFlowError(null, ex.getMessage());
                     }
+                }
+                if (Strings.isNotBlank(clientId) && Strings.isNotBlank(redirectUri)) {
+                    return new ModelAndView(Constants.REDIRECT
+                        + buildAuthorizePageUrl(clientId, redirectUri, state, applicationCode));
+                }
+                if (activeSession.isPresent()) {
                     return new ModelAndView(Constants.REDIRECT + "/auth/index.html");
                 }
-                if (Strings.isBlank(clientId) || Strings.isBlank(redirectUri)) {
-                    return modelAndViewService.redirectPlatformMainHome();
-                }
-                applyLoginPageModel(model, clientId, redirectUri, state, applicationCode);
-                return new ModelAndView(filename, model.asMap());
+                return modelAndViewService.redirectPlatformMainHome();
             }
 
             return new ModelAndView(filename);
@@ -247,22 +271,6 @@ public class PageController {
         return Strings.isNotBlank(passportId) ? passportId.trim() : "—";
     }
 
-    private void applyLoginPageModel(Model model, String clientId, String redirectUri, String state,
-                                     String applicationCode) {
-        model.addAttribute("clientId", clientId != null ? clientId : "");
-        model.addAttribute("redirectUri", redirectUri != null ? redirectUri : "");
-        model.addAttribute("state", state != null ? state : "");
-        model.addAttribute("applicationCode", applicationCode != null ? applicationCode : "");
-        String m = dingTalkIamProperties.getLoginPageBindMode();
-        if (Strings.isNotBlank(m)) {
-            model.addAttribute("dingTalkBindMode", m.trim());
-        }
-        String weComMode = weComIamProperties.getLoginPageBindMode();
-        if (Strings.isNotBlank(weComMode)) {
-            model.addAttribute("weComBindMode", weComMode.trim());
-        }
-    }
-
     Optional<SessionDto> resolveActiveSession(String cookieSessionId, HttpServletRequest request) {
         String resolvedSessionId = cookieSessionId;
         if (Strings.isBlank(resolvedSessionId) && request != null) {
@@ -283,12 +291,8 @@ public class PageController {
         return session == null ? Optional.empty() : Optional.of(session);
     }
 
-    String buildLoginPageUrl(String clientId, String redirectUri, String state) {
-        return buildLoginPageUrl(clientId, redirectUri, state, null);
-    }
-
-    String buildLoginPageUrl(String clientId, String redirectUri, String state, String applicationCode) {
-        UriComponentsBuilder builder = UriComponentsBuilder.fromPath("/auth/login.html");
+    String buildAuthorizePageUrl(String clientId, String redirectUri, String state, String applicationCode) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromPath("/auth/authorize");
         if (Strings.isNotBlank(clientId)) {
             builder.queryParam("clientId", clientId.trim());
         }

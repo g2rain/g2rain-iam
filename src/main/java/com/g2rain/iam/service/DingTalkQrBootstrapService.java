@@ -37,8 +37,14 @@ public class DingTalkQrBootstrapService {
 
     public DingTalkQrBootstrapVo buildQrBootstrap(String bindMode, String clientId, String redirectUri,
                                                   String state, String loginRole, String applicationCode) {
+        return buildQrBootstrap(bindMode, clientId, redirectUri, state, loginRole, applicationCode, null);
+    }
+
+    public DingTalkQrBootstrapVo buildQrBootstrap(String bindMode, String clientId, String redirectUri,
+                                                  String state, String loginRole, String applicationCode,
+                                                  String transactionId) {
         String gotoUrl = dingTalkOAuthStateService.persistStateAndBuildAuthorizeUrl(
-            bindMode, clientId, redirectUri, state, true, loginRole, applicationCode);
+            bindMode, clientId, redirectUri, state, true, loginRole, applicationCode, transactionId);
         return new DingTalkQrBootstrapVo(gotoUrl);
     }
 }
