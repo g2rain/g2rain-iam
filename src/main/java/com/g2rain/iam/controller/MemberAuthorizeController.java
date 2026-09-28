@@ -15,14 +15,35 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 会员授权换票控制器。
+ * <p>
+ * 校验客服 decrypt 签发的 {@code memberResolveCode}，经 Member {@code resolveOrCreate}
+ * 后签发或复用 {@code SessionType=MEMBER} Token；DPoP 协议与 {@code /auth/token} 对齐。
+ * </p>
+ */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/auth/member")
 @Tag(name = "会员授权换票", description = "校验 memberResolveCode 并签发 SessionType=MEMBER Token")
 public class MemberAuthorizeController {
 
+    /**
+     * 会员换票业务服务。
+     */
     private final MemberAuthorizeService memberAuthorizeService;
 
+    /**
+     * 会员换票接口。
+     * <p>
+     * 校验短时可复用码（同回调可多次换票），完成 Client/Application DPoP 校验后签发 MEMBER Token。
+     * </p>
+     *
+     * @param clientDPoP      客户端级 DPoP 证明
+     * @param applicationDPoP 应用级 DPoP 证明
+     * @param request         含 memberResolveCode 与外部用户标识的换票请求
+     * @return 会员访问令牌视图
+     */
     @PostMapping("/token")
     @Operation(
         summary = "会员换票",

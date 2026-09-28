@@ -19,6 +19,11 @@ public class TenantProvisionPermissionService {
 
     private final GenericRedisHelper genericRedisHelper;
 
+    /**
+     * 校验 Passport 是否具备创建机构资格（存在管理员开户 Redis 标记）。
+     *
+     * @param passportId Passport ID
+     */
     public void verifyCanCreateOrgan(Long passportId) {
         if (passportId == null || passportId <= 0) {
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "passportId");

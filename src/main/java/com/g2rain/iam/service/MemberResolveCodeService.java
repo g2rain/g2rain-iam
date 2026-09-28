@@ -14,6 +14,12 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.Instant;
 
+/**
+ * 会员解析码（{@code memberResolveCode}）签发与校验。
+ * <p>
+ * 短时可复用：同一次客服回调可多次换票，不做单次消费删除。
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 public class MemberResolveCodeService {
@@ -21,6 +27,12 @@ public class MemberResolveCodeService {
     private final GenericRedisHelper redis;
     private final WeComIamProperties weComIamProperties;
 
+    /**
+     * 签发短时 memberResolveCode 并写入 Redis。
+     *
+     * @param payload 解析码载荷（含 organId 等）
+     * @return 明文码与过期时间
+     */
     public IssuedCode issue(MemberResolveCodeDto payload) {
         String code = IamUtils.generateAuthorizationCode();
         long ttlSeconds = Math.max(60L,
@@ -45,6 +57,12 @@ public class MemberResolveCodeService {
         return payload;
     }
 
+    /**
+     * 已签发的解析码与过期时间。
+     *
+     * @param code      明文解析码
+     * @param expiresAt 过期时刻
+     */
     public record IssuedCode(String code, Instant expiresAt) {
     }
 }

@@ -38,7 +38,11 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * 基于 tid 的授权流程编排：按事务状态分流、发码、拒绝回调。
+ * 基于授权事务（{@code tid}）的流程编排服务。
+ * <p>
+ * 按事务状态分流至登录、选用户、应用授权 consent、发码或拒绝回调；
+ * 页面间不再透传完整 OAuth 参数，上下文冻结在 {@link AuthorizationTransactionDto} 中。
+ * </p>
  */
 @Service
 @RequiredArgsConstructor
@@ -55,6 +59,13 @@ public class AuthorizationFlowService {
     private final ApplicationClient applicationClient;
     private final OrganClient organClient;
 
+    /**
+     * 按事务当前状态继续编排：匿名发码、登录、选用户、consent 或终态幂等回读。
+     *
+     * @param txn       授权事务
+     * @param sessionId 当前浏览器会话 ID（可选）
+     * @return 下一页面视图或客户端回调重定向
+     */
     public ModelAndView continueFlow(AuthorizationTransactionDto txn, String sessionId) {
         if (txn.getStatus() != null && txn.getStatus().isTerminal()) {
             return terminalResult(txn);
@@ -83,6 +94,13 @@ public class AuthorizationFlowService {
         return renderFlowError(txn, IamErrorCode.AUTH_TRANSACTION_STATE_INVALID.getMessage());
     }
 
+    /**
+     * 账号密码登录成功后：将事务推进为 {@link AuthorizationTransactionStatus#AUTHENTICATED} 并继续编排。
+     *
+     * @param txn       授权事务
+     * @param sessionId 新建立的会话 ID
+     * @return 选用户页、consent 页或发码回调
+     */
     public ModelAndView afterPasswordLogin(AuthorizationTransactionDto txn, String sessionId) {
         if (!transactionService.compareAndUpdate(
             txn.getTid(),
@@ -104,6 +122,14 @@ public class AuthorizationFlowService {
         return progressAfterAuthenticated(updated, sessionId, null);
     }
 
+    /**
+     * 渲染登录页，仅向模型注入 {@code tid} 与可选错误/用户名回显，以及 IdP 入口配置。
+     *
+     * @param txn      授权事务
+     * @param error    错误信息（可选）
+     * @param username 用户名回显（可选）
+     * @return 登录页视图
+     */
     public ModelAndView renderLogin(AuthorizationTransactionDto txn, String error, String username) {
         ModelAndView mv = new ModelAndView("login");
         ModelMap model = mv.getModelMap();
@@ -125,6 +151,12 @@ public class AuthorizationFlowService {
         return mv;
     }
 
+    /**
+     * 渲染注册页，仅向模型注入 {@code tid}。
+     *
+     * @param txn 授权事务
+     * @return 注册页视图
+     */
     public ModelAndView renderRegister(AuthorizationTransactionDto txn) {
         ModelAndView mv = new ModelAndView("register");
         ModelMap model = mv.getModelMap();
@@ -132,6 +164,19 @@ public class AuthorizationFlowService {
         return mv;
     }
 
+    /**
+     * 用户确认选中身份或拒绝授权。
+     * <p>
+     * 拒绝时标记 {@code DENIED} 并向客户端回调 {@code access_denied}；
+     * 确认时校验用户属于当前会话，无 {@code applicationCode} 则直接发码，有则进入 consent。
+     * </p>
+     *
+     * @param txn       授权事务
+     * @param sessionId 当前会话 ID
+     * @param userId    所选用户 ID
+     * @param denied    是否拒绝授权
+     * @return 发码回调、consent 页、登录页或错误页
+     */
     public ModelAndView confirm(AuthorizationTransactionDto txn, String sessionId, String userId, boolean denied) {
         if (denied) {
             if (!transactionService.compareAndUpdate(
@@ -181,6 +226,17 @@ public class AuthorizationFlowService {
         return progressAfterAuthenticated(transactionService.get(txn.getTid()), sessionId, selectedUserId);
     }
 
+    /**
+     * 应用授权确认：调用 Basis {@code activate_self} 开通 SELF 应用后发码。
+     * <p>
+     * 开通失败回滚至 {@code CONSENT_REQUIRED} 并在 consent 页展示错误；拒绝时复用 {@link #confirm}。
+     * </p>
+     *
+     * @param txn       授权事务（须含 applicationCode 与 selectedUserId）
+     * @param sessionId 当前会话 ID
+     * @param denied    是否拒绝授权
+     * @return 发码回调、consent 错误回显或拒绝回调
+     */
     public ModelAndView confirmApplication(AuthorizationTransactionDto txn, String sessionId, boolean denied) {
         if (denied) {
             return confirm(txn, sessionId, txn.getSelectedUserId(), true);
@@ -262,6 +318,12 @@ public class AuthorizationFlowService {
         return redirectWithCode(transactionService.get(txn.getTid()), code);
     }
 
+    /**
+     * 将事务标记为 IdP 登录进行中（{@code CREATED → IDP_PENDING}）。
+     *
+     * @param txn 授权事务
+     * @return 恒为 {@code null}（调用方自行决定后续跳转）
+     */
     public ModelAndView markIdpPending(AuthorizationTransactionDto txn) {
         transactionService.compareAndUpdate(
             txn.getTid(),
@@ -271,10 +333,24 @@ public class AuthorizationFlowService {
         return null;
     }
 
+    /**
+     * IdP 登录成功后的编排入口，语义同 {@link #afterPasswordLogin}。
+     *
+     * @param txn       授权事务
+     * @param sessionId 新建立的会话 ID
+     * @return 选用户页、consent 页或发码回调
+     */
     public ModelAndView afterIdpLogin(AuthorizationTransactionDto txn, String sessionId) {
         return afterPasswordLogin(txn, sessionId);
     }
 
+    /**
+     * 渲染流程错误页（不自动外跳）。
+     *
+     * @param txn     授权事务（可为 null）
+     * @param message 安全可展示的错误信息
+     * @return 错误页视图
+     */
     public ModelAndView renderFlowError(AuthorizationTransactionDto txn, String message) {
         ModelAndView mv = new ModelAndView("error");
         ModelMap model = mv.getModelMap();

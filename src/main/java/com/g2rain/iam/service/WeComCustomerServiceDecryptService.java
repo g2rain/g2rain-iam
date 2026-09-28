@@ -32,6 +32,12 @@ import org.springframework.stereotype.Service;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
+/**
+ * 企业微信客服回调解密服务。
+ * <p>
+ * 验签解密后校验 ACTIVE 授权与 organ 映射，签发短时可复用的 {@code memberResolveCode}。
+ * </p>
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -47,6 +53,12 @@ public class WeComCustomerServiceDecryptService {
     private final MemberResolveCodeService memberResolveCodeService;
     private final WeComIamProperties weComIamProperties;
 
+    /**
+     * 验签解密客服回调，定租户并签发 memberResolveCode。
+     *
+     * @param request 加密回调与验签参数
+     * @return 解密结果（含 organId 与 memberResolveCode）
+     */
     public WeComCustomerServiceDecryptVo decrypt(WeComCustomerServiceDecryptRequest request) {
         WeComCallbackType callbackType = parseCallbackType(request.getCallbackType());
         if (callbackType != WeComCallbackType.CUSTOMER_SERVICE) {

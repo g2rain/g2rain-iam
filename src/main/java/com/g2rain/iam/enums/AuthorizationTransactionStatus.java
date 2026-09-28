@@ -15,6 +15,11 @@ public enum AuthorizationTransactionStatus {
     CANCELLED,
     FAILED;
 
+    /**
+     * 是否为终态（不可再推进，仅可幂等回读结果）。
+     *
+     * @return 终态时返回 {@code true}
+     */
     public boolean isTerminal() {
         return this == DENIED || this == COMPLETED || this == CANCELLED || this == FAILED;
     }

@@ -58,14 +58,29 @@ public class PageController {
      */
     private IamAccessProperties iamAccessProperties;
 
+    /**
+     * 会话服务，用于首页登录态展示。
+     */
     private SessionService sessionService;
 
+    /**
+     * 处理平台入口等重定向。
+     */
     private ModelAndViewService modelAndViewService;
 
+    /**
+     * 授权事务 Redis 存储与状态迁移。
+     */
     private AuthorizationTransactionService transactionService;
 
+    /**
+     * 授权流程 Cookie，用于绑定 {@code tid} 与当前浏览器。
+     */
     private AuthFlowCookieService authFlowCookieService;
 
+    /**
+     * 基于 tid 的授权流程编排。
+     */
     private AuthorizationFlowService authorizationFlowService;
 
     /**
@@ -83,24 +98,21 @@ public class PageController {
     }
 
     /**
-     * 注册页面渲染方法，处理 /auth/register.html 路径。
+     * 注册页面渲染方法，处理 {@code /auth/register.html} 路径。
      * <p>
-     * 该方法专门用于渲染注册页面，接收 OAuth 授权流程中的参数（clientId、redirectUri、state），
-     * 并将这些参数传递给模板，以便在注册完成后能够正确跳转回登录页面。
+     * 须携带有效授权事务 {@code tid}；页面只注入 tid，不再透传完整 OAuth 参数。
      * </p>
      * <p>
      * 使用示例：
      * <pre>{@code
      * // 通过 GET 请求跳转到注册页
-     * /auth/register.html?clientId=client123&redirectUri=http://example.com/callback&state=xyz
+     * /auth/register.html?tid=...
      * }</pre>
      * </p>
      *
-     * @param clientId    客户端 ID（可选）
-     * @param redirectUri 登录后重定向的 URI（可选）
-     * @param state       请求的状态参数，通常用于防止 CSRF 攻击（可选）
-     * @param model       用于向视图传递数据的模型
-     * @return {@link ModelAndView}，包含注册页面视图
+     * @param request 当前 HTTP 请求（校验 flow Cookie）
+     * @param tid     授权事务 ID
+     * @return 注册页视图或流程错误页
      */
     @GetMapping(value = "/auth/register.html")
     public ModelAndView registerPage(
@@ -120,22 +132,30 @@ public class PageController {
     }
 
     /**
-     * 通用页面渲染方法，处理 /auth/*.html 路径。
+     * 通用页面渲染方法，处理 {@code /auth/*.html} 路径。
      * <p>
-     * 该方法会根据路径中的文件名查找对应的模板文件。如果模板存在，则渲染该模板；
-     * 如果模板不存在，则返回错误页面并提示路径不存在。
+     * 根据路径中的文件名查找模板；{@code index}/{@code login} 会结合会话与授权事务
+     * {@code tid} 做登录态分流，其它页面直接渲染。
      * </p>
      * <p>
      * 使用示例：
      * <pre>{@code
      * // 访问 /auth/index.html 会渲染 templates/index.html
-     * // 访问 /auth/test.html 如果模板不存在，会显示错误页面
+     * // 访问 /auth/login.html?tid=... 进入同一授权事务的登录编排
      * }</pre>
      * </p>
      *
-     * @param filename 模板文件名（不包含 .html 后缀）
-     * @param model    用于向视图传递数据的模型
-     * @return {@link ModelAndView}，包含模板视图或错误页面视图
+     * @param filename        模板文件名（不包含 .html 后缀）
+     * @param redirectUri     可选回跳地址（首页游客态）
+     * @param clientId        可选客户端 ID（兼容旧入口，重定向至 /authorize）
+     * @param state           可选 state
+     * @param applicationCode 可选应用编码
+     * @param tid             授权事务 ID（登录页续跑）
+     * @param from            来源标记（如 logout）
+     * @param sessionId       当前会话 Cookie
+     * @param request         当前 HTTP 请求
+     * @param model           视图模型
+     * @return 模板视图、授权续跑重定向或错误页
      */
     @GetMapping(value = "/auth/{filename}.html")
     public ModelAndView dynamicPage(@PathVariable(name = "filename") String filename,

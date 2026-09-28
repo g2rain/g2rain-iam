@@ -29,6 +29,6 @@
 - [企业微信客服回调认证升级](design/wecom-customer-service-callback-verification.md)
 - [Token 签发双模式对齐（MEMBER 应用上下文）](design/member-token-issuance-alignment.md)（已完成实施）
 - [应用授权确认（OAuth 统一确认）](design/open-platform-oauth-upgrade.md)（已实施：有 applicationCode 须确认并开通 SELF；无则原发码逻辑）
-- [IAM 页面与授权流程解耦升级方案](design/iam-page-flow-upgrade.md)（待开发）
+- [IAM 页面与授权流程解耦升级方案](design/iam-page-flow-upgrade.md)（已收敛：站内页面只认 `tid`）
 
 设计文档不自动等于开发指令；是否实施由 `aiCoding.activeRequirement` 或唯一 `开发中` 需求决定。

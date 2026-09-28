@@ -24,6 +24,12 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Objects;
 
+/**
+ * 会员换票服务：校验 {@code memberResolveCode}、完成 DPoP 校验并签发 MEMBER Token。
+ * <p>
+ * Client/Application DPoP 须在任何 Member 写入前完成，避免无效证明仍创建会员。
+ * </p>
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -38,6 +44,14 @@ public class MemberAuthorizeService {
     private final TokenService tokenService;
     private final GenericRedisHelper redis;
 
+    /**
+     * 校验 memberResolveCode 与 DPoP，resolveOrCreate 会员后签发或复用 MEMBER Token。
+     *
+     * @param clientDPoP      客户端级 DPoP 证明
+     * @param applicationDPoP 应用级 DPoP 证明
+     * @param request         换票请求
+     * @return 会员访问令牌视图
+     */
     public MemberAuthorizeTokenVo token(
         String clientDPoP, String applicationDPoP, MemberAuthorizeTokenRequest request) {
         MemberResolveCodeDto codePayload =

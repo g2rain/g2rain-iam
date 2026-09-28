@@ -22,6 +22,9 @@ import com.g2rain.iam.wecom.WeComPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/**
+ * 企业微信 OAuth 服务：构建扫码授权 URL，并在回调中完成换票与会话建立。
+ */
 @Service
 @RequiredArgsConstructor
 public class WeComOAuthService {
@@ -31,22 +34,43 @@ public class WeComOAuthService {
     private final AuthService authService;
     private final WeComInternalAdminAsserter weComInternalAdminAsserter;
 
+    /**
+     * 构建企业微信扫码授权 URL（无 loginRole / applicationCode / tid）。
+     */
     public String buildAuthorizeUrl(
         String bindMode, String clientId, String redirectUri, String state) {
         return buildAuthorizeUrl(bindMode, clientId, redirectUri, state, null, null);
     }
 
+    /**
+     * 构建企业微信扫码授权 URL（可指定 loginRole）。
+     */
     public String buildAuthorizeUrl(
         String bindMode, String clientId, String redirectUri, String state, String loginRole) {
         return buildAuthorizeUrl(bindMode, clientId, redirectUri, state, loginRole, null);
     }
 
+    /**
+     * 构建企业微信扫码授权 URL（可指定 loginRole 与 applicationCode）。
+     */
     public String buildAuthorizeUrl(
         String bindMode, String clientId, String redirectUri, String state, String loginRole,
         String applicationCode) {
         return buildAuthorizeUrl(bindMode, clientId, redirectUri, state, loginRole, applicationCode, null);
     }
 
+    /**
+     * 构建企业微信扫码授权 URL，并将授权事务 {@code transactionId} 写入 OAuth state。
+     *
+     * @param bindMode        IdP 接入形态
+     * @param clientId        OAuth 客户端 ID
+     * @param redirectUri     OAuth 回调地址
+     * @param state           业务 state
+     * @param loginRole       登录角色（可选）
+     * @param applicationCode 目标应用编码（可选）
+     * @param transactionId   授权事务 tid（可选）
+     * @return 企业微信授权页完整 URL
+     */
     public String buildAuthorizeUrl(
         String bindMode, String clientId, String redirectUri, String state, String loginRole,
         String applicationCode, String transactionId) {
@@ -54,6 +78,13 @@ public class WeComOAuthService {
             bindMode, clientId, redirectUri, state, loginRole, applicationCode, transactionId);
     }
 
+    /**
+     * 企业微信授权回调：消费 state、换票、校验管理员/第三方授权并建立 IAM 会话。
+     *
+     * @param authCode    企业微信授权码
+     * @param opaqueState 不透明 state
+     * @return 含 sessionId 与 transactionId 的登录结果
+     */
     public WeComOAuthResult finishLogin(String authCode, String opaqueState) {
         WeComOAuthStateDto state = stateService.consume(opaqueState);
         IdpBindMode bindMode = IdpBindMode.valueOf(state.getBindMode());

@@ -77,6 +77,12 @@ public class SessionService {
         return sessionId;
     }
 
+    /**
+     * 按会话 ID 读取会话；不存在返回 {@code null}。
+     *
+     * @param sessionId 会话 ID
+     * @return 会话 DTO，或 {@code null}
+     */
     public SessionDto getSession(String sessionId) {
         if (Objects.isNull(sessionId)) {
             return null;
@@ -87,10 +93,21 @@ public class SessionService {
         );
     }
 
+    /**
+     * 判断会话是否已过期（Redis 中不存在即视为过期）。
+     *
+     * @param sessionId 会话 ID
+     * @return 过期或不存在时返回 {@code true}
+     */
     public boolean isSessionExpired(String sessionId) {
         return Objects.isNull(getSession(sessionId));
     }
 
+    /**
+     * 销毁会话（删除 Redis 中的会话缓存）。
+     *
+     * @param sessionId 会话 ID
+     */
     public void logout(String sessionId) {
         if (Objects.nonNull(sessionId)) {
             genericRedisHelper.delete(RedisKeyRule.SESSION.format(sessionId));

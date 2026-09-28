@@ -25,19 +25,63 @@ import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.util.UriComponentsBuilder;
 
 /**
- * 账号注册：须在授权事务（tid）内完成。
+ * 账号注册控制器。
+ * <p>
+ * 提供注册接口，通过 {@link PassportService} 间接调用 g2rain-basis 的
+ * {@code /passport/save} 完成账号创建。注册须在授权事务（{@code tid}）内完成，
+ * 成功后重定向回同一事务的授权续跑入口。
+ * </p>
+ * <p>
+ * 前端表单：{@code register.html} 使用 {@code /auth/passport_register} 作为提交地址。
+ * </p>
+ *
+ * @author jagger
+ * @since 2026/03/14
  */
 @Controller
 @AllArgsConstructor
 @RequestMapping("/auth")
 public class PassportController {
 
+    /**
+     * Passport 注册服务，转发至 Basis 完成账号创建。
+     */
     private final PassportService passportService;
+
+    /**
+     * 注册验证码与限流校验。
+     */
     private final RegisterCaptchaService registerCaptchaService;
+
+    /**
+     * 授权事务 Redis 存储与状态迁移。
+     */
     private final AuthorizationTransactionService transactionService;
+
+    /**
+     * 授权流程 Cookie，用于绑定 {@code tid} 与当前浏览器。
+     */
     private final AuthFlowCookieService authFlowCookieService;
+
+    /**
+     * 基于 tid 的授权流程编排（渲染注册页等）。
+     */
     private final AuthorizationFlowService authorizationFlowService;
 
+    /**
+     * 账号注册接口。
+     * <p>
+     * 从注册页面接收 {@link PassportDto}，校验验证码与限流后转发至 Basis；
+     * 成功则重定向至 {@code /auth/authorize?tid=...} 继续同一授权事务。
+     * </p>
+     *
+     * @param passportDto 注册账号所需信息（用户名、密码、真实姓名等）
+     * @param captchaId   验证码 ID
+     * @param captchaCode 验证码内容
+     * @param tid         授权事务 ID
+     * @param request     当前 HTTP 请求（限流与验证码校验）
+     * @return 成功时重定向至授权续跑；失败时回到注册页并回显错误
+     */
     @PostMapping("/passport_register")
     public ModelAndView register(@Valid @ModelAttribute PassportDto passportDto,
                                  @RequestParam(name = "captchaId") String captchaId,
@@ -71,6 +115,16 @@ public class PassportController {
         return new ModelAndView(Constants.REDIRECT + loginUrl);
     }
 
+    /**
+     * 注册失败时回到同一授权事务的注册页并回显错误。
+     *
+     * @param request     当前 HTTP 请求
+     * @param tid         授权事务 ID
+     * @param passportDto 已填写的注册表单
+     * @param error       错误信息
+     * @param result      Basis 返回结果（可选，用于页面展示）
+     * @return 注册页或流程错误页
+     */
     private ModelAndView registerError(
         HttpServletRequest request,
         String tid,

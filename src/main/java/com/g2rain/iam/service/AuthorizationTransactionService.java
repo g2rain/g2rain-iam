@@ -29,6 +29,9 @@ import java.util.HexFormat;
 
 /**
  * 授权事务 Redis 存储与状态迁移。
+ * <p>
+ * 负责 tid 创建/复用、flow Cookie 绑定校验、CAS 状态推进，以及按 flow 维度取消未完成事务。
+ * </p>
  */
 @Service
 @RequiredArgsConstructor
@@ -37,11 +40,22 @@ public class AuthorizationTransactionService {
     private final GenericRedisHelper genericRedisHelper;
     private final IamAccessProperties iamAccessProperties;
 
+    /**
+     * 授权事务 TTL（至少 60 秒）。
+     *
+     * @return 事务存活时长
+     */
     public Duration ttl() {
         int seconds = Math.max(60, iamAccessProperties.getAuthorizationTransaction().getTtlSeconds());
         return Duration.ofSeconds(seconds);
     }
 
+    /**
+     * 按 tid 读取事务；不存在或已过期返回 {@code null}。
+     *
+     * @param tid 授权事务 ID
+     * @return 事务 DTO，或 {@code null}
+     */
     public AuthorizationTransactionDto get(String tid) {
         if (Strings.isBlank(tid)) {
             return null;
@@ -59,6 +73,13 @@ public class AuthorizationTransactionService {
         return dto;
     }
 
+    /**
+     * 要求事务存在、flow Cookie 匹配且未终态；否则抛出业务异常。
+     *
+     * @param tid            授权事务 ID
+     * @param flowCookieHash 当前浏览器 flow Cookie 的哈希
+     * @return 活跃事务
+     */
     public AuthorizationTransactionDto requireActive(String tid, String flowCookieHash) {
         AuthorizationTransactionDto dto = get(tid);
         if (dto == null
@@ -71,6 +92,13 @@ public class AuthorizationTransactionService {
         return dto;
     }
 
+    /**
+     * 要求事务存在且 flow Cookie 匹配（允许终态，用于幂等回读）。
+     *
+     * @param tid            授权事务 ID
+     * @param flowCookieHash 当前浏览器 flow Cookie 的哈希
+     * @return 可读事务
+     */
     public AuthorizationTransactionDto requireReadable(String tid, String flowCookieHash) {
         AuthorizationTransactionDto dto = get(tid);
         if (dto == null
@@ -129,6 +157,15 @@ public class AuthorizationTransactionService {
         return dto;
     }
 
+    /**
+     * CAS 更新事务状态：仅当当前状态等于 {@code expected} 时推进到 {@code next}。
+     *
+     * @param tid      授权事务 ID
+     * @param expected 期望的当前状态
+     * @param next     目标状态
+     * @param mutator  状态推进前的字段变更（可为 null）
+     * @return 是否更新成功
+     */
     public boolean compareAndUpdate(
         String tid,
         AuthorizationTransactionStatus expected,
@@ -150,6 +187,11 @@ public class AuthorizationTransactionService {
         return true;
     }
 
+    /**
+     * 强制取消未终态事务（标记 {@code CANCELLED} 并从 flow 索引移除）。
+     *
+     * @param dto 授权事务
+     */
     public void forceCancel(AuthorizationTransactionDto dto) {
         if (dto == null || dto.getStatus() == null || dto.getStatus().isTerminal()) {
             return;
@@ -159,6 +201,12 @@ public class AuthorizationTransactionService {
         removeFromFlowIndex(dto.getFlowCookieHash(), dto.getTid());
     }
 
+    /**
+     * 列出同一 flow Cookie 下仍活跃的授权事务。
+     *
+     * @param flowCookieHash flow Cookie 哈希
+     * @return 活跃事务列表（可能为空）
+     */
     public List<AuthorizationTransactionDto> listActiveByFlowHash(String flowCookieHash) {
         List<AuthorizationTransactionDto> result = new ArrayList<>();
         if (Strings.isBlank(flowCookieHash)) {
@@ -181,6 +229,11 @@ public class AuthorizationTransactionService {
         return result;
     }
 
+    /**
+     * 取消同一 flow Cookie 下全部未完成事务（用于本浏览器退出）。
+     *
+     * @param flowCookieHash flow Cookie 哈希
+     */
     public void cancelAllByFlowHash(String flowCookieHash) {
         for (AuthorizationTransactionDto dto : listActiveByFlowHash(flowCookieHash)) {
             forceCancel(dto);

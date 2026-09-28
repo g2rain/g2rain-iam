@@ -32,19 +32,59 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.ModelAndView;
 
+/**
+ * 企业微信 OAuth 控制器。
+ * <p>
+ * 路径前缀 {@code /auth/wecom}。扫码登录须在授权事务（{@code tid}）内发起，
+ * OAuth 上下文从事务读取，不在页面间透传完整 OAuth 参数。
+ * </p>
+ */
 @Slf4j
 @Controller
 @RequiredArgsConstructor
 @RequestMapping("/auth/wecom")
 @Tag(name = "企业微信 OAuth", description = "企业微信 OAuth 相关接口")
 public class WeComOAuthController {
+
+    /**
+     * 企业微信 OAuth 授权与回调登录服务。
+     */
     private final WeComOAuthService oauthService;
+
+    /**
+     * 企业微信 Stream 授权码签发服务。
+     */
     private final WeComStreamAuthorizationService streamAuthorizationService;
+
+    /**
+     * IAM 会话 Cookie 写入。
+     */
     private final IamSessionCookieService sessionCookieService;
+
+    /**
+     * 授权事务 Redis 存储与状态迁移。
+     */
     private final AuthorizationTransactionService transactionService;
+
+    /**
+     * 授权流程 Cookie，用于绑定 {@code tid} 与当前浏览器。
+     */
     private final AuthFlowCookieService authFlowCookieService;
+
+    /**
+     * 基于 tid 的授权流程编排。
+     */
     private final AuthorizationFlowService authorizationFlowService;
 
+    /**
+     * 跳转企业微信扫码登录页：从授权事务读取 OAuth 上下文并重定向。
+     *
+     * @param request   当前 HTTP 请求
+     * @param bindMode  绑定模式（内部企业 / 第三方等）
+     * @param tid       授权事务 ID
+     * @param loginRole 登录角色（可选）
+     * @return 重定向至企业微信扫码页或错误页
+     */
     @GetMapping("/authorize")
     @Operation(summary = "跳转企业微信扫码登录", hidden = true)
     @ApiResponse(responseCode = "302", description = "重定向至企业微信扫码页")
@@ -66,6 +106,16 @@ public class WeComOAuthController {
         }
     }
 
+    /**
+     * 企业微信扫码登录回调：换票建会话后回到授权事务继续编排。
+     *
+     * @param request  当前 HTTP 请求
+     * @param response 当前 HTTP 响应（写入会话 Cookie）
+     * @param authCode 企业微信授权码（优先）
+     * @param code     兼容字段授权码
+     * @param state    不透明 state（Redis 中关联 tid）
+     * @return 授权流程续跑视图或错误页
+     */
     @GetMapping("/callback")
     @Operation(summary = "企业微信扫码登录回调", hidden = true)
     public ModelAndView callback(
@@ -92,6 +142,12 @@ public class WeComOAuthController {
         }
     }
 
+    /**
+     * 企业微信 Stream 场景签发短时授权码。
+     *
+     * @param dto Stream 授权请求
+     * @return 授权码视图对象
+     */
     @ResponseBody
     @PostMapping("/authorize_code")
     public Result<WeComStreamAuthorizationVo> authorizeCode(
@@ -99,6 +155,13 @@ public class WeComOAuthController {
         return Result.success(streamAuthorizationService.issueStreamAuthorizationCode(dto));
     }
 
+    /**
+     * 从授权事务解析 OAuth 上下文。
+     *
+     * @param request 当前 HTTP 请求
+     * @param tid     授权事务 ID
+     * @return 解析后的 OAuth 上下文
+     */
     private ResolvedOAuth resolve(HttpServletRequest request, String tid) {
         if (Strings.isBlank(tid)) {
             throw new BusinessException(IamErrorCode.AUTH_TRANSACTION_INVALID);
@@ -110,6 +173,15 @@ public class WeComOAuthController {
             txn.getState(), txn.getApplicationCode());
     }
 
+    /**
+     * 从授权事务解析出的 OAuth 上下文快照。
+     *
+     * @param tid             授权事务 ID
+     * @param clientId        客户端 ID
+     * @param redirectUri     回调地址
+     * @param state           业务 state
+     * @param applicationCode 目标应用编码（可选）
+     */
     private record ResolvedOAuth(
         String tid, String clientId, String redirectUri, String state, String applicationCode) {
     }

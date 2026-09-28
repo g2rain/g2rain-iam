@@ -17,9 +17,21 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/internal/tenant_provision")
 public class TenantProvisionInternalController {
 
+    /**
+     * 租户开通权限校验服务。
+     */
     @Resource
     private TenantProvisionPermissionService tenantProvisionPermissionService;
 
+    /**
+     * 校验指定 Passport 是否具备创建机构（开户）资格。
+     * <p>
+     * 以 IdP 管理员登录时写入的 Redis 资格标记为准；无浏览器 Cookie。
+     * </p>
+     *
+     * @param request 含 passportId 的校验请求
+     * @return 空成功结果；无资格时抛业务异常
+     */
     @PostMapping("/verify_create_organ")
     public Result<Void> verifyCreateOrgan(@RequestBody @Validated VerifyCreateOrganRequest request) {
         tenantProvisionPermissionService.verifyCanCreateOrgan(request.getPassportId());
