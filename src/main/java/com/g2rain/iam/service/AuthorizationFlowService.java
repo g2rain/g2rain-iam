@@ -3,6 +3,7 @@ package com.g2rain.iam.service;
 import com.g2rain.basis.dto.ApplicationAuthorizationActivateSelfRequest;
 import com.g2rain.basis.dto.ApplicationSelectDto;
 import com.g2rain.basis.dto.OrganIdNameMapSelectDto;
+import com.g2rain.basis.enums.ApplicationType;
 import com.g2rain.basis.vo.ApplicationAuthorizationActivateSelfVo;
 import com.g2rain.basis.vo.ApplicationVo;
 import com.g2rain.basis.vo.OrganIdNameVo;
@@ -168,7 +169,7 @@ public class AuthorizationFlowService {
      * 用户确认选中身份或拒绝授权。
      * <p>
      * 拒绝时标记 {@code DENIED} 并向客户端回调 {@code access_denied}；
-     * 确认时校验用户属于当前会话，无 {@code applicationCode} 则直接发码，有则进入 consent。
+     * 确认时校验用户属于当前会话；仅 {@code openPlatformConsent=true} 进入 consent，否则直接发码。
      * </p>
      *
      * @param txn       授权事务
@@ -207,14 +208,20 @@ public class AuthorizationFlowService {
             return renderFlowError(txn, "所选用户不属于当前登录账号");
         }
 
+        ModelAndView resolveError = ensureApplicationConsentResolved(txn);
+        if (resolveError != null) {
+            return resolveError;
+        }
+        AuthorizationTransactionDto resolved = transactionService.get(txn.getTid());
+
         transactionService.compareAndUpdate(
-            txn.getTid(),
-            txn.getStatus(),
+            resolved.getTid(),
+            resolved.getStatus(),
             AuthorizationTransactionStatus.USER_SELECTED,
             d -> d.setSelectedUserId(selectedUserId));
         AuthorizationTransactionDto selected = transactionService.get(txn.getTid());
 
-        if (Strings.isBlank(selected.getApplicationCode())) {
+        if (!requiresOpenPlatformConsent(selected)) {
             return completeWithCode(selected, session, selectedUserId);
         }
 
@@ -230,9 +237,10 @@ public class AuthorizationFlowService {
      * 应用授权确认：调用 Basis {@code activate_self} 开通 SELF 应用后发码。
      * <p>
      * 开通失败回滚至 {@code CONSENT_REQUIRED} 并在 consent 页展示错误；拒绝时复用 {@link #confirm}。
+     * 仅允许 {@code openPlatformConsent=true} 的事务进入。
      * </p>
      *
-     * @param txn       授权事务（须含 applicationCode 与 selectedUserId）
+     * @param txn       授权事务（须含 applicationCode、openPlatformConsent 与 selectedUserId）
      * @param sessionId 当前会话 ID
      * @param denied    是否拒绝授权
      * @return 发码回调、consent 错误回显或拒绝回调
@@ -241,6 +249,16 @@ public class AuthorizationFlowService {
         if (denied) {
             return confirm(txn, sessionId, txn.getSelectedUserId(), true);
         }
+
+        ModelAndView resolveError = ensureApplicationConsentResolved(txn);
+        if (resolveError != null) {
+            return resolveError;
+        }
+        txn = transactionService.get(txn.getTid());
+        if (!requiresOpenPlatformConsent(txn)) {
+            return renderFlowError(txn, IamErrorCode.AUTH_TRANSACTION_STATE_INVALID.getMessage());
+        }
+
         SessionDto session = sessionService.getSession(sessionId);
         if (session == null) {
             return renderLogin(txn, null, null);
@@ -382,6 +400,12 @@ public class AuthorizationFlowService {
             return renderLogin(txn, null, null);
         }
 
+        ModelAndView resolveError = ensureApplicationConsentResolved(txn);
+        if (resolveError != null) {
+            return resolveError;
+        }
+        txn = transactionService.get(txn.getTid());
+
         List<UserVo> users = userService.listUserVos(session);
         if (users.isEmpty()) {
             transactionService.compareAndUpdate(
@@ -400,7 +424,7 @@ public class AuthorizationFlowService {
         }
         final String resolvedSelected = selected;
 
-        if (Strings.isBlank(txn.getApplicationCode())) {
+        if (!requiresOpenPlatformConsent(txn)) {
             if (Strings.isNotBlank(resolvedSelected)) {
                 transactionService.compareAndUpdate(
                     txn.getTid(),
@@ -510,10 +534,12 @@ public class AuthorizationFlowService {
                 "username", u.getRealName() == null ? "" : u.getRealName()
             ))
             .toList());
-        model.addAttribute("applicationCode", Strings.isBlank(txn.getApplicationCode()) ? "" : txn.getApplicationCode());
+        boolean openPlatform = requiresOpenPlatformConsent(txn);
+        model.addAttribute("applicationCode",
+            openPlatform && Strings.isNotBlank(txn.getApplicationCode()) ? txn.getApplicationCode() : "");
         if (selectedUser != null) {
             model.addAttribute("selectedUserId", String.valueOf(selectedUser.getId()));
-            if (withPreview && Strings.isNotBlank(txn.getApplicationCode())) {
+            if (withPreview && openPlatform && Strings.isNotBlank(txn.getApplicationCode())) {
                 populatePreview(model, selectedUser, txn.getApplicationCode());
             }
         }
@@ -537,6 +563,66 @@ public class AuthorizationFlowService {
             AuthorizationTransactionStatus.ACTIVATING,
             AuthorizationTransactionStatus.CONSENT_REQUIRED,
             null);
+    }
+
+    /**
+     * 有 {@code applicationCode} 时查询 Basis 应用类型并冻结 {@code openPlatformConsent}。
+     *
+     * @param txn 授权事务
+     * @return 解析失败时的错误页；成功或无需解析时返回 {@code null}
+     */
+    private ModelAndView ensureApplicationConsentResolved(AuthorizationTransactionDto txn) {
+        if (Strings.isBlank(txn.getApplicationCode())) {
+            return null;
+        }
+        if (txn.getOpenPlatformConsent() != null) {
+            return null;
+        }
+
+        final boolean openPlatform;
+        try {
+            ApplicationSelectDto selectDto = new ApplicationSelectDto();
+            selectDto.setApplicationCode(txn.getApplicationCode().trim());
+            Result<List<ApplicationVo>> appResult = applicationClient.selectList(selectDto);
+            if (!appResult.isSuccess() || appResult.getData() == null || appResult.getData().isEmpty()) {
+                String message = appResult.getErrorMessage();
+                return renderFlowError(txn, Strings.isBlank(message) ? "无法加载应用信息" : message);
+            }
+            ApplicationVo application = appResult.getData().getFirst();
+            if (Strings.isBlank(application.getApplicationType())) {
+                return renderFlowError(txn, "应用类型无效");
+            }
+            ApplicationType type = ApplicationType.fromName(application.getApplicationType().trim());
+            openPlatform = ApplicationType.nonMicroApp(type);
+        } catch (BusinessException ex) {
+            return renderFlowError(txn, ex.getMessage() == null ? "应用类型无效" : ex.getMessage());
+        } catch (Exception ex) {
+            return renderFlowError(txn, "无法加载应用信息，请稍后重试");
+        }
+
+        AuthorizationTransactionDto current = transactionService.get(txn.getTid());
+        if (current == null) {
+            return renderFlowError(txn, IamErrorCode.AUTH_TRANSACTION_INVALID.getMessage());
+        }
+        if (current.getOpenPlatformConsent() != null) {
+            return null;
+        }
+        if (!transactionService.compareAndUpdate(
+            current.getTid(),
+            current.getStatus(),
+            current.getStatus(),
+            d -> d.setOpenPlatformConsent(openPlatform))) {
+            AuthorizationTransactionDto after = transactionService.get(txn.getTid());
+            if (after != null && after.getOpenPlatformConsent() != null) {
+                return null;
+            }
+            return renderFlowError(txn, IamErrorCode.AUTH_TRANSACTION_STATE_INVALID.getMessage());
+        }
+        return null;
+    }
+
+    private static boolean requiresOpenPlatformConsent(AuthorizationTransactionDto txn) {
+        return Boolean.TRUE.equals(txn.getOpenPlatformConsent());
     }
 
     private void populatePreview(ModelMap model, UserVo selectedUser, String applicationCode) {

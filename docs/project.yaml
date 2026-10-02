@@ -113,7 +113,7 @@ documentation:
     - docs/design/iam-page-flow-upgrade.md
 
 aiCoding:
-  activeRequirement: docs/design/iam-page-flow-upgrade.md
+  activeRequirement: docs/design/open-platform-oauth-upgrade.md
   requirementTemplate: docs/requirements/README.md
   validation:
     - 读取中央登记、本地边界、安全要求、偏差、设计和当前需求

@@ -1,5 +1,6 @@
 package com.g2rain.iam.service;
 
+import com.g2rain.basis.enums.ApplicationType;
 import com.g2rain.basis.vo.ApplicationVo;
 import com.g2rain.basis.vo.OrganIdNameVo;
 import com.g2rain.basis.vo.UserVo;
@@ -22,8 +23,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.servlet.ModelAndView;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -82,8 +85,7 @@ class AuthorizationFlowServiceTest {
         SessionDto session = session("s1");
         when(sessionService.getSession("s1")).thenReturn(session);
         when(userService.listUserVos(session)).thenReturn(List.of(user(7L)));
-        when(transactionService.compareAndUpdate(eq("tid-1"), any(), any(), any())).thenReturn(true);
-        when(transactionService.get("tid-1")).thenReturn(txn);
+        stubCompareAndUpdate(txn);
         when(authorizationService.generateAuthorizationCode(session, "client", "7", false))
             .thenReturn("legacy-code");
 
@@ -100,6 +102,7 @@ class AuthorizationFlowServiceTest {
         SessionDto session = session("s1");
         when(sessionService.getSession("s1")).thenReturn(session);
         when(userService.listUserVos(session)).thenReturn(List.of(user(7L), user(8L)));
+        when(transactionService.get("tid-1")).thenReturn(txn);
 
         ModelAndView mv = service.continueFlow(txn, "s1");
 
@@ -107,6 +110,7 @@ class AuthorizationFlowServiceTest {
         assertNull(mv.getModel().get("selectedUserId"));
         assertEquals("", mv.getModel().get("applicationCode"));
         verify(authorizationService, never()).generateAuthorizationCode(any(), any(), any(), anyBoolean());
+        verify(applicationClient, never()).selectList(any());
     }
 
     @Test
@@ -115,8 +119,7 @@ class AuthorizationFlowServiceTest {
         SessionDto session = session("s1");
         when(sessionService.getSession("s1")).thenReturn(session);
         when(userService.listUserVos(session)).thenReturn(List.of(user(7L), user(8L)));
-        when(transactionService.compareAndUpdate(eq("tid-1"), any(), any(), any())).thenReturn(true);
-        when(transactionService.get("tid-1")).thenReturn(txn);
+        stubCompareAndUpdate(txn);
         when(authorizationService.generateAuthorizationCode(session, "client", "8", false))
             .thenReturn("picked-code");
 
@@ -124,22 +127,20 @@ class AuthorizationFlowServiceTest {
 
         assertTrue(String.valueOf(mv.getViewName()).contains("code=picked-code"));
         verify(authorizationService).generateAuthorizationCode(session, "client", "8", false);
+        verify(applicationClient, never()).selectList(any());
     }
 
     @Test
-    void continueFlow_withApplicationCode_loadsLocalPreview() {
+    void continueFlow_withPublicApplicationCode_loadsLocalPreview() {
         AuthorizationTransactionDto txn = txn(AuthorizationTransactionStatus.AUTHENTICATED, "open-app");
         SessionDto session = session("s1");
         when(sessionService.getSession("s1")).thenReturn(session);
         UserVo selected = user(7L);
         selected.setOrganId(100L);
         when(userService.listUserVos(session)).thenReturn(List.of(selected));
-        when(transactionService.compareAndUpdate(eq("tid-1"), any(), any(), any())).thenReturn(true);
-        when(transactionService.get("tid-1")).thenReturn(txn);
+        stubCompareAndUpdate(txn);
 
-        ApplicationVo application = new ApplicationVo();
-        application.setApplicationName("开放应用");
-        application.setDescription("应用说明");
+        ApplicationVo application = application("开放应用", "应用说明", ApplicationType.PUBLIC.name());
         when(applicationClient.selectList(any())).thenReturn(Result.success(List.of(application)));
         when(organClient.selectOrganIdNameMap(any()))
             .thenReturn(Result.success(List.of(new OrganIdNameVo(100L, "租户甲"))));
@@ -147,6 +148,7 @@ class AuthorizationFlowServiceTest {
         ModelAndView mv = service.continueFlow(txn, "s1");
 
         assertEquals("consent", mv.getViewName());
+        assertTrue(Boolean.TRUE.equals(txn.getOpenPlatformConsent()));
         ConsentPreviewDto preview = (ConsentPreviewDto) mv.getModel().get("preview");
         assertNotNull(preview);
         assertEquals("开放应用", preview.getApplicationName());
@@ -158,10 +160,76 @@ class AuthorizationFlowServiceTest {
     }
 
     @Test
+    void continueFlow_withSystemApplicationCode_issuesCodeWithoutConsent() {
+        AuthorizationTransactionDto txn = txn(AuthorizationTransactionStatus.AUTHENTICATED, "page-app");
+        SessionDto session = session("s1");
+        when(sessionService.getSession("s1")).thenReturn(session);
+        when(userService.listUserVos(session)).thenReturn(List.of(user(7L)));
+        stubCompareAndUpdate(txn);
+        when(applicationClient.selectList(any()))
+            .thenReturn(Result.success(List.of(application("页面应用", "说明", ApplicationType.SYSTEM.name()))));
+        when(authorizationService.generateAuthorizationCode(session, "client", "7", false))
+            .thenReturn("page-code");
+
+        ModelAndView mv = service.continueFlow(txn, "s1");
+
+        assertTrue(String.valueOf(mv.getViewName()).contains("code=page-code"));
+        assertFalse(Boolean.TRUE.equals(txn.getOpenPlatformConsent()));
+        assertEquals(Boolean.FALSE, txn.getOpenPlatformConsent());
+        verify(authorizationService).generateAuthorizationCode(session, "client", "7", false);
+        verify(applicationAuthorizationClient, never()).activateSelf(any());
+    }
+
+    @Test
+    void continueFlow_withSupportApplicationCode_issuesCodeWithoutConsent() {
+        AuthorizationTransactionDto txn = txn(AuthorizationTransactionStatus.AUTHENTICATED, "support-app");
+        SessionDto session = session("s1");
+        when(sessionService.getSession("s1")).thenReturn(session);
+        when(userService.listUserVos(session)).thenReturn(List.of(user(7L)));
+        stubCompareAndUpdate(txn);
+        when(applicationClient.selectList(any()))
+            .thenReturn(Result.success(List.of(application("支撑应用", "说明", ApplicationType.SUPPORT.name()))));
+        when(authorizationService.generateAuthorizationCode(session, "client", "7", false))
+            .thenReturn("support-code");
+
+        ModelAndView mv = service.continueFlow(txn, "s1");
+
+        assertTrue(String.valueOf(mv.getViewName()).contains("code=support-code"));
+        assertEquals(Boolean.FALSE, txn.getOpenPlatformConsent());
+        verify(applicationAuthorizationClient, never()).activateSelf(any());
+    }
+
+    @Test
+    void continueFlow_withUnknownApplicationCode_failsClosed() {
+        AuthorizationTransactionDto txn = txn(AuthorizationTransactionStatus.AUTHENTICATED, "missing-app");
+        SessionDto session = session("s1");
+        when(sessionService.getSession("s1")).thenReturn(session);
+        when(applicationClient.selectList(any())).thenReturn(Result.success(List.of()));
+
+        ModelAndView mv = service.continueFlow(txn, "s1");
+
+        assertEquals("error", mv.getViewName());
+        verify(authorizationService, never()).generateAuthorizationCode(any(), any(), any(), anyBoolean());
+        verify(applicationAuthorizationClient, never()).activateSelf(any());
+    }
+
+    @Test
+    void continueFlow_whenApplicationLookupThrows_failsClosed() {
+        AuthorizationTransactionDto txn = txn(AuthorizationTransactionStatus.AUTHENTICATED, "boom-app");
+        SessionDto session = session("s1");
+        when(sessionService.getSession("s1")).thenReturn(session);
+        when(applicationClient.selectList(any())).thenThrow(new RuntimeException("basis down"));
+
+        ModelAndView mv = service.continueFlow(txn, "s1");
+
+        assertEquals("error", mv.getViewName());
+        verify(authorizationService, never()).generateAuthorizationCode(any(), any(), any(), anyBoolean());
+    }
+
+    @Test
     void confirm_denied_redirectsAccessDenied() {
         AuthorizationTransactionDto txn = txn(AuthorizationTransactionStatus.AUTHENTICATED, "open-app");
-        when(transactionService.compareAndUpdate(eq("tid-1"), any(), any(), any())).thenReturn(true);
-        when(transactionService.get("tid-1")).thenReturn(txn);
+        stubCompareAndUpdate(txn);
 
         ModelAndView mv = service.confirm(txn, "s1", "7", true);
 
@@ -170,6 +238,19 @@ class AuthorizationFlowServiceTest {
         verify(authorizationService, never()).generateAuthorizationCode(
             any(), any(), any(), anyBoolean(), any(), any(), any());
         verify(applicationAuthorizationClient, never()).activateSelf(any());
+    }
+
+    private void stubCompareAndUpdate(AuthorizationTransactionDto txn) {
+        when(transactionService.compareAndUpdate(eq("tid-1"), any(), any(), any())).thenAnswer(invocation -> {
+            AuthorizationTransactionStatus next = invocation.getArgument(2);
+            Consumer<AuthorizationTransactionDto> mutator = invocation.getArgument(3);
+            if (mutator != null) {
+                mutator.accept(txn);
+            }
+            txn.setStatus(next);
+            return true;
+        });
+        when(transactionService.get("tid-1")).thenReturn(txn);
     }
 
     private static AuthorizationTransactionDto txn(AuthorizationTransactionStatus status, String applicationCode) {
@@ -195,5 +276,13 @@ class AuthorizationFlowServiceTest {
         UserVo user = new UserVo();
         user.setId(id);
         return user;
+    }
+
+    private static ApplicationVo application(String name, String description, String applicationType) {
+        ApplicationVo application = new ApplicationVo();
+        application.setApplicationName(name);
+        application.setDescription(description);
+        application.setApplicationType(applicationType);
+        return application;
     }
 }

@@ -63,7 +63,7 @@ IAM → 创建 authorization transaction，冻结参数，建立或复用 flow C
 IAM → 303 到下一页面，URL 仅携带 tid
   → 登录 / 注册 / IdP（页面与表单只带 tid）
   → 用户选择（如需要）
-  → 应用授权确认（仅当事务中的 applicationCode 非空）
+  → 应用授权确认（仅当 openPlatformConsent=true，即 PUBLIC/PRIVATE）
   → 原子完成事务，签发 code（或拒绝）
   → redirect 冻结的 redirectUri?code=...&state=...（或 error=access_denied）
   → 清除本事务数据（终态保留至 TTL 仅用于幂等读，或立即删除后不可再推进）
@@ -92,7 +92,8 @@ IAM 过程中除本次「首次全参数建事务」外，**所有页面只接�
 | 字段 | 说明 |
 | --- | --- |
 | `tid` / `transactionId` | 高熵随机、不含业务含义；IAM 页面间唯一传递的授权引用 |
-| `applicationCode` | 可选的目标应用编码；本阶段仅作为授权流程上下文冻结保存 |
+| `applicationCode` | 可选的目标应用编码；原始请求值冻结保存（审计） |
+| `openPlatformConsent` | 可空；有 `applicationCode` 时查 Basis `applicationType` 后冻结：`true`=PUBLIC/PRIVATE 须确认，`false`=SUPPORT/SYSTEM 忽略 |
 | `clientId` | 业务侧动态生成的 Client DPoP 客户端标识；发码时绑定，换票时与 DPoP `kid` 比对 |
 | `redirectUri` | 首次请求提供的回调地址；本阶段不做强校验，后续不可改写 |
 | `state` | 原样保存，仅从事务回传，不再信任表单值 |
@@ -105,7 +106,7 @@ IAM 过程中除本次「首次全参数建事务」外，**所有页面只接�
 | `createdAt` / `expiresAt` | 审计与过期控制 |
 
 `ANONYMOUS`：首次建事务后可直接发码并 redirect，不进入 Session / 选用户 / 确认。  
-`USER`：按冻结的 `applicationCode` 是否为空分流——为空则沿用直接发码或选用户后发码；非空则确认页 + SELF 开通后发码。本阶段不对 `applicationCode` 做应用归属强校验。
+`USER`：有 `applicationCode` 时先查 Basis `applicationType` 写入 `openPlatformConsent`——`false` 或无码则沿用直接发码或选用户后发码；`true`（PUBLIC/PRIVATE）则确认页 + SELF 开通后发码；查失败则错误页。详见 [open-platform-oauth-upgrade.md](open-platform-oauth-upgrade.md)。
 
 离开 IAM（成功发码或拒绝回调）时：使用事务内冻结的 `redirectUri` 与 `state` 做 redirect，并将本事务标为终态、从流程索引移除；**出站后页面不得再依赖该 `tid` 推进业务**。终态记录可保留至 `expiresAt`，仅用于重复提交返回既有结果、禁止再次发码。
 
@@ -142,8 +143,8 @@ IAM 过程中除本次「首次全参数建事务」外，**所有页面只接�
 | `AUTHENTICATED` | 恰有一个可用用户 | `USER_SELECTED` | 继续授权分流 |
 | `AUTHENTICATED` | 有多个可用用户 | `AUTHENTICATED` | 用户选择页 |
 | `AUTHENTICATED` | 用户提交可用用户 | `USER_SELECTED` | 继续授权分流 |
-| `USER_SELECTED` | `applicationCode` 为空 | `COMPLETED` | 原子发码并 redirect |
-| `USER_SELECTED` | `applicationCode` 非空 | `CONSENT_REQUIRED` | 授权确认页 |
+| `USER_SELECTED` | 无码或 `openPlatformConsent=false` | `COMPLETED` | 原子发码并 redirect（不绑定应用） |
+| `USER_SELECTED` | `openPlatformConsent=true` | `CONSENT_REQUIRED` | 授权确认页 |
 | `CONSENT_REQUIRED` | 用户拒绝 | `DENIED` | redirect `error=access_denied&state=...` 并清推进能力 |
 | `CONSENT_REQUIRED` | 用户确认 | `ACTIVATING` | 调用 Basis SELF 开通 |
 | `ACTIVATING` | 开通成功并与发码同原子提交 | `COMPLETED` | redirect 带 code |
@@ -167,7 +168,8 @@ IAM 过程中除本次「首次全参数建事务」外，**所有页面只接�
 
 | 标识 | 用途 |
 | --- | --- |
-| `applicationCode` | 目标应用上下文；确认、Application DPoP、Token |
+| `applicationCode` | 目标应用上下文；开放平台路径用于确认、Application DPoP、Token；页面应用路径忽略 |
+| `openPlatformConsent` | 是否需要开放平台确认（由 Basis `applicationType` 解析） |
 | `clientId` | 本次浏览器 Client DPoP 客户端；发码绑定，换票与 DPoP `kid` 一致 |
 
 Basis 不保存 `tid`，不为动态 `clientId` 登记回调。本阶段不以 `applicationCode + redirectUri` 强校验创建。回调白名单等属后续协议升级。
@@ -196,7 +198,7 @@ Basis 不保存 `tid`，不为动态 `clientId` 登记回调。本阶段不以 `
 3. 除首次全参数建事务外，表单只提交 `tid` 与该页必要输入；
 4. 每次推进校验 `tid + flowCookie`；
 5. Session 只承载登录身份，不再存 `oauth*` 待确认参数；
-6. `USER` 授权码绑定 `clientId`、`applicationCode`、Session（TTL 策略保持现网：有 applicationCode 时 5 分钟，无则 10 分钟）；`ANONYMOUS` 沿用无 Session 语义。
+6. `USER` 授权码绑定 `clientId`、Session；仅 `openPlatformConsent=true` 时额外绑定 `applicationCode`（TTL：开放平台 5 分钟，否则 10 分钟）；`ANONYMOUS` 沿用无 Session 语义。
 
 ## 6. 认证、鉴权与 DPoP 边界
 

@@ -20,9 +20,19 @@ public class AuthorizationTransactionDto {
     private String tid;
 
     /**
-     * 目标应用编码（可选）；非空时进入应用授权 consent。
+     * 目标应用编码（可选）；原始请求值保留供审计。
+     * <p>是否进入开放平台 consent 由 {@link #openPlatformConsent} 决定。</p>
      */
     private String applicationCode;
+
+    /**
+     * 是否需要开放平台授权确认（由 Basis {@code applicationType} 解析后冻结）。
+     * <p>
+     * {@code null}：尚未解析；{@code true}：PUBLIC/PRIVATE，须 consent + SELF；
+     * {@code false}：SUPPORT/SYSTEM，后续按无 {@code applicationCode} 处理。
+     * </p>
+     */
+    private Boolean openPlatformConsent;
 
     /**
      * OAuth 客户端 ID（冻结）。
