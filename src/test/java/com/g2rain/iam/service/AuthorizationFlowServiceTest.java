@@ -8,9 +8,7 @@ import com.g2rain.common.model.Result;
 import com.g2rain.iam.client.ApplicationAuthorizationClient;
 import com.g2rain.iam.client.ApplicationClient;
 import com.g2rain.iam.client.OrganClient;
-import com.g2rain.iam.config.DingTalkIamProperties;
 import com.g2rain.iam.config.IamAccessProperties;
-import com.g2rain.iam.config.WeComIamProperties;
 import com.g2rain.iam.dto.AuthorizationTransactionDto;
 import com.g2rain.iam.dto.ConsentPreviewDto;
 import com.g2rain.iam.dto.SessionDto;
@@ -51,10 +49,6 @@ class AuthorizationFlowServiceTest {
     @Mock
     private IamAccessProperties iamAccessProperties;
     @Mock
-    private DingTalkIamProperties dingTalkIamProperties;
-    @Mock
-    private WeComIamProperties weComIamProperties;
-    @Mock
     private ApplicationAuthorizationClient applicationAuthorizationClient;
     @Mock
     private ApplicationClient applicationClient;
@@ -71,8 +65,6 @@ class AuthorizationFlowServiceTest {
             userService,
             authorizationService,
             iamAccessProperties,
-            dingTalkIamProperties,
-            weComIamProperties,
             applicationAuthorizationClient,
             applicationClient,
             organClient
@@ -238,6 +230,39 @@ class AuthorizationFlowServiceTest {
         verify(authorizationService, never()).generateAuthorizationCode(
             any(), any(), any(), anyBoolean(), any(), any(), any());
         verify(applicationAuthorizationClient, never()).activateSelf(any());
+    }
+
+    @Test
+    void renderLogin_usesFrozenAuthPolicyNotGlobalBindMode() {
+        AuthorizationTransactionDto txn = txn(AuthorizationTransactionStatus.CREATED, "g2rain-admin-shell");
+        com.g2rain.iam.dto.AuthPolicySnapshot policy = new com.g2rain.iam.dto.AuthPolicySnapshot();
+        policy.setLoginMethods(java.util.EnumSet.of(com.g2rain.iam.enums.LoginMethod.WECOM));
+        policy.setWeComBindMode("INTERNAL");
+        policy.setAllowRegister(false);
+        policy.setSource(com.g2rain.iam.enums.AuthPolicySource.APPLICATION);
+        txn.setAuthPolicy(policy);
+
+        ModelAndView mv = service.renderLogin(txn, null, null);
+
+        assertEquals("login", mv.getViewName());
+        assertEquals(false, mv.getModel().get("hasPassword"));
+        assertEquals(false, mv.getModel().get("allowRegister"));
+        assertEquals("INTERNAL", mv.getModel().get("weComBindMode"));
+        assertNull(mv.getModel().get("dingTalkBindMode"));
+    }
+
+    @Test
+    void renderRegister_deniedWhenFrozenPolicyDisallows() {
+        AuthorizationTransactionDto txn = txn(AuthorizationTransactionStatus.CREATED, "g2rain-main-shell");
+        com.g2rain.iam.dto.AuthPolicySnapshot policy = new com.g2rain.iam.dto.AuthPolicySnapshot();
+        policy.setLoginMethods(java.util.EnumSet.of(com.g2rain.iam.enums.LoginMethod.PASSWORD));
+        policy.setAllowRegister(false);
+        policy.setSource(com.g2rain.iam.enums.AuthPolicySource.APPLICATION);
+        txn.setAuthPolicy(policy);
+
+        ModelAndView mv = service.renderRegister(txn);
+
+        assertEquals("error", mv.getViewName());
     }
 
     private void stubCompareAndUpdate(AuthorizationTransactionDto txn) {

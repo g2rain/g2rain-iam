@@ -3,6 +3,7 @@ package com.g2rain.iam.service;
 import com.g2rain.common.exception.BusinessException;
 import com.g2rain.data.redis.GenericRedisHelper;
 import com.g2rain.iam.config.IamAccessProperties;
+import com.g2rain.iam.dto.AuthPolicySnapshot;
 import com.g2rain.iam.dto.AuthorizationTransactionDto;
 import com.g2rain.iam.enums.AuthorizationMode;
 import com.g2rain.iam.enums.AuthorizationTransactionStatus;
@@ -36,6 +37,9 @@ class AuthorizationTransactionServiceTest {
     @Mock
     private IamAccessProperties iamAccessProperties;
 
+    @Mock
+    private AuthPolicyResolver authPolicyResolver;
+
     private AuthorizationTransactionService service;
 
     private final Map<String, Object> store = new HashMap<>();
@@ -45,7 +49,12 @@ class AuthorizationTransactionServiceTest {
         IamAccessProperties.AuthorizationTransaction cfg = new IamAccessProperties.AuthorizationTransaction();
         cfg.setTtlSeconds(600);
         when(iamAccessProperties.getAuthorizationTransaction()).thenReturn(cfg);
-        service = new AuthorizationTransactionService(genericRedisHelper, iamAccessProperties);
+        AuthPolicySnapshot defaultPolicy = new AuthPolicySnapshot();
+        defaultPolicy.setLoginMethods(java.util.EnumSet.of(com.g2rain.iam.enums.LoginMethod.PASSWORD));
+        defaultPolicy.setAllowRegister(true);
+        defaultPolicy.setSource(com.g2rain.iam.enums.AuthPolicySource.PLATFORM_DEFAULT);
+        lenient().when(authPolicyResolver.resolve(any())).thenReturn(defaultPolicy);
+        service = new AuthorizationTransactionService(genericRedisHelper, iamAccessProperties, authPolicyResolver);
 
         lenient().doAnswer(invocation -> {
             String key = invocation.getArgument(0);

@@ -10,6 +10,7 @@ import com.g2rain.iam.dto.DingTalkQrBootstrapDto;
 import com.g2rain.iam.dto.DingTalkStreamAuthorizationDto;
 import com.g2rain.iam.enums.IamErrorCode;
 import com.g2rain.iam.service.AuthFlowCookieService;
+import com.g2rain.iam.service.AuthPolicyGuard;
 import com.g2rain.iam.service.AuthorizationFlowService;
 import com.g2rain.iam.service.AuthorizationTransactionService;
 import com.g2rain.iam.service.DingTalkOAuthService;
@@ -90,6 +91,11 @@ public class DingTalkOAuthController {
     private final AuthorizationFlowService authorizationFlowService;
 
     /**
+     * 登录策略闸门。
+     */
+    private final AuthPolicyGuard authPolicyGuard;
+
+    /**
      * 申请内嵌扫码（方式二）的 sns 授权 goto URL。
      *
      * @param request 当前 HTTP 请求（校验 flow Cookie）
@@ -103,7 +109,9 @@ public class DingTalkOAuthController {
         HttpServletRequest request,
         @Valid @RequestBody DingTalkQrBootstrapDto dto) {
         ResolvedOAuth ctx = resolveOAuthContext(request, dto.getTid());
-        authorizationFlowService.markIdpPending(transactionService.get(ctx.tid()));
+        AuthorizationTransactionDto txn = transactionService.get(ctx.tid());
+        authPolicyGuard.requireDingTalk(txn, dto.getBindMode());
+        authorizationFlowService.markIdpPending(txn);
         return Result.success(dingTalkQrBootstrapService.buildQrBootstrap(
             dto.getBindMode(),
             ctx.clientId(),
@@ -134,11 +142,15 @@ public class DingTalkOAuthController {
         @RequestParam(name = "loginRole", required = false) String loginRole) {
         try {
             ResolvedOAuth ctx = resolveOAuthContext(request, tid);
-            authorizationFlowService.markIdpPending(transactionService.get(ctx.tid()));
+            AuthorizationTransactionDto txn = transactionService.get(ctx.tid());
+            authPolicyGuard.requireDingTalk(txn, bindMode);
+            authorizationFlowService.markIdpPending(txn);
             String url = dingTalkOAuthService.buildDingTalkAuthorizeRedirectUrl(
                 bindMode, ctx.clientId(), ctx.redirectUri(), ctx.state(), loginRole,
                 ctx.applicationCode(), ctx.tid());
             return new ModelAndView(Constants.REDIRECT + url);
+        } catch (BusinessException ex) {
+            return authorizationFlowService.renderFlowError(null, ex.getMessage());
         } catch (Exception e) {
             log.error("钉钉授权跳转失败 bindMode={} message={}", bindMode, e.getMessage(), e);
             return authorizationFlowService.renderFlowError(null, "钉钉授权准备失败，请稍后重试或改用账号密码登录");

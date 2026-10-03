@@ -7,7 +7,9 @@
 - **全参数、无 `tid`**：创建 Redis 授权事务，写入/复用流程 Cookie `G2RAIN_AUTH_FLOW`（`SameSite=Lax`），`303` 到仅含 `tid` 的续跑 URL。
 - **仅 `tid`**：校验 `tid` + 流程 Cookie，按事务状态继续（登录 / 选用户 / 应用授权确认 / 发码）。
 
-未登录则进入登录或 IdP；IAM 站内页面只携带 `tid`。有 `applicationCode` 时先经 Basis `/application/list` 解析 `applicationType`，并将结果冻结为事务字段 `openPlatformConsent`：
+未登录则进入登录或 IdP；IAM 站内页面只携带 `tid`。建事务时按 `applicationCode` 从 IAM `g2rain.iam.auth-policy` **互斥整段选用**专条或 `default`，与平台 IdP 能力求交后冻结为 `authPolicy`（密码 / 钉钉 / 企微 / 是否允许注册）。登录页与 `POST /auth/login`、IdP、注册只认冻结快照，专条不合并 default。示例专条：`g2rain-main-shell`、`g2rain-admin-shell`；开放平台应用一般命中 default。
+
+有 `applicationCode` 时（认证后）另经 Basis `/application/list` 解析 `applicationType`，并将结果冻结为事务字段 `openPlatformConsent`：
 
 - 未携带 `applicationCode`：单用户直接发码并回调；多用户先选用户再发码（授权码默认 10 分钟 TTL，不绑定应用）。
 - `SUPPORT` / `SYSTEM`：忽略 `applicationCode`，行为同无参路径。
@@ -24,7 +26,7 @@
 
 ## IdP
 
-登录页仅带 `tid` 发起钉钉/企微；IAM 将 `idp_state` 映射到事务。外部回调后校验流程 Cookie，绑定 Session，再按事务状态继续授权。
+登录页仅在冻结策略允许时展示钉钉/企微，且只带 `tid` 发起；IAM 将 `idp_state` 映射到事务。外部回调后校验流程 Cookie，绑定 Session，再按事务状态继续授权。
 
 ## 密钥轮换
 

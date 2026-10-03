@@ -98,4 +98,9 @@ public class AuthorizationTransactionDto {
      * 发码成功后缓存，供终态幂等回读（可选）。
      */
     private String issuedCode;
+
+    /**
+     * 建事务时冻结的登录/注册策略；页面与写路径只读此快照。
+     */
+    private AuthPolicySnapshot authPolicy;
 }

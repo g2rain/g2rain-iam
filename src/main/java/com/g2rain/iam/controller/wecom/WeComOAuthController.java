@@ -7,6 +7,7 @@ import com.g2rain.iam.dto.AuthorizationTransactionDto;
 import com.g2rain.iam.dto.WeComStreamAuthorizationDto;
 import com.g2rain.iam.enums.IamErrorCode;
 import com.g2rain.iam.service.AuthFlowCookieService;
+import com.g2rain.iam.service.AuthPolicyGuard;
 import com.g2rain.iam.service.AuthorizationFlowService;
 import com.g2rain.iam.service.AuthorizationTransactionService;
 import com.g2rain.iam.service.IamSessionCookieService;
@@ -77,6 +78,11 @@ public class WeComOAuthController {
     private final AuthorizationFlowService authorizationFlowService;
 
     /**
+     * 登录策略闸门。
+     */
+    private final AuthPolicyGuard authPolicyGuard;
+
+    /**
      * 跳转企业微信扫码登录页：从授权事务读取 OAuth 上下文并重定向。
      *
      * @param request   当前 HTTP 请求
@@ -95,11 +101,15 @@ public class WeComOAuthController {
         @RequestParam(required = false) String loginRole) {
         try {
             ResolvedOAuth ctx = resolve(request, tid);
-            authorizationFlowService.markIdpPending(transactionService.get(ctx.tid()));
+            AuthorizationTransactionDto txn = transactionService.get(ctx.tid());
+            authPolicyGuard.requireWeCom(txn, bindMode);
+            authorizationFlowService.markIdpPending(txn);
             return new ModelAndView(Constants.REDIRECT
                 + oauthService.buildAuthorizeUrl(
                 bindMode, ctx.clientId(), ctx.redirectUri(), ctx.state(), loginRole,
                 ctx.applicationCode(), ctx.tid()));
+        } catch (BusinessException exception) {
+            return authorizationFlowService.renderFlowError(null, exception.getMessage());
         } catch (Exception exception) {
             log.error("企业微信授权跳转失败 bindMode={}", bindMode, exception);
             return authorizationFlowService.renderFlowError(null, "企业微信授权准备失败，请稍后重试");

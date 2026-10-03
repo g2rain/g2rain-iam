@@ -30,5 +30,6 @@
 - [Token 签发双模式对齐（MEMBER 应用上下文）](design/member-token-issuance-alignment.md)（已完成实施）
 - [应用授权确认（OAuth 按应用类型分流）](design/open-platform-oauth-upgrade.md)（已实施：有 applicationCode 时查 Basis applicationType；仅 PUBLIC/PRIVATE 确认+SELF；SUPPORT/SYSTEM 忽略；查失败关闭）
 - [IAM 页面与授权流程解耦升级方案](design/iam-page-flow-upgrade.md)（已收敛：站内页面只认 `tid`）
+- [按 applicationCode 的登录方式与注册策略](design/application-auth-policy.md)（已实施 P0：多 Shell 专条 g2rain-main-shell / g2rain-admin-shell；开放平台一般命中 default；互斥整段选用；事务冻结 + 双闸门）
 
 设计文档不自动等于开发指令；是否实施由 `aiCoding.activeRequirement` 或唯一 `开发中` 需求决定。

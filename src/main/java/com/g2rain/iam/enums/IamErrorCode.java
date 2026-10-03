@@ -198,7 +198,22 @@ public enum IamErrorCode implements ErrorCode {
     /**
      * 企业微信登录用户类型与请求意图不匹配
      */
-    WECOM_USER_TYPE_INVALID("iam.40045", "企业微信登录用户类型与请求不匹配");
+    WECOM_USER_TYPE_INVALID("iam.40045", "企业微信登录用户类型与请求不匹配"),
+
+    /**
+     * 求交后无可用登录方式
+     */
+    AUTH_POLICY_NO_LOGIN_METHOD("iam.40050", "该应用未配置可用登录方式"),
+
+    /**
+     * 当前冻结策略不允许该登录方式
+     */
+    AUTH_POLICY_METHOD_DENIED("iam.40051", "当前应用不允许此登录方式"),
+
+    /**
+     * 当前冻结策略不允许注册
+     */
+    AUTH_POLICY_REGISTER_DENIED("iam.40052", "当前应用不允许注册");
 
     private final String code;
 

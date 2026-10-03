@@ -15,15 +15,15 @@ import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.client.ApplicationAuthorizationClient;
 import com.g2rain.iam.client.ApplicationClient;
 import com.g2rain.iam.client.OrganClient;
-import com.g2rain.iam.config.DingTalkIamProperties;
 import com.g2rain.iam.config.IamAccessProperties;
-import com.g2rain.iam.config.WeComIamProperties;
+import com.g2rain.iam.dto.AuthPolicySnapshot;
 import com.g2rain.iam.dto.AuthorizationTransactionDto;
 import com.g2rain.iam.dto.ConsentPreviewDto;
 import com.g2rain.iam.dto.SessionDto;
 import com.g2rain.iam.enums.AuthorizationMode;
 import com.g2rain.iam.enums.AuthorizationTransactionStatus;
 import com.g2rain.iam.enums.IamErrorCode;
+import com.g2rain.iam.enums.LoginMethod;
 import com.g2rain.iam.utils.Constants;
 import com.g2rain.iam.utils.IamUtils;
 import lombok.RequiredArgsConstructor;
@@ -54,8 +54,6 @@ public class AuthorizationFlowService {
     private final UserService userService;
     private final AuthorizationService authorizationService;
     private final IamAccessProperties iamAccessProperties;
-    private final DingTalkIamProperties dingTalkIamProperties;
-    private final WeComIamProperties weComIamProperties;
     private final ApplicationAuthorizationClient applicationAuthorizationClient;
     private final ApplicationClient applicationClient;
     private final OrganClient organClient;
@@ -141,13 +139,18 @@ public class AuthorizationFlowService {
         if (Strings.isNotBlank(username)) {
             model.addAttribute("username", username);
         }
-        String dingTalk = dingTalkIamProperties.getLoginPageBindMode();
-        if (Strings.isNotBlank(dingTalk)) {
-            model.addAttribute("dingTalkBindMode", dingTalk.trim());
+        AuthPolicySnapshot policy = txn.getAuthPolicy();
+        boolean hasPassword = policy != null && policy.allows(LoginMethod.PASSWORD);
+        boolean allowRegister = policy != null && policy.isAllowRegister();
+        model.addAttribute("hasPassword", hasPassword);
+        model.addAttribute("allowRegister", allowRegister);
+        if (policy != null && policy.allows(LoginMethod.DINGTALK)
+            && Strings.isNotBlank(policy.getDingTalkBindMode())) {
+            model.addAttribute("dingTalkBindMode", policy.getDingTalkBindMode());
         }
-        String weCom = weComIamProperties.getLoginPageBindMode();
-        if (Strings.isNotBlank(weCom)) {
-            model.addAttribute("weComBindMode", weCom.trim());
+        if (policy != null && policy.allows(LoginMethod.WECOM)
+            && Strings.isNotBlank(policy.getWeComBindMode())) {
+            model.addAttribute("weComBindMode", policy.getWeComBindMode());
         }
         return mv;
     }
@@ -159,6 +162,10 @@ public class AuthorizationFlowService {
      * @return 注册页视图
      */
     public ModelAndView renderRegister(AuthorizationTransactionDto txn) {
+        AuthPolicySnapshot policy = txn.getAuthPolicy();
+        if (policy == null || !policy.isAllowRegister()) {
+            return renderFlowError(txn, IamErrorCode.AUTH_POLICY_REGISTER_DENIED.getMessage());
+        }
         ModelAndView mv = new ModelAndView("register");
         ModelMap model = mv.getModelMap();
         model.addAttribute(Constants.TID, txn.getTid());

@@ -8,6 +8,7 @@ import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.dto.AuthorizationTransactionDto;
 import com.g2rain.iam.enums.IamErrorCode;
 import com.g2rain.iam.service.AuthFlowCookieService;
+import com.g2rain.iam.service.AuthPolicyGuard;
 import com.g2rain.iam.service.AuthorizationFlowService;
 import com.g2rain.iam.service.AuthorizationTransactionService;
 import com.g2rain.iam.service.PassportService;
@@ -69,6 +70,11 @@ public class PassportController {
     private final AuthorizationFlowService authorizationFlowService;
 
     /**
+     * 登录策略闸门。
+     */
+    private final AuthPolicyGuard authPolicyGuard;
+
+    /**
      * 账号注册接口。
      * <p>
      * 从注册页面接收 {@link PassportDto}，校验验证码与限流后转发至 Basis；
@@ -91,6 +97,14 @@ public class PassportController {
         if (Strings.isBlank(tid)) {
             return authorizationFlowService.renderFlowError(
                 null, IamErrorCode.AUTH_TRANSACTION_INVALID.getMessage());
+        }
+
+        try {
+            String flowHash = authFlowCookieService.hash(authFlowCookieService.readRaw(request));
+            AuthorizationTransactionDto txn = transactionService.requireActive(tid.trim(), flowHash);
+            authPolicyGuard.requireRegister(txn);
+        } catch (BusinessException ex) {
+            return authorizationFlowService.renderFlowError(null, ex.getMessage());
         }
 
         String rlError = registerCaptchaService.checkRegisterRateLimit(request);

@@ -5,6 +5,7 @@ import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.dto.AuthorizationTransactionDto;
 import com.g2rain.iam.enums.IamErrorCode;
 import com.g2rain.iam.service.AuthFlowCookieService;
+import com.g2rain.iam.service.AuthPolicyGuard;
 import com.g2rain.iam.service.AuthService;
 import com.g2rain.iam.service.AuthorizationFlowService;
 import com.g2rain.iam.service.AuthorizationTransactionService;
@@ -81,6 +82,11 @@ public class LoginController {
     private final AuthorizationFlowService authorizationFlowService;
 
     /**
+     * 登录策略闸门。
+     */
+    private final AuthPolicyGuard authPolicyGuard;
+
+    /**
      * 用户登录接口：在授权事务内校验账号密码并继续流程。
      * <p>
      * 成功则写入 HttpOnly 会话 Cookie，并调用 {@link AuthorizationFlowService#afterPasswordLogin}；
@@ -110,6 +116,7 @@ public class LoginController {
         try {
             String flowHash = authFlowCookieService.hash(authFlowCookieService.readRaw(request));
             AuthorizationTransactionDto txn = transactionService.requireActive(tid.trim(), flowHash);
+            authPolicyGuard.requirePassword(txn);
             String sessionId = authService.authenticate(username, password);
             iamSessionCookieService.writeSessionCookie(response, sessionId);
             return authorizationFlowService.afterPasswordLogin(txn, sessionId);

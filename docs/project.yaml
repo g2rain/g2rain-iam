@@ -111,9 +111,10 @@ documentation:
     - docs/design/member-token-issuance-alignment.md
     - docs/design/open-platform-oauth-upgrade.md
     - docs/design/iam-page-flow-upgrade.md
+    - docs/design/application-auth-policy.md
 
 aiCoding:
-  activeRequirement: docs/design/open-platform-oauth-upgrade.md
+  activeRequirement: docs/design/application-auth-policy.md
   requirementTemplate: docs/requirements/README.md
   validation:
     - 读取中央登记、本地边界、安全要求、偏差、设计和当前需求

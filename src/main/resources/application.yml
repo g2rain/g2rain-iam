@@ -135,3 +135,20 @@ g2rain:
       credential:
         encryption-key: ${WECOM_CREDENTIAL_ENCRYPTION_KEY:}
         key-id: ${WECOM_CREDENTIAL_KEY_ID:default}
+    auth-policy:
+      default:
+        login-methods:
+          - PASSWORD
+        allow-register: true
+      applications:
+        g2rain-main-shell:
+          login-methods:
+            - PASSWORD
+            - WECOM
+          we-com-bind-mode: INTERNAL
+          allow-register: false
+        g2rain-admin-shell:
+          login-methods:
+            - WECOM
+          we-com-bind-mode: INTERNAL
+          allow-register: false

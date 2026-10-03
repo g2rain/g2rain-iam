@@ -39,6 +39,7 @@ public class AuthorizationTransactionService {
 
     private final GenericRedisHelper genericRedisHelper;
     private final IamAccessProperties iamAccessProperties;
+    private final AuthPolicyResolver authPolicyResolver;
 
     /**
      * 授权事务 TTL（至少 60 秒）。
@@ -151,6 +152,7 @@ public class AuthorizationTransactionService {
         dto.setStatus(AuthorizationTransactionStatus.CREATED);
         dto.setCreatedAt(now.getEpochSecond());
         dto.setExpiresAt(now.plus(ttl).getEpochSecond());
+        dto.setAuthPolicy(authPolicyResolver.resolve(dto.getApplicationCode()));
         persist(dto, ttl);
         genericRedisHelper.set(dedupKey, dto.getTid(), ttl);
         addToFlowIndex(flowCookieHash, dto.getTid(), ttl);

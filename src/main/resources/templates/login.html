@@ -41,16 +41,21 @@
 
         <div class="landing-panel action-panel landing-op-form landing-op-login"
              th:with="hasTid=${tid != null and !#strings.isEmpty(tid)},
+                      passwordEnabled=${hasTid and hasPassword == true},
                       hasDingTalk=${hasTid and dingTalkBindMode != null and !#strings.isEmpty(dingTalkBindMode)},
-                      hasWeCom=${hasTid and weComBindMode != null and !#strings.isEmpty(weComBindMode)}">
+                      hasWeCom=${hasTid and weComBindMode != null and !#strings.isEmpty(weComBindMode)},
+                      showRegister=${hasTid and allowRegister == true}">
             <h2 class="title">登录</h2>
-            <p class="login-panel-lead" th:if="${hasDingTalk or hasWeCom}">使用账号密码或企业扫码完成身份认证</p>
-            <p class="login-panel-lead" th:unless="${hasDingTalk or hasWeCom}">请输入账号密码登录</p>
+            <p class="login-panel-lead" th:if="${passwordEnabled and (hasDingTalk or hasWeCom)}">使用账号密码或企业扫码完成身份认证</p>
+            <p class="login-panel-lead" th:if="${passwordEnabled and !hasDingTalk and !hasWeCom}">请输入账号密码登录</p>
+            <p class="login-panel-lead" th:if="${!passwordEnabled and (hasDingTalk or hasWeCom)}">使用企业扫码完成身份认证</p>
 
             <div class="error-message login-error" th:if="${error != null and error != ''}" th:text="${error}" role="alert"></div>
 
-            <div class="login-tabs" th:classappend="${!hasDingTalk} ? ' login-tabs--solo' : ''">
-                <div class="login-tab-bar" th:if="${hasDingTalk}" role="tablist">
+            <input type="hidden" id="tid" name="tid" th:value="${tid} ?: ''">
+
+            <div class="login-tabs" th:classappend="${!hasDingTalk or !passwordEnabled} ? ' login-tabs--solo' : ''">
+                <div class="login-tab-bar" th:if="${hasDingTalk and passwordEnabled}" role="tablist">
                     <button type="button" class="login-tab login-tab-active" role="tab" aria-selected="true"
                             data-login-tab="account" id="login-tab-btn-account">账号登录</button>
                     <button type="button" class="login-tab" role="tab" aria-selected="false"
@@ -58,8 +63,10 @@
                 </div>
 
                 <div id="login-tab-panel-account"
-                     class="login-tab-panel login-tab-panel-active"
+                     class="login-tab-panel"
+                     th:classappend="${passwordEnabled} ? ' login-tab-panel-active' : ''"
                      role="tabpanel"
+                     th:if="${passwordEnabled}"
                      th:attr="aria-labelledby=${hasDingTalk} ? 'login-tab-btn-account' : _">
                     <form method="POST" action="/auth/login">
                         <div class="form-group">
@@ -72,24 +79,20 @@
                             <input type="password" id="password" name="password" required>
                         </div>
 
-                        <input type="hidden" id="tid" name="tid" th:value="${tid} ?: ''">
+                        <input type="hidden" name="tid" th:value="${tid} ?: ''">
 
                         <div class="form-actions landing-form-actions">
                             <button type="submit" class="btn btn-primary btn-lg">登录</button>
-                            <a th:if="${hasTid}"
+                            <a th:if="${showRegister}"
                                th:href="@{/auth/register.html(tid=${tid})}"
                                class="btn btn-outline btn-lg">注册账号</a>
                         </div>
                     </form>
-                    <a th:if="${hasWeCom}"
-                       class="btn btn-outline btn-lg btn-block"
-                       th:href="@{/auth/wecom/authorize(bindMode=${weComBindMode},tid=${tid})}">
-                        企业微信扫码登录
-                    </a>
                 </div>
 
                 <div id="login-tab-panel-dingtalk"
                      class="login-tab-panel"
+                     th:classappend="${hasDingTalk and !passwordEnabled} ? ' login-tab-panel-active' : ''"
                      role="tabpanel"
                      aria-labelledby="login-tab-btn-dingtalk"
                      th:if="${hasDingTalk}">
@@ -107,6 +110,11 @@
                     </div>
                 </div>
             </div>
+            <a th:if="${hasWeCom}"
+               class="btn btn-outline btn-lg btn-block"
+               th:href="@{/auth/wecom/authorize(bindMode=${weComBindMode},tid=${tid})}">
+                企业微信扫码登录
+            </a>
         </div>
     </section>
 
@@ -227,6 +235,8 @@
                 }
             });
         });
+    } else if (wrap) {
+        window.__g2rainInitDingTalkQr();
     }
 })();
 /*]]>*/
