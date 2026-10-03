@@ -237,7 +237,7 @@ IAM → 303 仅 tid 续跑
 
 | 入口 | 行为 |
 | --- | --- |
-| `renderLogin` | **仅**渲染冻结策略中的方式；无 `PASSWORD` 则不渲染密码表单 |
+| `renderLogin` | **仅**渲染冻结策略中的方式；无 `PASSWORD` 则不渲染密码表单。多种方式时用对等卡片切换同一工作区；仅一种方式时不展示卡片条 |
 | `renderRegister` | 仅当冻结 `allowRegister=true`；否则错误页或回登录 |
 | 登录页注册链接 | 仅当冻结 `allowRegister=true` |
 

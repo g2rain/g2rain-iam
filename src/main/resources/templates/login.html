@@ -45,6 +45,7 @@
                       hasDingTalk=${hasTid and dingTalkBindMode != null and !#strings.isEmpty(dingTalkBindMode)},
                       hasWeCom=${hasTid and weComBindMode != null and !#strings.isEmpty(weComBindMode)},
                       showRegister=${hasTid and allowRegister == true},
+                      methodCount=${(passwordEnabled ? 1 : 0) + (hasDingTalk ? 1 : 0) + (hasWeCom ? 1 : 0)},
                       selectedMethod=${loginMethod != null and !#strings.isEmpty(loginMethod)} ? ${loginMethod} : ''">
             <h2 class="title">登录</h2>
             <p class="login-panel-lead" th:if="${passwordEnabled and (hasDingTalk or hasWeCom)}">选择一种方式完成身份认证</p>
@@ -56,7 +57,7 @@
             <input type="hidden" id="tid" name="tid" th:value="${tid} ?: ''">
 
             <div class="login-method-cards" role="tablist" aria-label="登录方式"
-                 th:if="${passwordEnabled or hasDingTalk or hasWeCom}">
+                 th:if="${methodCount > 1}">
                 <button type="button" class="login-method-card" role="tab"
                         data-login-method="password"
                         th:if="${passwordEnabled}"
@@ -115,7 +116,7 @@
                      class="login-workspace-panel"
                      role="tabpanel"
                      th:if="${passwordEnabled}"
-                     th:attr="hidden=${selectedMethod != 'password'}">
+                     th:hidden="${selectedMethod != 'password'}">
                     <form method="POST" action="/auth/login">
                         <div class="form-group">
                             <label for="username">用户名<span class="required-asterisk" aria-hidden="true">*</span></label>
@@ -142,7 +143,7 @@
                      class="login-workspace-panel"
                      role="tabpanel"
                      th:if="${hasDingTalk}"
-                     th:attr="hidden=${selectedMethod != 'dingtalk'}">
+                     th:hidden="${selectedMethod != 'dingtalk'}">
                     <div class="dingtalk-login-wrap"
                          th:attr="data-dingtalk-qr-init=1,
                                   data-bootstrap-url=@{/auth/dingtalk/qr/bootstrap},
@@ -161,7 +162,7 @@
                      class="login-workspace-panel"
                      role="tabpanel"
                      th:if="${hasWeCom}"
-                     th:attr="hidden=${selectedMethod != 'wecom'}">
+                     th:hidden="${selectedMethod != 'wecom'}">
                     <div class="wecom-login-wrap">
                         <p class="wecom-login-hint">将跳转到企业微信完成扫码登录</p>
                         <a class="btn btn-primary btn-lg btn-block"
@@ -178,7 +179,6 @@
         G2Rain IAM
     </footer>
 </main>
-<th:block th:if="${dingTalkBindMode != null and !#strings.isEmpty(dingTalkBindMode) and tid != null and !#strings.isEmpty(tid)}">
 <script>
 /*<![CDATA[*/
 (function () {
@@ -263,27 +263,24 @@
         });
     }
 
-    window.__g2rainInitDingTalkQr = function () {
+    function initDingTalkQr() {
         if (!wrap || window.__g2rainDingTalkQrStarted) { return; }
         window.__g2rainDingTalkQrStarted = true;
         setStatus('正在加载钉钉扫码…', true);
         loadScript(ddLoginSrc).then(runQrBootstrap).catch(function () {
             setStatus('加载钉钉扫码失败，请使用「浏览器跳转钉钉登录」。', false);
         });
-    };
+    }
 
     function selectMethod(name) {
-        var cards = document.querySelectorAll('[data-login-method]');
-        var panels = document.querySelectorAll('.login-workspace-panel');
-        cards.forEach(function (card) {
+        document.querySelectorAll('[data-login-method]').forEach(function (card) {
             var on = card.getAttribute('data-login-method') === name;
             card.classList.toggle('login-method-card-active', on);
             card.setAttribute('aria-selected', on ? 'true' : 'false');
             card.tabIndex = on ? 0 : -1;
         });
-        panels.forEach(function (panel) {
-            var id = panel.id || '';
-            var match = id === 'login-workspace-' + name;
+        document.querySelectorAll('.login-workspace-panel').forEach(function (panel) {
+            var match = panel.id === 'login-workspace-' + name;
             if (match) {
                 panel.removeAttribute('hidden');
             } else {
@@ -291,12 +288,11 @@
             }
         });
         if (name === 'dingtalk') {
-            window.__g2rainInitDingTalkQr();
+            initDingTalkQr();
         }
     }
 
-    var cards = document.querySelectorAll('[data-login-method]');
-    cards.forEach(function (card) {
+    document.querySelectorAll('[data-login-method]').forEach(function (card) {
         card.addEventListener('click', function () {
             selectMethod(card.getAttribute('data-login-method'));
         });
@@ -304,39 +300,8 @@
 
     var dingtalkPanel = document.getElementById('login-workspace-dingtalk');
     if (dingtalkPanel && !dingtalkPanel.hasAttribute('hidden')) {
-        window.__g2rainInitDingTalkQr();
+        initDingTalkQr();
     }
-})();
-/*]]>*/
-</script>
-</th:block>
-<script th:unless="${dingTalkBindMode != null and !#strings.isEmpty(dingTalkBindMode) and tid != null and !#strings.isEmpty(tid)}">
-/*<![CDATA[*/
-(function () {
-    function selectMethod(name) {
-        var cards = document.querySelectorAll('[data-login-method]');
-        var panels = document.querySelectorAll('.login-workspace-panel');
-        cards.forEach(function (card) {
-            var on = card.getAttribute('data-login-method') === name;
-            card.classList.toggle('login-method-card-active', on);
-            card.setAttribute('aria-selected', on ? 'true' : 'false');
-            card.tabIndex = on ? 0 : -1;
-        });
-        panels.forEach(function (panel) {
-            var id = panel.id || '';
-            var match = id === 'login-workspace-' + name;
-            if (match) {
-                panel.removeAttribute('hidden');
-            } else {
-                panel.setAttribute('hidden', '');
-            }
-        });
-    }
-    document.querySelectorAll('[data-login-method]').forEach(function (card) {
-        card.addEventListener('click', function () {
-            selectMethod(card.getAttribute('data-login-method'));
-        });
-    });
 })();
 /*]]>*/
 </script>
