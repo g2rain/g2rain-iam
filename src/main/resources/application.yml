@@ -1,5 +1,7 @@
 server:
   port: ${SERVER_PORT:8082}
+  # 认反代传入的 X-Forwarded-Proto / Host，避免 302 Location 变成 http://
+  forward-headers-strategy: framework
 
 spring:
   threads:
