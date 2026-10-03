@@ -14,31 +14,21 @@ import com.g2rain.iam.utils.Constants;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.ModelAndView;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.Optional;
 
 
 /**
- * 页面控制器，负责渲染登录和授权同意页面。
+ * IAM 站内 HTML 入口：授权事务页（login / register）与非授权页（index / platform）分开映射。
  * <p>
- * 该控制器用于处理客户端的登录和授权请求，渲染登录页面和授权同意页面，并在需要时处理用户会话。
- * </p>
- * <p>
- * 使用示例：
- * <pre>{@code
- * // 通过 GET 请求跳转到登录页
- * /auth/login?clientId=client123&redirectUri=http://example.com/callback
- * }</pre>
+ * 登录与注册须绑定有效 {@code tid} 与流程 Cookie；consent 不提供公开 GET，由编排直接渲染。
+ * 无客户端上下文时不接受直接登录，统一回到业务侧再进 {@code /auth/authorize}。
  * </p>
  *
  * @author alpha
@@ -47,11 +37,6 @@ import java.util.Optional;
 @Controller
 @AllArgsConstructor
 public class PageController {
-
-    /**
-     * 资源加载器，用于检查模板文件是否存在。
-     */
-    private ResourceLoader resourceLoader;
 
     /**
      * IAM / 平台对外地址，用于首页「立即登录」绝对跳转。
@@ -98,21 +83,62 @@ public class PageController {
     }
 
     /**
-     * 注册页面渲染方法，处理 {@code /auth/register.html} 路径。
+     * IAM 首页：只认会话，不走授权事务。
      * <p>
-     * 须携带有效授权事务 {@code tid}；页面只注入 tid，不再透传完整 OAuth 参数。
+     * 已登录展示账号摘要；{@code from=logout} 展示游客页；否则回业务控制台。
+     * 授权必须从业务侧进入 {@code /auth/authorize}，本页不接收 OAuth 查询串。
      * </p>
+     */
+    @GetMapping(value = "/auth/index.html")
+    public ModelAndView indexPage(
+        @RequestParam(name = "redirectUri", required = false) String redirectUri,
+        @RequestParam(name = "from", required = false) String from,
+        @CookieValue(name = Constants.SESSION_NAME, required = false) String sessionId,
+        HttpServletRequest request,
+        Model model) {
+        Optional<SessionDto> activeSession = resolveActiveSession(sessionId, request);
+        if (activeSession.isPresent()) {
+            applyLoggedInIndexModel(model, activeSession.get());
+            return new ModelAndView("index", model.asMap());
+        }
+        if ("logout".equals(from)) {
+            applyGuestIndexModel(model, redirectUri);
+            return new ModelAndView("index", model.asMap());
+        }
+        return modelAndViewService.redirectPlatformMainHome();
+    }
+
+    /**
+     * 登录页：须有效授权事务 {@code tid}（与注册页相同）。
      * <p>
-     * 使用示例：
-     * <pre>{@code
-     * // 通过 GET 请求跳转到注册页
-     * /auth/register.html?tid=...
-     * }</pre>
+     * 已登录则按事务继续编排；未登录渲染登录页。可选 {@code loginMethod} 只选择卡片，不是授权上下文。
+     * 无 tid 不渲染登录表单。
      * </p>
-     *
-     * @param request 当前 HTTP 请求（校验 flow Cookie）
-     * @param tid     授权事务 ID
-     * @return 注册页视图或流程错误页
+     */
+    @GetMapping(value = "/auth/login.html")
+    public ModelAndView loginPage(
+        HttpServletRequest request,
+        @RequestParam(name = Constants.TID, required = false) String tid,
+        @RequestParam(name = "loginMethod", required = false) String loginMethod,
+        @CookieValue(name = Constants.SESSION_NAME, required = false) String sessionId) {
+        if (Strings.isBlank(tid)) {
+            return authorizationFlowService.renderFlowError(
+                null, "请从业务侧重新发起授权后再登录");
+        }
+        try {
+            AuthorizationTransactionDto txn = requireActiveTxn(request, tid);
+            Optional<SessionDto> activeSession = resolveActiveSession(sessionId, request);
+            if (activeSession.isPresent()) {
+                return authorizationFlowService.continueFlow(txn, activeSession.get().getSessionId());
+            }
+            return authorizationFlowService.renderLogin(txn, null, null, loginMethod);
+        } catch (Exception ex) {
+            return authorizationFlowService.renderFlowError(null, ex.getMessage());
+        }
+    }
+
+    /**
+     * 注册页：须携带有效授权事务 {@code tid}。
      */
     @GetMapping(value = "/auth/register.html")
     public ModelAndView registerPage(
@@ -123,112 +149,16 @@ public class PageController {
                 null, "请从业务侧重新发起授权后再注册");
         }
         try {
-            String flowHash = authFlowCookieService.hash(authFlowCookieService.readRaw(request));
-            AuthorizationTransactionDto txn = transactionService.requireActive(tid.trim(), flowHash);
+            AuthorizationTransactionDto txn = requireActiveTxn(request, tid);
             return authorizationFlowService.renderRegister(txn);
         } catch (Exception ex) {
             return authorizationFlowService.renderFlowError(null, ex.getMessage());
         }
     }
 
-    /**
-     * 通用页面渲染方法，处理 {@code /auth/*.html} 路径。
-     * <p>
-     * 根据路径中的文件名查找模板；{@code index}/{@code login} 会结合会话与授权事务
-     * {@code tid} 做登录态分流，其它页面直接渲染。
-     * </p>
-     * <p>
-     * 使用示例：
-     * <pre>{@code
-     * // 访问 /auth/index.html 会渲染 templates/index.html
-     * // 访问 /auth/login.html?tid=... 进入同一授权事务的登录编排
-     * }</pre>
-     * </p>
-     *
-     * @param filename        模板文件名（不包含 .html 后缀）
-     * @param redirectUri     可选回跳地址（首页游客态）
-     * @param clientId        可选客户端 ID（兼容旧入口，重定向至 /authorize）
-     * @param state           可选 state
-     * @param applicationCode 可选应用编码
-     * @param tid             授权事务 ID（登录页续跑）
-     * @param from            来源标记（如 logout）
-     * @param sessionId       当前会话 Cookie
-     * @param request         当前 HTTP 请求
-     * @param model           视图模型
-     * @return 模板视图、授权续跑重定向或错误页
-     */
-    @GetMapping(value = "/auth/{filename}.html")
-    public ModelAndView dynamicPage(@PathVariable(name = "filename") String filename,
-                                    @RequestParam(name = "redirectUri", required = false) String redirectUri,
-                                    @RequestParam(name = "clientId", required = false) String clientId,
-                                    @RequestParam(name = "state", required = false) String state,
-                                    @RequestParam(name = "applicationCode", required = false) String applicationCode,
-                                    @RequestParam(name = Constants.TID, required = false) String tid,
-                                    @RequestParam(name = "from", required = false) String from,
-                                    @CookieValue(name = Constants.SESSION_NAME, required = false) String sessionId,
-                                    HttpServletRequest request,
-                                    Model model) {
-        // 防止路径遍历攻击，确保文件名只包含合法字符
-        if (filename == null || filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
-            model.addAttribute("error", "非法的路径参数");
-            model.addAttribute("redirectUri", "");
-            return new ModelAndView("error");
-        }
-
-        // 检查模板文件是否存在
-        String templatePath = "classpath:/templates/" + filename + ".html";
-        Resource resource = resourceLoader.getResource(templatePath);
-
-        if (resource.exists() && resource.isReadable()) {
-            Optional<SessionDto> activeSession = resolveActiveSession(sessionId, request);
-
-            if ("index".equals(filename)) {
-                if (activeSession.isPresent()) {
-                    applyLoggedInIndexModel(model, activeSession.get());
-                    return new ModelAndView(filename, model.asMap());
-                }
-                if ("logout".equals(from)) {
-                    applyGuestIndexModel(model, redirectUri);
-                    return new ModelAndView(filename, model.asMap());
-                }
-                if (Strings.isNotBlank(clientId) && Strings.isNotBlank(redirectUri)) {
-                    return new ModelAndView(Constants.REDIRECT
-                        + buildAuthorizePageUrl(clientId, redirectUri, state, applicationCode));
-                }
-                return modelAndViewService.redirectPlatformMainHome();
-            }
-
-            if ("login".equals(filename)) {
-                if (Strings.isNotBlank(tid)) {
-                    try {
-                        String flowHash = authFlowCookieService.hash(authFlowCookieService.readRaw(request));
-                        AuthorizationTransactionDto txn = transactionService.requireActive(tid.trim(), flowHash);
-                        if (activeSession.isPresent()) {
-                            return authorizationFlowService.continueFlow(txn, activeSession.get().getSessionId());
-                        }
-                        return authorizationFlowService.renderLogin(txn, null, null);
-                    } catch (Exception ex) {
-                        return authorizationFlowService.renderFlowError(null, ex.getMessage());
-                    }
-                }
-                if (Strings.isNotBlank(clientId) && Strings.isNotBlank(redirectUri)) {
-                    return new ModelAndView(Constants.REDIRECT
-                        + buildAuthorizePageUrl(clientId, redirectUri, state, applicationCode));
-                }
-                if (activeSession.isPresent()) {
-                    return new ModelAndView(Constants.REDIRECT + "/auth/index.html");
-                }
-                return modelAndViewService.redirectPlatformMainHome();
-            }
-
-            return new ModelAndView(filename);
-        }
-
-        // 模板不存在，返回错误页面
-        String requestPath = "/auth/" + filename + ".html";
-        model.addAttribute("error", "请求的页面不存在: " + requestPath);
-        model.addAttribute("redirectUri", "");
-        return new ModelAndView("error");
+    private AuthorizationTransactionDto requireActiveTxn(HttpServletRequest request, String tid) {
+        String flowHash = authFlowCookieService.hash(authFlowCookieService.readRaw(request));
+        return transactionService.requireActive(tid.trim(), flowHash);
     }
 
     private void applyGuestIndexModel(Model model, String redirectUri) {
@@ -309,23 +239,6 @@ public class PageController {
         }
         SessionDto session = sessionService.getSession(resolvedSessionId.trim());
         return session == null ? Optional.empty() : Optional.of(session);
-    }
-
-    String buildAuthorizePageUrl(String clientId, String redirectUri, String state, String applicationCode) {
-        UriComponentsBuilder builder = UriComponentsBuilder.fromPath("/auth/authorize");
-        if (Strings.isNotBlank(clientId)) {
-            builder.queryParam("clientId", clientId.trim());
-        }
-        if (Strings.isNotBlank(redirectUri)) {
-            builder.queryParam("redirectUri", redirectUri.trim());
-        }
-        if (Strings.isNotBlank(state)) {
-            builder.queryParam("state", state);
-        }
-        if (Strings.isNotBlank(applicationCode)) {
-            builder.queryParam("applicationCode", applicationCode.trim());
-        }
-        return builder.build(true).toUriString();
     }
 
     private static String resolveLoginMethod(String idpType) {

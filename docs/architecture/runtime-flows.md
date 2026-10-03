@@ -18,7 +18,7 @@
 
 出站时使用事务内冻结的 `redirectUri`/`state`，事务终态化。本轮不做回调白名单。创建事务时不校验 Client DPoP（与现网一致）；持钥在 `/auth/token` 换票时校验。
 
-站内页面、登录、注册与 IdP 只认 `tid` + 流程 Cookie；已移除 Session `oauth*` 与页面间全参数透传。
+站内 HTML 显式映射：`/auth/login.html` 与 `/auth/register.html` 只认 `tid`（+ 流程 Cookie）；`/auth/index.html` 与 `/auth/platform` 不走事务、不接收 OAuth 查询串。consent 无公开 GET。无 `{filename}` 通配。已移除 Session `oauth*` 与页面间全参数透传。
 
 ## Token
 

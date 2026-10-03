@@ -1,6 +1,7 @@
 package com.g2rain.iam.controller;
 
 import com.g2rain.iam.config.IamAccessProperties;
+import com.g2rain.iam.dto.AuthorizationTransactionDto;
 import com.g2rain.iam.dto.SessionDto;
 import com.g2rain.iam.service.AuthFlowCookieService;
 import com.g2rain.iam.service.AuthorizationFlowService;
@@ -9,14 +10,11 @@ import com.g2rain.iam.service.ModelAndViewService;
 import com.g2rain.iam.service.SessionService;
 import com.g2rain.iam.utils.Constants;
 import jakarta.servlet.http.Cookie;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.ResourceLoader;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.ui.ExtendedModelMap;
 import org.springframework.web.servlet.ModelAndView;
@@ -24,8 +22,6 @@ import org.springframework.web.servlet.ModelAndView;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,12 +29,6 @@ import static org.mockito.Mockito.when;
 class PageControllerSessionTest {
 
     private static final String PLATFORM_HOME = Constants.REDIRECT + "https://platform.example.com/main/home";
-
-    @Mock
-    private ResourceLoader resourceLoader;
-
-    @Mock
-    private Resource resource;
 
     @Mock
     private IamAccessProperties iamAccessProperties;
@@ -61,13 +51,6 @@ class PageControllerSessionTest {
     @InjectMocks
     private PageController pageController;
 
-    @BeforeEach
-    void setUpResource() {
-        lenient().when(resourceLoader.getResource(anyString())).thenReturn(resource);
-        lenient().when(resource.exists()).thenReturn(true);
-        lenient().when(resource.isReadable()).thenReturn(true);
-    }
-
     @Test
     void indexWithoutSessionRedirectsToPlatformMainHome() {
         MockHttpServletRequest request = new MockHttpServletRequest();
@@ -75,8 +58,8 @@ class PageControllerSessionTest {
         when(modelAndViewService.redirectPlatformMainHome())
             .thenReturn(new ModelAndView(PLATFORM_HOME));
 
-        ModelAndView view = pageController.dynamicPage(
-            "index", null, null, null, null, null, null, null, request, model);
+        ModelAndView view = pageController.indexPage(
+            null, null, null, request, model);
 
         assertEquals(PLATFORM_HOME, view.getViewName());
         verify(modelAndViewService).redirectPlatformMainHome();
@@ -99,8 +82,8 @@ class PageControllerSessionTest {
         ExtendedModelMap model = new ExtendedModelMap();
         when(iamAccessProperties.resolvedPlatformBaseUrl()).thenReturn("https://platform.example.com");
 
-        ModelAndView view = pageController.dynamicPage(
-            "index", null, null, null, null, null, "logout", null, request, model);
+        ModelAndView view = pageController.indexPage(
+            null, "logout", null, request, model);
 
         assertEquals("index", view.getViewName());
         assertFalse((Boolean) model.get("loggedIn"));
@@ -120,8 +103,8 @@ class PageControllerSessionTest {
         when(iamAccessProperties.resolvedPlatformBaseUrl()).thenReturn("https://iam.example.com");
         ExtendedModelMap model = new ExtendedModelMap();
 
-        ModelAndView view = pageController.dynamicPage(
-            "index", null, null, null, null, null, null, "session-1", request, model);
+        ModelAndView view = pageController.indexPage(
+            null, null, "session-1", request, model);
 
         assertEquals("index", view.getViewName());
         assertEquals(true, model.get("loggedIn"));
@@ -131,104 +114,63 @@ class PageControllerSessionTest {
     }
 
     @Test
-    void loginWithSessionWithoutOAuthRedirectsToIndex() {
+    void loginWithoutTidRendersFlowError() {
         MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setCookies(new Cookie(Constants.SESSION_NAME, "session-2"));
+        when(authorizationFlowService.renderFlowError(null, "请从业务侧重新发起授权后再登录"))
+            .thenReturn(new ModelAndView("error"));
+
+        ModelAndView view = pageController.loginPage(request, null, null, "session-2");
+
+        assertEquals("error", view.getViewName());
+        verify(authorizationFlowService).renderFlowError(null, "请从业务侧重新发起授权后再登录");
+    }
+
+    @Test
+    void loginWithTidRendersLogin() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        AuthorizationTransactionDto txn = new AuthorizationTransactionDto();
+        txn.setTid("tid-1");
+        when(authFlowCookieService.readRaw(request)).thenReturn("flow");
+        when(authFlowCookieService.hash("flow")).thenReturn("hash");
+        when(transactionService.requireActive("tid-1", "hash")).thenReturn(txn);
+        when(authorizationFlowService.renderLogin(txn, null, null, "wecom"))
+            .thenReturn(new ModelAndView("login"));
+
+        ModelAndView view = pageController.loginPage(request, "tid-1", "wecom", null);
+
+        assertEquals("login", view.getViewName());
+        verify(authorizationFlowService).renderLogin(txn, null, null, "wecom");
+    }
+
+    @Test
+    void loginWithTidAndSessionContinuesFlow() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        AuthorizationTransactionDto txn = new AuthorizationTransactionDto();
+        txn.setTid("tid-2");
         SessionDto session = new SessionDto();
         session.setSessionId("session-2");
         when(sessionService.getSession("session-2")).thenReturn(session);
-        ExtendedModelMap model = new ExtendedModelMap();
+        when(authFlowCookieService.readRaw(request)).thenReturn("flow");
+        when(authFlowCookieService.hash("flow")).thenReturn("hash");
+        when(transactionService.requireActive("tid-2", "hash")).thenReturn(txn);
+        when(authorizationFlowService.continueFlow(txn, "session-2"))
+            .thenReturn(new ModelAndView(Constants.REDIRECT + "/auth/authorize?tid=tid-2"));
 
-        ModelAndView view = pageController.dynamicPage(
-            "login", null, null, null, null, null, null, "session-2", request, model);
+        ModelAndView view = pageController.loginPage(request, "tid-2", null, "session-2");
 
-        assertEquals(Constants.REDIRECT + "/auth/index.html", view.getViewName());
-    }
-
-    @Test
-    void loginWithSessionAndOAuthRedirectsToAuthorize() {
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        SessionDto session = new SessionDto();
-        session.setSessionId("session-3");
-        when(sessionService.getSession("session-3")).thenReturn(session);
-        ExtendedModelMap model = new ExtendedModelMap();
-
-        ModelAndView view = pageController.dynamicPage(
-            "login",
-            "https://app.test/callback",
-            "client-a",
-            "state-x",
-            null,
-            null,
-            null,
-            "session-3",
-            request,
-            model);
-
-        assertTrue(view.getViewName().startsWith(Constants.REDIRECT));
         assertTrue(view.getViewName().contains("/auth/authorize"));
-        assertTrue(view.getViewName().contains("clientId=client-a"));
-        assertTrue(view.getViewName().contains("redirectUri="));
-        assertTrue(view.getViewName().contains("state=state-x"));
+        verify(authorizationFlowService).continueFlow(txn, "session-2");
     }
 
     @Test
-    void indexWithoutSessionWithOAuthRedirectsToAuthorize() {
+    void registerWithoutTidRendersFlowError() {
         MockHttpServletRequest request = new MockHttpServletRequest();
-        ExtendedModelMap model = new ExtendedModelMap();
+        when(authorizationFlowService.renderFlowError(null, "请从业务侧重新发起授权后再注册"))
+            .thenReturn(new ModelAndView("error"));
 
-        ModelAndView view = pageController.dynamicPage(
-            "index",
-            "https://app.test/callback",
-            "client-a",
-            "state-x",
-            null,
-            null,
-            null,
-            null,
-            request,
-            model);
+        ModelAndView view = pageController.registerPage(request, null);
 
-        assertTrue(view.getViewName().startsWith(Constants.REDIRECT));
-        assertTrue(view.getViewName().contains("/auth/authorize"));
-        assertTrue(view.getViewName().contains("clientId=client-a"));
-        assertTrue(view.getViewName().contains("redirectUri="));
-        assertTrue(view.getViewName().contains("state=state-x"));
-    }
-
-    @Test
-    void loginWithoutOAuthRedirectsToPlatformMainHome() {
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        ExtendedModelMap model = new ExtendedModelMap();
-        when(modelAndViewService.redirectPlatformMainHome())
-            .thenReturn(new ModelAndView(PLATFORM_HOME));
-
-        ModelAndView view = pageController.dynamicPage(
-            "login", null, null, null, null, null, null, null, request, model);
-
-        assertEquals(PLATFORM_HOME, view.getViewName());
-        verify(modelAndViewService).redirectPlatformMainHome();
-    }
-
-    @Test
-    void loginWithOAuthNoSessionRedirectsToAuthorize() {
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        ExtendedModelMap model = new ExtendedModelMap();
-
-        ModelAndView view = pageController.dynamicPage(
-            "login",
-            "https://app.test/callback",
-            "client-a",
-            "state-x",
-            null,
-            null,
-            null,
-            null,
-            request,
-            model);
-
-        assertTrue(view.getViewName().startsWith(Constants.REDIRECT));
-        assertTrue(view.getViewName().contains("/auth/authorize"));
-        assertTrue(view.getViewName().contains("clientId=client-a"));
+        assertEquals("error", view.getViewName());
+        verify(authorizationFlowService).renderFlowError(null, "请从业务侧重新发起授权后再注册");
     }
 }

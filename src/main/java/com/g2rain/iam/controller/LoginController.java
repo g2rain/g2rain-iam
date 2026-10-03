@@ -124,7 +124,7 @@ public class LoginController {
             try {
                 String flowHash = authFlowCookieService.hash(authFlowCookieService.readRaw(request));
                 AuthorizationTransactionDto txn = transactionService.requireReadable(tid.trim(), flowHash);
-                return authorizationFlowService.renderLogin(txn, ex.getMessage(), username);
+                return authorizationFlowService.renderLogin(txn, ex.getMessage(), username, "password");
             } catch (BusinessException ignored) {
                 return authorizationFlowService.renderFlowError(null, ex.getMessage());
             }
@@ -133,7 +133,7 @@ public class LoginController {
             try {
                 String flowHash = authFlowCookieService.hash(authFlowCookieService.readRaw(request));
                 AuthorizationTransactionDto txn = transactionService.requireReadable(tid.trim(), flowHash);
-                return authorizationFlowService.renderLogin(txn, "用户名或密码错误", username);
+                return authorizationFlowService.renderLogin(txn, "用户名或密码错误", username, "password");
             } catch (BusinessException ex) {
                 return authorizationFlowService.renderFlowError(null, ex.getMessage());
             }

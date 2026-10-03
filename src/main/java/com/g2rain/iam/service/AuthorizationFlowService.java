@@ -130,6 +130,20 @@ public class AuthorizationFlowService {
      * @return 登录页视图
      */
     public ModelAndView renderLogin(AuthorizationTransactionDto txn, String error, String username) {
+        return renderLogin(txn, error, username, null);
+    }
+
+    /**
+     * 渲染登录页，并选定方法卡片（须属于冻结策略，否则回退默认优先级）。
+     *
+     * @param txn                  授权事务
+     * @param error                错误信息（可选）
+     * @param username             用户名回显（可选）
+     * @param preferredLoginMethod {@code password} / {@code dingtalk} / {@code wecom}（可选）
+     * @return 登录页视图
+     */
+    public ModelAndView renderLogin(
+        AuthorizationTransactionDto txn, String error, String username, String preferredLoginMethod) {
         ModelAndView mv = new ModelAndView("login");
         ModelMap model = mv.getModelMap();
         model.addAttribute(Constants.TID, txn.getTid());
@@ -141,18 +155,49 @@ public class AuthorizationFlowService {
         }
         AuthPolicySnapshot policy = txn.getAuthPolicy();
         boolean hasPassword = policy != null && policy.allows(LoginMethod.PASSWORD);
+        boolean hasDingTalk = policy != null && policy.allows(LoginMethod.DINGTALK)
+            && Strings.isNotBlank(policy.getDingTalkBindMode());
+        boolean hasWeCom = policy != null && policy.allows(LoginMethod.WECOM)
+            && Strings.isNotBlank(policy.getWeComBindMode());
         boolean allowRegister = policy != null && policy.isAllowRegister();
         model.addAttribute("hasPassword", hasPassword);
         model.addAttribute("allowRegister", allowRegister);
-        if (policy != null && policy.allows(LoginMethod.DINGTALK)
-            && Strings.isNotBlank(policy.getDingTalkBindMode())) {
+        if (hasDingTalk) {
             model.addAttribute("dingTalkBindMode", policy.getDingTalkBindMode());
         }
-        if (policy != null && policy.allows(LoginMethod.WECOM)
-            && Strings.isNotBlank(policy.getWeComBindMode())) {
+        if (hasWeCom) {
             model.addAttribute("weComBindMode", policy.getWeComBindMode());
         }
+        model.addAttribute("loginMethod", resolveLoginMethod(
+            preferredLoginMethod, hasPassword, hasDingTalk, hasWeCom));
         return mv;
+    }
+
+    /**
+     * 选定登录卡片：优先使用冻结策略内的 preferred，否则 密码 &gt; 钉钉 &gt; 企微。
+     */
+    static String resolveLoginMethod(
+        String preferred, boolean hasPassword, boolean hasDingTalk, boolean hasWeCom) {
+        String normalized = Strings.isBlank(preferred) ? "" : preferred.trim().toLowerCase();
+        if ("password".equals(normalized) && hasPassword) {
+            return "password";
+        }
+        if ("dingtalk".equals(normalized) && hasDingTalk) {
+            return "dingtalk";
+        }
+        if ("wecom".equals(normalized) && hasWeCom) {
+            return "wecom";
+        }
+        if (hasPassword) {
+            return "password";
+        }
+        if (hasDingTalk) {
+            return "dingtalk";
+        }
+        if (hasWeCom) {
+            return "wecom";
+        }
+        return "";
     }
 
     /**

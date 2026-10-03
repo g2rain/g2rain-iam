@@ -249,6 +249,7 @@ class AuthorizationFlowServiceTest {
         assertEquals(false, mv.getModel().get("allowRegister"));
         assertEquals("INTERNAL", mv.getModel().get("weComBindMode"));
         assertNull(mv.getModel().get("dingTalkBindMode"));
+        assertEquals("wecom", mv.getModel().get("loginMethod"));
     }
 
     @Test
