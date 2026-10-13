@@ -1,5 +1,7 @@
 server:
   port: ${SERVER_PORT:8082}
+  # 认反代传入的 X-Forwarded-Proto / Host，避免 302 Location 变成 http://
+  forward-headers-strategy: framework
 
 spring:
   threads:
@@ -135,3 +137,20 @@ g2rain:
       credential:
         encryption-key: ${WECOM_CREDENTIAL_ENCRYPTION_KEY:}
         key-id: ${WECOM_CREDENTIAL_KEY_ID:default}
+    auth-policy:
+      default:
+        login-methods:
+          - PASSWORD
+        allow-register: true
+      applications:
+        g2rain-main-shell:
+          login-methods:
+            - PASSWORD
+            - WECOM
+          we-com-bind-mode: INTERNAL
+          allow-register: false
+        g2rain-admin-shell:
+          login-methods:
+            - WECOM
+          we-com-bind-mode: INTERNAL
+          allow-register: false

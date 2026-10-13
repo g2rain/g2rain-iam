@@ -55,6 +55,11 @@ public class Constants {
     public static final String STATE = "state";
 
     /**
+     * 开放平台目标应用编码参数名。
+     */
+    public static final String APPLICATION_CODE = "applicationCode";
+
+    /**
      * 匿名 OAuth 授权的 state 标识值。
      */
     public static final String STATE_ANONYMOUS = "anonymous";
@@ -70,6 +75,16 @@ public class Constants {
      * Session 名称字段，通常用于存储用户的身份验证会话 ID。
      */
     public static final String SESSION_NAME = "G2RAIN_AUTH_SESSION_ID";
+
+    /**
+     * 授权流程 Cookie：与 tid 绑定，禁止跨浏览器续跑。
+     */
+    public static final String AUTH_FLOW_COOKIE_NAME = "G2RAIN_AUTH_FLOW";
+
+    /**
+     * 授权事务 ID 请求参数名。
+     */
+    public static final String TID = "tid";
 
     /**
      * 第三方身份源（钉钉等）自动建号时写入 Basis 的占位密码：新建 passport 必填字段，

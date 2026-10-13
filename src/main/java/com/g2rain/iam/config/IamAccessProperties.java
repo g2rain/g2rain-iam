@@ -52,6 +52,12 @@ public class IamAccessProperties {
     private final AnonymousAuth anonymous = new AnonymousAuth();
 
     /**
+     * 授权事务（tid）配置。
+     */
+    @NestedConfigurationProperty
+    private final AuthorizationTransaction authorizationTransaction = new AuthorizationTransaction();
+
+    /**
      * {@link #baseUrl} 已 trim、去尾斜杠。
      */
     public String normalizedBaseUrl() {
@@ -155,5 +161,20 @@ public class IamAccessProperties {
                 && Objects.nonNull(organId)
                 && Collections.isNotEmpty(roleIds);
         }
+    }
+
+    @Getter
+    @Setter
+    public static class AuthorizationTransaction {
+
+        /**
+         * 授权事务 TTL（秒），默认 10 分钟。
+         */
+        private int ttlSeconds = 10 * 60;
+
+        /**
+         * SELF 开通租约（秒）。
+         */
+        private int activationLeaseSeconds = 60;
     }
 }

@@ -1,6 +1,5 @@
 package com.g2rain.iam.service;
 
-
 import com.g2rain.common.utils.Strings;
 import com.g2rain.data.redis.GenericRedisHelper;
 import com.g2rain.iam.dto.AuthorizationCodeDto;
@@ -11,6 +10,7 @@ import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 
@@ -22,7 +22,6 @@ import java.util.List;
  * <p>
  * 使用示例：
  * <pre>{@code
- * // 根据当前会话和客户端信息生成授权码
  * String code = authorizationService.generateAuthorizationCode(session, "client123", "user456");
  * }</pre>
  * </p>
@@ -40,41 +39,35 @@ public class AuthorizationService {
     private GenericRedisHelper genericRedisHelper;
 
     /**
-     * 生成授权码并存储在 Redis 中。
-     * <p>
-     * 根据当前会话、客户端 ID 和用户 ID 生成唯一授权码，并将对应的 {@link AuthorizationCodeDto} 对象存入 Redis，
-     * 设置过期时间为 10 分钟。
-     * </p>
+     * 生成授权码并存储在 Redis 中（默认 TTL 10 分钟）。
      *
-     * @param session  当前用户会话信息
-     * @param clientId 客户端 ID
+     * @param session              当前用户会话信息
+     * @param clientId             客户端 ID
      * @param userId               用户 ID
      * @param thirdPartyIdpLogin   是否外部身份源（如钉钉）授权链路发码
-     * @return {@link String} 生成的授权码
+     * @return 生成的授权码
      */
     public String generateAuthorizationCode(SessionDto session, String clientId, String userId, boolean thirdPartyIdpLogin) {
-        // 1. 校验用户名 + 密码是否正确
-        AuthorizationCodeDto codeDto = new AuthorizationCodeDto();
-        codeDto.setSessionId(session.getSessionId());
-        codeDto.setClientId(clientId);
-        codeDto.setUserId(userId);
-        codeDto.setThirdPartyIdpLogin(thirdPartyIdpLogin);
-        codeDto.setIdpType(Strings.isBlank(session.getIdpType()) ? null : session.getIdpType().trim());
-        codeDto.setIdpSubject(Strings.isBlank(session.getIdpSubject()) ? null : session.getIdpSubject().trim());
-        codeDto.setIdpApplicationCode(Strings.isBlank(session.getIdpApplicationCode()) ? null : session.getIdpApplicationCode().trim());
-        codeDto.setIdpBindMode(Strings.isBlank(session.getIdpBindMode()) ? null : session.getIdpBindMode().trim());
+        return generateAuthorizationCode(session, clientId, userId, thirdPartyIdpLogin, null, null, null);
+    }
 
-        // 2. 生成授权码
-        String code = IamUtils.generateAuthorizationCode();
-
-        // 3. 存 session，10 分钟过期
-        genericRedisHelper.set(
-            RedisKeyRule.AUTHORIZATION_CODE.format(code),
-            codeDto,
-            Duration.ofMinutes(10)
-        );
-
-        return code;
+    /**
+     * 生成授权码并写入 Redis。
+     * <p>
+     * 绑定 {@code applicationCode} 时额外写入 {@code applicationId}、{@code organId}，TTL 为 5 分钟；否则 TTL 为 10 分钟。
+     * </p>
+     */
+    public String generateAuthorizationCode(
+        SessionDto session,
+        String clientId,
+        String userId,
+        boolean thirdPartyIdpLogin,
+        String applicationCode,
+        Long applicationId,
+        Long organId) {
+        Duration ttl = Strings.isNotBlank(applicationCode) ? Duration.ofMinutes(5) : Duration.ofMinutes(10);
+        return storeAuthorizationCode(
+            session, clientId, userId, thirdPartyIdpLogin, applicationCode, applicationId, organId, ttl);
     }
 
     /**
@@ -104,6 +97,45 @@ public class AuthorizationService {
             RedisKeyRule.AUTHORIZATION_CODE.format(code),
             codeDto,
             Duration.ofMinutes(10)
+        );
+        return code;
+    }
+
+    private String storeAuthorizationCode(
+        SessionDto session,
+        String clientId,
+        String userId,
+        boolean thirdPartyIdpLogin,
+        String applicationCode,
+        Long applicationId,
+        Long organId,
+        Duration ttl) {
+        AuthorizationCodeDto codeDto = new AuthorizationCodeDto();
+        codeDto.setSessionId(session.getSessionId());
+        codeDto.setClientId(clientId);
+        codeDto.setUserId(userId);
+        codeDto.setThirdPartyIdpLogin(thirdPartyIdpLogin);
+        codeDto.setIdpType(Strings.isBlank(session.getIdpType()) ? null : session.getIdpType().trim());
+        codeDto.setIdpSubject(Strings.isBlank(session.getIdpSubject()) ? null : session.getIdpSubject().trim());
+        codeDto.setIdpApplicationCode(Strings.isBlank(session.getIdpApplicationCode()) ? null : session.getIdpApplicationCode().trim());
+        codeDto.setIdpBindMode(Strings.isBlank(session.getIdpBindMode()) ? null : session.getIdpBindMode().trim());
+
+        Instant now = Instant.now();
+        codeDto.setIssuedAt(now.getEpochSecond());
+        codeDto.setExpiresAt(now.plus(ttl).getEpochSecond());
+
+        if (Strings.isNotBlank(applicationCode)) {
+            codeDto.setApplicationCode(applicationCode.trim());
+            codeDto.setApplicationId(applicationId);
+            codeDto.setOrganId(organId);
+        }
+
+        // 生成授权码并存入 Redis
+        String code = IamUtils.generateAuthorizationCode();
+        genericRedisHelper.set(
+            RedisKeyRule.AUTHORIZATION_CODE.format(code),
+            codeDto,
+            ttl
         );
         return code;
     }

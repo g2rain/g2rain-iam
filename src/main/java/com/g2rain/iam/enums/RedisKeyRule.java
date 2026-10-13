@@ -37,6 +37,21 @@ public enum RedisKeyRule {
     AUTHORIZATION_CODE("auth:authorization:%s"),
 
     /**
+     * 授权事务，格式为 "auth:authorization:txn:{tid}"
+     */
+    AUTHORIZATION_TRANSACTION("auth:authorization:txn:%s"),
+
+    /**
+     * 流程 Cookie 下未完成 tid 集合，格式为 "auth:authorization:flow:{flowCookieHash}"
+     */
+    AUTHORIZATION_FLOW_INDEX("auth:authorization:flow:%s"),
+
+    /**
+     * 事务去重键，格式为 "auth:authorization:dedup:{mode}:{applicationCode}:{clientId}:{stateHash}"
+     */
+    AUTHORIZATION_DEDUP("auth:authorization:dedup:%s:%s:%s:%s"),
+
+    /**
      * 钉钉 OAuth 防 CSRF 的 state，格式为 "auth:dingtalk:oauth:state:{state}"
      */
     DINGTALK_OAUTH_STATE("auth:dingtalk:oauth:state:%s"),
@@ -64,7 +79,27 @@ public enum RedisKeyRule {
     /**
      * 企业微信第三方应用 suite_access_token。
      */
-    WECOM_SUITE_ACCESS_TOKEN("auth:wecom:suite:token:%s");
+    WECOM_SUITE_ACCESS_TOKEN("auth:wecom:suite:token:%s"),
+
+    /**
+     * 企业微信回调解密防重放指纹。
+     */
+    WECOM_CALLBACK_REPLAY("auth:wecom:callback:replay:%s"),
+
+    /**
+     * 客服 decrypt 签发的会员解析短时码（TTL 内可复用校验，非单次消费）。
+     */
+    MEMBER_RESOLVE_CODE("auth:member:resolve:code:%s"),
+
+    /**
+     * MEMBER 会话 Token 复用缓存，按 organId + externalUserId + applicationCode。
+     */
+    MEMBER_SESSION_TOKEN("auth:member:session:token:%s:%s:%s"),
+
+    /**
+     * IdP 企业管理员开通租户资格（passportId），与 Session TTL 对齐。
+     */
+    IDP_TENANT_PROVISION_ELIGIBLE("auth:idp:tenant-provision:eligible:%s");
 
     /**
      * Redis 键的格式规则，使用占位符 %s。

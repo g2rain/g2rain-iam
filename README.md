@@ -52,6 +52,8 @@
 
 该仓库位于 g2rain 后端平台链路中，是统一认证与授权服务。 它与 g2rain-basis、g2rain-basis-api、g2rain-common、g2rain-gateway-webflux、g2rain-gateway-webmvc 在主数据访问与平台集成方面协同工作。 在协议层面，它负责签发授权码与访问令牌，而不只是一个页面级登录模块。 它还协调第三方身份提供方的接入与绑定流程。
 
+本项目已在中央架构库登记为 `identity-security-service` 类型的 `platform-singleton`，是 G2rain 唯一统一身份安全服务；当前不创建空泛的通用 Profile。项目事实见 [docs/project.yaml](docs/project.yaml)，完整文档入口见 [docs/index.md](docs/index.md)。
+
 ## 业务域说明
 
 该仓库聚焦于 `身份与访问控制`。
@@ -331,6 +333,15 @@ flowchart TD
 ## 12. 使用建议
 
 本项目基于 [Apache 2.0许可证](https://github.com/g2rain/g2rain-common/blob/main/LICENSE) 开源。
+
+## 工程文档
+
+- [文档导航](docs/index.md)
+- [项目元数据](docs/project.yaml)
+- [架构偏差](docs/architecture/deviations.md)
+- [配置与部署](docs/operations/configuration.md)
+- [安全边界](docs/security/security-boundaries.md)
+- [需求入口](docs/requirements/README.md)
 
 ## 联系我们
 

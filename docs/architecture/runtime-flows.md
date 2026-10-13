@@ -1,0 +1,33 @@
+# 运行流程
+
+## 登录与授权码
+
+业务侧生成本地 Client DPoP 上下文后，顶层进入 `/auth/authorize`：
+
+- **全参数、无 `tid`**：创建 Redis 授权事务，写入/复用流程 Cookie `G2RAIN_AUTH_FLOW`（`SameSite=Lax`），`303` 到仅含 `tid` 的续跑 URL。
+- **仅 `tid`**：校验 `tid` + 流程 Cookie，按事务状态继续（登录 / 选用户 / 应用授权确认 / 发码）。
+
+未登录则进入登录或 IdP；IAM 站内页面只携带 `tid`。建事务时按 `applicationCode` 从 IAM `g2rain.iam.auth-policy` **互斥整段选用**专条或 `default`，与平台 IdP 能力求交后冻结为 `authPolicy`（密码 / 钉钉 / 企微 / 是否允许注册）。登录页与 `POST /auth/login`、IdP、注册只认冻结快照，专条不合并 default。示例专条：`g2rain-main-shell`、`g2rain-admin-shell`；开放平台应用一般命中 default。
+
+有 `applicationCode` 时（认证后）另经 Basis `/application/list` 解析 `applicationType`，并将结果冻结为事务字段 `openPlatformConsent`：
+
+- 未携带 `applicationCode`：单用户直接发码并回调；多用户先选用户再发码（授权码默认 10 分钟 TTL，不绑定应用）。
+- `SUPPORT` / `SYSTEM`：忽略 `applicationCode`，行为同无参路径。
+- `PUBLIC` / `PRIVATE`：进入 consent；确认后调用 Basis `activate_self` 开通全部 `SELF` 并发码（5 分钟 TTL，绑定应用）。拒绝则 `access_denied`。
+- 查不到应用、调用失败或类型非法：错误页，不发码。
+
+出站时使用事务内冻结的 `redirectUri`/`state`，事务终态化。本轮不做回调白名单。创建事务时不校验 Client DPoP（与现网一致）；持钥在 `/auth/token` 换票时校验。
+
+站内 HTML 显式映射：`/auth/login.html` 与 `/auth/register.html` 只认 `tid`（+ 流程 Cookie）；`/auth/index.html` 与 `/auth/platform` 不走事务、不接收 OAuth 查询串。consent 无公开 GET。无 `{filename}` 通配。已移除 Session `oauth*` 与页面间全参数透传。
+
+## Token
+
+调用 `/auth/token` → DPoP Filter 校验证明 → 校验 grant、授权码/刷新凭据和客户端 → 选择活动密钥 → 签发访问 Token → 更新一次性或刷新状态。
+
+## IdP
+
+登录页仅在冻结策略允许时展示对应方式（密码 / 钉钉 / 企微），多种方式用对等卡片切换工作区，且只带 `tid` 发起；IAM 将 `idp_state` 映射到事务。外部回调后校验流程 Cookie，绑定 Session，再按事务状态继续授权。
+
+## 密钥轮换
+
+发布新 key → 保留验证所需旧公钥 → 激活新签名 key → 同步 Gateway → 等待旧 Token 生命周期 → 撤销旧 key。轮换必须可回滚。

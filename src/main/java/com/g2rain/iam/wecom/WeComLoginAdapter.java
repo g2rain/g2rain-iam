@@ -18,9 +18,17 @@ public interface WeComLoginAdapter {
      *
      * @param state       IAM opaque state
      * @param callbackUrl IAM 回调地址
+     * @param weComUserType 企微 SSO usertype：member（员工）或 admin（管理员）；与 SessionType.MEMBER 无关
      * @return 企业微信授权页完整 URL
      */
-    String buildAuthorizeUrl(String state, String callbackUrl);
+    String buildAuthorizeUrl(String state, String callbackUrl, String weComUserType);
+
+    /**
+     * @deprecated 使用 {@link #buildAuthorizeUrl(String, String, String)}
+     */
+    default String buildAuthorizeUrl(String state, String callbackUrl) {
+        return buildAuthorizeUrl(state, callbackUrl, "member");
+    }
 
     /**
      * 使用授权码换票并解析用户主体

@@ -38,7 +38,8 @@ public class InternalWeComLoginAdapter extends AbstractWeComLoginAdapter {
     }
 
     @Override
-    public String buildAuthorizeUrl(String state, String callbackUrl) {
+    public String buildAuthorizeUrl(String state, String callbackUrl, String weComUserType) {
+        // 企业内部 qrConnect 无 usertype 参数；管理员断言在登录后由服务侧完成
         requireInternalCredentials();
         WeComIamProperties.Internal config = properties.getInternal();
         return UriComponentsBuilder.fromUriString(AUTHORIZE_URL)

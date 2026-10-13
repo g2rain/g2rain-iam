@@ -23,6 +23,122 @@
     line-height: 1.5;
 }
 
+/* ---------- 登录方式卡片 ---------- */
+.login-page .login-method-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+    gap: 10px;
+    margin: 0 0 1.25rem;
+}
+
+.login-page .login-method-card {
+    appearance: none;
+    -webkit-appearance: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-width: 0;
+    margin: 0;
+    padding: 0.9rem 0.55rem 0.85rem;
+    font: inherit;
+    color: #cbd5e1;
+    background: rgba(2, 6, 23, 0.42);
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 14px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+    text-align: center;
+    user-select: none;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-page .login-method-card:hover {
+    color: #e2e8f0;
+    background: rgba(30, 41, 59, 0.55);
+    border-color: rgba(165, 180, 252, 0.4);
+}
+
+.login-page .login-method-card:focus-visible {
+    outline: 2px solid rgba(129, 140, 248, 0.8);
+    outline-offset: 2px;
+}
+
+.login-page .login-method-card-active,
+.login-page .login-method-card-active:hover {
+    color: #f8fafc;
+    background: linear-gradient(180deg, rgba(79, 70, 229, 0.38) 0%, rgba(30, 41, 59, 0.72) 100%);
+    border-color: rgba(165, 180, 252, 0.72);
+    box-shadow:
+        0 0 0 1px rgba(129, 140, 248, 0.4),
+        0 8px 22px rgba(79, 70, 229, 0.22);
+}
+
+.login-page .login-method-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(99, 102, 241, 0.18);
+    color: #a5b4fc;
+}
+
+.login-page .login-method-card-active .login-method-icon {
+    background: rgba(129, 140, 248, 0.32);
+    color: #e0e7ff;
+}
+
+.login-page .login-method-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    line-height: 1.3;
+}
+
+.login-page .login-method-hint {
+    font-size: 0.6875rem;
+    line-height: 1.35;
+    color: #64748b;
+}
+
+.login-page .login-method-card-active .login-method-hint {
+    color: #c7d2fe;
+}
+
+/* ---------- 工作区 ---------- */
+.login-page .login-workspace {
+    min-height: 0;
+}
+
+.login-page .login-workspace-panel[hidden] {
+    display: none !important;
+}
+
+.login-page .login-workspace-panel:not([hidden]) {
+    display: block;
+    animation: login-workspace-in 0.22s ease;
+}
+
+@keyframes login-workspace-in {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .login-page .login-workspace-panel:not([hidden]) {
+        animation: none;
+    }
+}
+
 /* ---------- 表单（深色面板内） ---------- */
 .login-page .landing-op-login .form-group {
     margin-bottom: 1.125rem;
@@ -98,95 +214,16 @@
     box-shadow: 0 6px 22px rgba(102, 126, 234, 0.45);
 }
 
-/* ---------- Tab：轨道 + 分段 ---------- */
-.login-page .login-tabs {
-    margin-top: 0.125rem;
-}
-
-.login-page .login-tab-bar {
-    display: flex;
-    gap: 5px;
-    padding: 5px;
-    margin-bottom: 1.375rem;
-    border-radius: 12px;
-    background: rgba(2, 6, 23, 0.4);
-    border: 1px solid rgba(148, 163, 184, 0.2);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-
-.login-page .login-tab {
-    flex: 1;
-    padding: 0.7rem 0.85rem;
-    font-size: 0.9375rem;
-    font-weight: 500;
-    letter-spacing: 0.01em;
-    color: #94a3b8;
-    background: transparent;
-    border: none;
-    border-radius: 9px;
-    cursor: pointer;
-    user-select: none;
-    transition: color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.login-page .login-tab:hover {
-    color: #e2e8f0;
-    background: rgba(248, 249, 255, 0.07);
-}
-
-.login-page .login-tab:focus-visible {
-    outline: 2px solid rgba(129, 140, 248, 0.75);
-    outline-offset: 2px;
-}
-
-.login-page .login-tab-active {
-    color: #f8fafc;
-    background: linear-gradient(180deg, rgba(51, 65, 85, 0.72) 0%, rgba(30, 41, 59, 0.62) 100%);
-    box-shadow:
-        0 1px 4px rgba(8, 15, 35, 0.4),
-        inset 0 -2px 0 #818cf8;
-}
-
-.login-page .login-tab-active:hover {
-    color: #f8fafc;
-    background: linear-gradient(180deg, rgba(51, 65, 85, 0.78) 0%, rgba(30, 41, 59, 0.68) 100%);
-}
-
-/* ---------- Tab 面板切换 ---------- */
-.login-page .login-tab-panel {
-    display: none;
-}
-
-.login-page .login-tab-panel-active {
-    display: block;
-    animation: login-tab-panel-in 0.22s ease;
-}
-
-@keyframes login-tab-panel-in {
-    from {
-        opacity: 0;
-        transform: translateY(6px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .login-page .login-tab-panel-active {
-        animation: none;
-    }
-}
-
-/* ---------- 钉钉登录区 ---------- */
-.login-page .dingtalk-login-wrap {
+/* ---------- 钉钉 / 企微工作区 ---------- */
+.login-page .dingtalk-login-wrap,
+.login-page .wecom-login-wrap {
     display: flex;
     flex-direction: column;
     align-items: stretch;
 }
 
-.login-page .dingtalk-qr-hint {
+.login-page .dingtalk-qr-hint,
+.login-page .wecom-login-hint {
     margin: 0 0 0.75rem;
     font-size: 0.8125rem;
     line-height: 1.5;
@@ -200,10 +237,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(2, 6, 23, 0.38);
+    background: #fff;
     border-radius: 12px;
     border: 1px solid rgba(148, 163, 184, 0.22);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .login-page .dingtalk-qr-status {
@@ -234,7 +270,8 @@
     }
 }
 
-.login-page .dingtalk-login-wrap .btn-block {
+.login-page .dingtalk-login-wrap .btn-block,
+.login-page .wecom-login-wrap .btn-block {
     display: block;
     width: 100%;
     text-align: center;
@@ -250,11 +287,6 @@
     line-height: 1.45;
 }
 
-/* ---------- 无钉钉 Tab 时表单顶距 ---------- */
-.login-page .login-tabs--solo .login-tab-panel-active {
-    animation: none;
-}
-
 /* ---------- 窄屏 ---------- */
 @media (max-width: 900px) {
     .login-page .landing-op-login .landing-form-actions {
@@ -268,9 +300,12 @@
 }
 
 @media (max-width: 480px) {
-    .login-page .login-tab {
-        padding: 0.65rem 0.5rem;
-        font-size: 0.875rem;
+    .login-page .login-method-card {
+        padding: 0.75rem 0.4rem 0.7rem;
+    }
+
+    .login-page .login-method-name {
+        font-size: 0.8125rem;
     }
 
     .login-page .landing-op-login .landing-form-actions .btn {

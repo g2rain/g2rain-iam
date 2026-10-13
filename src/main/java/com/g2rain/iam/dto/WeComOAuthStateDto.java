@@ -12,4 +12,10 @@ public class WeComOAuthStateDto {
     private String clientId;
     private String redirectUri;
     private String state;
+    /** 开放平台目标应用编码 */
+    private String applicationCode;
+    /** 登录意图：USER 或 ADMIN */
+    private String loginRole;
+    /** 授权事务 tid */
+    private String transactionId;
 }

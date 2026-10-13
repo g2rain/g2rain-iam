@@ -1,4 +1,4 @@
-package com.g2rain.iam.controller;
+package com.g2rain.iam.controller.dingtalk;
 
 import com.g2rain.common.model.Result;
 import com.g2rain.iam.dto.DingTalkPassportBindStartDto;

@@ -40,18 +40,26 @@ public class ThirdPartyWeComLoginAdapter extends AbstractWeComLoginAdapter {
     }
 
     @Override
-    public String buildAuthorizeUrl(String state, String callbackUrl) {
+    public String buildAuthorizeUrl(String state, String callbackUrl, String weComUserType) {
         requireThirdPartyCredentials();
+        String userType = "admin".equalsIgnoreCase(weComUserType) ? "admin" : "member";
         return UriComponentsBuilder.fromUriString(AUTHORIZE_URL)
             .queryParam("appid", properties.getThirdParty().getProviderCorpId().trim())
             .queryParam("redirect_uri", callbackUrl)
             .queryParam("state", state)
-            .queryParam("usertype", "member")
+            .queryParam("usertype", userType)
             .build(false).toUriString();
     }
 
     @Override
     public WeComPrincipal exchangeCodeForPrincipal(String authCode) {
+        return exchangeCodeForPrincipal(authCode, null);
+    }
+
+    /**
+     * @param expectedWeComUserType 期望的企微 usertype（member/admin）；null 则不校验
+     */
+    public WeComPrincipal exchangeCodeForPrincipal(String authCode, String expectedWeComUserType) {
         requireNonBlankAuthCode(authCode);
         requireThirdPartyCredentials();
         ObjectNode request = objectMapper().createObjectNode()
@@ -63,6 +71,9 @@ public class ThirdPartyWeComLoginAdapter extends AbstractWeComLoginAdapter {
             request,
             IamErrorCode.WECOM_USERINFO_FAILED
         );
+        if (Strings.isNotBlank(expectedWeComUserType)) {
+            assertUserType(response, expectedWeComUserType);
+        }
         JsonNode user = response.path("user_info");
         JsonNode corp = response.path("corp_info");
         String corpId = textAny(corp, "corpid", "corpId");
@@ -83,6 +94,26 @@ public class ThirdPartyWeComLoginAdapter extends AbstractWeComLoginAdapter {
             agentId,
             response.toString()
         );
+    }
+
+    private void assertUserType(JsonNode response, String expectedWeComUserType) {
+        // 企微文档：usertype 1=成员，2=管理员；或字符串 member/admin
+        JsonNode typeNode = response.path("usertype");
+        String expected = expectedWeComUserType.trim().toLowerCase();
+        boolean ok;
+        if (typeNode.isNumber()) {
+            int code = typeNode.asInt();
+            ok = ("member".equals(expected) && code == 1)
+                || ("admin".equals(expected) && code == 2);
+        } else {
+            String actual = typeNode.asText("").trim().toLowerCase();
+            ok = expected.equals(actual)
+                || ("member".equals(expected) && ("1".equals(actual) || "member".equals(actual)))
+                || ("admin".equals(expected) && ("2".equals(actual) || "admin".equals(actual)));
+        }
+        if (!ok) {
+            throw new BusinessException(IamErrorCode.WECOM_USER_TYPE_INVALID);
+        }
     }
 
     private void requireThirdPartyCredentials() {

@@ -8,8 +8,10 @@ import com.g2rain.common.model.Result;
 import com.g2rain.iam.client.LoginClient;
 import com.g2rain.iam.dingtalk.DingTalkPrincipal;
 import com.g2rain.iam.dto.SessionDto;
+import com.g2rain.iam.enums.IdpLoginRole;
 import com.g2rain.iam.idp.IdpPrincipal;
 import com.g2rain.iam.service.idp.IdpAuthServiceRouter;
+import com.g2rain.iam.service.idp.IdpEmployeeLoginOrchestrator;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
@@ -30,6 +32,9 @@ public class AuthService {
     @Resource
     private IdpAuthServiceRouter idpAuthServiceRouter;
 
+    @Resource
+    private IdpEmployeeLoginOrchestrator idpEmployeeLoginOrchestrator;
+
     /**
      * 账号密码登录并创建会话
      */
@@ -46,11 +51,21 @@ public class AuthService {
     }
 
     /**
-     * IdP 登录并创建会话
+     * IdP 登录并创建会话（无员工 organ 闸门，兼容 Stream 等）
      */
     public String authenticateIdp(IdpPrincipal principal, boolean autoProvisionMissingPassport) {
         String passportId = idpAuthServiceRouter.resolvePassportId(principal, autoProvisionMissingPassport);
-        return sessionService.createIdpSession(passportId, principal);
+        return sessionService.createIdpSession(passportId, principal, IdpLoginRole.USER, false);
+    }
+
+    /**
+     * IdP 员工扫码登录：按 loginRole 做 organ/User 闸门与管理员标记。
+     */
+    public String authenticateIdpEmployee(
+        IdpPrincipal principal, IdpLoginRole loginRole, boolean idpAdmin, boolean autoProvision) {
+        String passportId = idpEmployeeLoginOrchestrator.resolvePassportForEmployeeLogin(
+            principal, loginRole, autoProvision);
+        return sessionService.createIdpSession(passportId, principal, loginRole, idpAdmin);
     }
 
     /**
@@ -61,7 +76,7 @@ public class AuthService {
     }
 
     /**
-     * 钉钉登录并创建会话
+     * 钉钉登录并创建会话（无员工闸门）
      */
     public String authenticateDingTalk(DingTalkPrincipal principal, boolean autoProvisionMissingPassport) {
         return authenticateIdp(principal.toIdpPrincipal(), autoProvisionMissingPassport);

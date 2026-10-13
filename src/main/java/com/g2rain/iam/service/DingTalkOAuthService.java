@@ -3,12 +3,14 @@ package com.g2rain.iam.service;
 import com.g2rain.common.exception.BusinessException;
 import com.g2rain.common.utils.Strings;
 import com.g2rain.data.redis.GenericRedisHelper;
-import com.g2rain.iam.dto.DingTalkOAuthStateDto;
+import com.g2rain.iam.dingtalk.DingTalkAdminAsserter;
 import com.g2rain.iam.dingtalk.DingTalkLoginAdapter;
 import com.g2rain.iam.dingtalk.DingTalkLoginAdapterRouter;
 import com.g2rain.iam.dingtalk.DingTalkOAuthResult;
 import com.g2rain.iam.dingtalk.DingTalkPrincipal;
+import com.g2rain.iam.dto.DingTalkOAuthStateDto;
 import com.g2rain.iam.enums.IamErrorCode;
+import com.g2rain.iam.enums.IdpLoginRole;
 import com.g2rain.iam.enums.RedisKeyRule;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,10 +19,7 @@ import org.springframework.stereotype.Service;
 import java.util.Optional;
 
 /**
- * 钉钉 OAuth 服务
- * 功能：浏览器授权跳转、回调换票建会话；内嵌扫码与 Stream 发码委托 {@link DingTalkQrBootstrapService}、{@link DingTalkStreamAuthorizationService}
- *
- * @author Alpha
+ * 钉钉 OAuth 服务：构建授权跳转 URL，并在回调中完成换票与会话建立。
  */
 @Slf4j
 @Service
@@ -31,27 +30,57 @@ public class DingTalkOAuthService {
     private final GenericRedisHelper genericRedisHelper;
     private final DingTalkLoginAdapterRouter dingTalkLoginAdapterRouter;
     private final AuthService authService;
+    private final DingTalkAdminAsserter dingTalkAdminAsserter;
 
     /**
-     * 生成钉钉浏览器授权跳转 URL（方式一）
-     *
-     * @param bindMode    IdP 接入形态
-     * @param clientId    OAuth2 客户端 ID
-     * @param redirectUri OAuth2 回调地址
-     * @param state       业务系统 state
-     * @return 钉钉授权页完整 URL
+     * 构建钉钉授权页重定向 URL（无 loginRole / applicationCode / tid）。
      */
     public String buildDingTalkAuthorizeRedirectUrl(String bindMode, String clientId, String redirectUri,
                                                     String state) {
-        return dingTalkOAuthStateService.persistStateAndBuildAuthorizeUrl(
-            bindMode, clientId, redirectUri, state, false);
+        return buildDingTalkAuthorizeRedirectUrl(bindMode, clientId, redirectUri, state, null, null);
     }
 
     /**
-     * 按 opaque state 读取 OAuth 上下文（不删除 Redis）
+     * 构建钉钉授权页重定向 URL（可指定 loginRole）。
+     */
+    public String buildDingTalkAuthorizeRedirectUrl(String bindMode, String clientId, String redirectUri,
+                                                    String state, String loginRole) {
+        return buildDingTalkAuthorizeRedirectUrl(bindMode, clientId, redirectUri, state, loginRole, null);
+    }
+
+    /**
+     * 构建钉钉授权页重定向 URL（可指定 loginRole 与 applicationCode）。
+     */
+    public String buildDingTalkAuthorizeRedirectUrl(String bindMode, String clientId, String redirectUri,
+                                                    String state, String loginRole, String applicationCode) {
+        return buildDingTalkAuthorizeRedirectUrl(
+            bindMode, clientId, redirectUri, state, loginRole, applicationCode, null);
+    }
+
+    /**
+     * 构建钉钉授权页重定向 URL，并将授权事务 {@code transactionId} 写入 OAuth state。
      *
-     * @param opaqueState 钉钉回调中的 opaque state
-     * @return OAuth state 载荷，不存在或为空时返回空 Optional
+     * @param bindMode        IdP 接入形态
+     * @param clientId        OAuth 客户端 ID
+     * @param redirectUri     OAuth 回调地址
+     * @param state           业务 state
+     * @param loginRole       登录角色（可选）
+     * @param applicationCode 目标应用编码（可选）
+     * @param transactionId   授权事务 tid（可选）
+     * @return 钉钉授权页完整 URL
+     */
+    public String buildDingTalkAuthorizeRedirectUrl(String bindMode, String clientId, String redirectUri,
+                                                    String state, String loginRole, String applicationCode,
+                                                    String transactionId) {
+        return dingTalkOAuthStateService.persistStateAndBuildAuthorizeUrl(
+            bindMode, clientId, redirectUri, state, false, loginRole, applicationCode, transactionId);
+    }
+
+    /**
+     * 只读查看 OAuth state（不消费），用于回调失败时回显登录页。
+     *
+     * @param opaqueState 不透明 state
+     * @return state 载荷；不存在则为 empty
      */
     public Optional<DingTalkOAuthStateDto> peekOAuthState(String opaqueState) {
         if (Strings.isBlank(opaqueState)) {
@@ -64,11 +93,11 @@ public class DingTalkOAuthService {
     }
 
     /**
-     * 使用授权码完成换票、建会话，并返回后续 OAuth 重定向所需参数
+     * 钉钉授权回调：消费 state、换票、校验管理员角色并建立 IAM 会话。
      *
      * @param authCode    钉钉授权码
-     * @param opaqueState IAM opaque state
-     * @return 会话 ID 与 OAuth 客户端参数
+     * @param opaqueState 不透明 state
+     * @return 含 sessionId 与 transactionId 的登录结果
      */
     public DingTalkOAuthResult finishLogin(String authCode, String opaqueState) {
         String key = RedisKeyRule.DINGTALK_OAUTH_STATE.format(opaqueState);
@@ -84,15 +113,31 @@ public class DingTalkOAuthService {
         }
         genericRedisHelper.delete(key);
 
+        IdpLoginRole loginRole = IdpLoginRole.fromParam(payload.getLoginRole());
         boolean snsQrLogin = Boolean.TRUE.equals(payload.getQrEmbedded());
         DingTalkLoginAdapter adapter = dingTalkLoginAdapterRouter.resolve(payload.getBindMode());
         DingTalkPrincipal principal = adapter.exchangeCodeForPrincipal(authCode, snsQrLogin);
-        String sessionId = authService.authenticateDingTalk(principal, true);
+
+        boolean idpAdmin = false;
+        if (loginRole.isAdmin()) {
+            dingTalkAdminAsserter.assertCorpAdmin(
+                principal.bindMode(),
+                principal.corpId(),
+                principal.unionId(),
+                principal.idpApplicationCode()
+            );
+            idpAdmin = true;
+        }
+
+        String sessionId = authService.authenticateIdpEmployee(
+            principal.toIdpPrincipal(), loginRole, idpAdmin, true);
         return new DingTalkOAuthResult(
             sessionId,
             payload.getClientId(),
             payload.getRedirectUri(),
-            payload.getState()
+            payload.getState(),
+            payload.getApplicationCode(),
+            payload.getTransactionId()
         );
     }
 }
