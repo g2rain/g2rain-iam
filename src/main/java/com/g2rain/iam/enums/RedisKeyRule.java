@@ -47,9 +47,9 @@ public enum RedisKeyRule {
     AUTHORIZATION_FLOW_INDEX("auth:authorization:flow:%s"),
 
     /**
-     * 事务去重键，格式为 "auth:authorization:dedup:{mode}:{applicationCode}:{clientId}:{stateHash}"
+     * 事务去重键，格式为 "auth:authorization:dedup:{mode}:{applicationCode}:{clientId}:{stateHash}:{jkt}:{entryKeyHash}"
      */
-    AUTHORIZATION_DEDUP("auth:authorization:dedup:%s:%s:%s:%s"),
+    AUTHORIZATION_DEDUP("auth:authorization:dedup:%s:%s:%s:%s:%s:%s"),
 
     /**
      * 钉钉 OAuth 防 CSRF 的 state，格式为 "auth:dingtalk:oauth:state:{state}"

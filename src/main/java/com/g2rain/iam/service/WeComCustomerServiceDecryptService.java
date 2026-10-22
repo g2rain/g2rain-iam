@@ -166,6 +166,7 @@ public class WeComCustomerServiceDecryptService {
         try {
             return WeComCallbackType.valueOf(value.trim());
         } catch (Exception exception) {
+            log.error("failed to parseCallbackType", exception);
             throw new BusinessException(IamErrorCode.WECOM_CALLBACK_INVALID, "callbackType");
         }
     }

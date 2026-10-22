@@ -5,11 +5,10 @@ import com.g2rain.common.utils.Strings;
 import com.g2rain.data.redis.GenericRedisHelper;
 import com.g2rain.iam.config.IamAccessProperties;
 import com.g2rain.iam.dto.AuthorizationTransactionDto;
-import com.g2rain.iam.enums.AuthorizationMode;
+import com.g2rain.iam.dto.AuthorizeRequest;
 import com.g2rain.iam.enums.AuthorizationTransactionStatus;
 import com.g2rain.iam.enums.IamErrorCode;
 import com.g2rain.iam.enums.RedisKeyRule;
-import com.g2rain.iam.utils.AuthorizationState;
 import com.g2rain.iam.utils.IamUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -112,21 +111,20 @@ public class AuthorizationTransactionService {
 
     /**
      * 创建或复用未完成事务。flow Cookie 不匹配已有 dedup 记录时拒绝。
+     * <p>去重键包含公钥指纹与接入码，避免复用到其他密钥或其他租户入口的事务。</p>
      */
-    public AuthorizationTransactionDto createOrReuse(
-        String clientId,
-        String redirectUri,
-        String state,
-        String applicationCode,
-        String flowCookieHash) {
-        AuthorizationMode mode = AuthorizationState.isAnonymous(state)
-            ? AuthorizationMode.ANONYMOUS
-            : AuthorizationMode.USER;
-        String businessState = AuthorizationState.resolveCallbackState(state);
-        String appKey = Strings.isBlank(applicationCode) ? "_" : applicationCode.trim();
-        String stateKey = Strings.isBlank(businessState) ? "_" : sha256(businessState);
+    public AuthorizationTransactionDto createOrReuse(AuthorizeRequest request, String flowCookieHash) {
+        String clientId = request.clientId().trim();
+        String businessState = Strings.isBlank(request.state()) ? null : request.state().trim();
+        String applicationCode = Strings.isBlank(request.applicationCode()) ? null : request.applicationCode().trim();
+        String entryKey = Strings.isBlank(request.entryKey()) ? null : request.entryKey().trim();
         String dedupKey = RedisKeyRule.AUTHORIZATION_DEDUP.format(
-            mode.name(), appKey, clientId.trim(), stateKey);
+            request.mode().name(),
+            Objects.requireNonNullElse(applicationCode, "_"),
+            clientId,
+            Strings.isBlank(businessState) ? "_" : sha256(businessState),
+            Objects.requireNonNullElse(request.jkt(), "_"),
+            Strings.isBlank(entryKey) ? "_" : sha256(entryKey));
 
         String existingTid = genericRedisHelper.get(dedupKey, String.class);
         if (Strings.isNotBlank(existingTid)) {
@@ -143,12 +141,14 @@ public class AuthorizationTransactionService {
         Duration ttl = ttl();
         AuthorizationTransactionDto dto = new AuthorizationTransactionDto();
         dto.setTid(IamUtils.generateAuthorizationCode());
-        dto.setClientId(clientId.trim());
-        dto.setRedirectUri(redirectUri.trim());
+        dto.setClientId(clientId);
+        dto.setRedirectUri(request.redirectUri().trim());
         dto.setState(businessState);
-        dto.setApplicationCode(Strings.isBlank(applicationCode) ? null : applicationCode.trim());
+        dto.setApplicationCode(applicationCode);
         dto.setFlowCookieHash(flowCookieHash);
-        dto.setAuthorizationMode(mode);
+        dto.setAuthorizationMode(request.mode());
+        dto.setEntryKey(entryKey);
+        dto.setJkt(request.jkt());
         dto.setStatus(AuthorizationTransactionStatus.CREATED);
         dto.setCreatedAt(now.getEpochSecond());
         dto.setExpiresAt(now.plus(ttl).getEpochSecond());

@@ -1,6 +1,8 @@
 package com.g2rain.iam.controller;
 
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.g2rain.basis.dto.PassportDto;
 import com.g2rain.common.exception.BusinessException;
 import com.g2rain.common.model.Result;
@@ -42,6 +44,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 @Controller
 @AllArgsConstructor
 @RequestMapping("/auth")
+@Slf4j
 public class PassportController {
 
     /**
@@ -104,6 +107,7 @@ public class PassportController {
             AuthorizationTransactionDto txn = transactionService.requireActive(tid.trim(), flowHash);
             authPolicyGuard.requireRegister(txn);
         } catch (BusinessException ex) {
+            log.error("failed to register", ex);
             return authorizationFlowService.renderFlowError(null, ex.getMessage());
         }
 
@@ -156,6 +160,7 @@ public class PassportController {
             }
             return mv;
         } catch (BusinessException ex) {
+            log.error("failed to registerError", ex);
             return authorizationFlowService.renderFlowError(null, ex.getMessage());
         }
     }

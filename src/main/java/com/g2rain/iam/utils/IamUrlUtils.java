@@ -16,7 +16,7 @@ public final class IamUrlUtils {
             return "";
         }
         String base = url.trim();
-        while (!base.isEmpty() && base.endsWith("/")) {
+        while (base.endsWith("/")) {
             base = base.substring(0, base.length() - 1);
         }
         return base;
@@ -42,16 +42,18 @@ public final class IamUrlUtils {
      * @return 拼接结果
      */
     public static String joinAbsoluteUrl(String base, String... pathSegments) {
-        String result = trimTrailingSlash(base);
+        StringBuilder result = new StringBuilder(trimTrailingSlash(base));
         if (pathSegments == null) {
-            return result;
+            return result.toString();
         }
+
         for (String segment : pathSegments) {
             if (segment == null || segment.isBlank()) {
                 continue;
             }
-            result += ensureLeadingSlash(segment);
+            result.append(ensureLeadingSlash(segment));
         }
-        return result;
+
+        return result.toString();
     }
 }

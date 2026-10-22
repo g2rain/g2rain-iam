@@ -1,11 +1,14 @@
 package com.g2rain.iam.wecom;
 
+
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
  * 企业微信授权回调兼容入口：委托通用验证器，固定使用第三方授权凭据。
  */
 @Component
+@Slf4j
 public class WeComCallbackCrypto {
     private final WeComCallbackCredentialResolver credentialResolver;
     private final WeComCallbackVerifier callbackVerifier;
@@ -52,6 +55,7 @@ public class WeComCallbackCrypto {
             var nodes = document.getElementsByTagName(tag);
             return nodes.getLength() == 0 ? "" : nodes.item(0).getTextContent().trim();
         } catch (Exception exception) {
+            log.error("failed to xmlValue", exception);
             throw new com.g2rain.common.exception.BusinessException(
                 com.g2rain.iam.enums.IamErrorCode.WECOM_CALLBACK_INVALID);
         }

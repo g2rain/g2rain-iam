@@ -1,6 +1,9 @@
 package com.g2rain.iam.filters;
 
 
+
+import lombok.extern.slf4j.Slf4j;
+import com.g2rain.iam.utils.IamUtils;
 import com.g2rain.common.exception.BusinessException;
 import com.g2rain.common.exception.SystemErrorCode;
 import com.g2rain.common.utils.Moments;
@@ -42,6 +45,7 @@ import java.util.UUID;
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 180)
+@Slf4j
 public record ClientDPoPAuthFilter(Tracer tracer) implements Filter {
 
     @Override
@@ -105,7 +109,7 @@ public record ClientDPoPAuthFilter(Tracer tracer) implements Filter {
 
             // 校验 JWK 类型
             JWK jwk = header.getJWK();
-            if (!(jwk instanceof ECKey ecKey)) {
+            if (!(jwk instanceof ECKey ecKey) || !IamUtils.isEs256(header, ecKey)) {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWK");
             }
 
@@ -163,8 +167,10 @@ public record ClientDPoPAuthFilter(Tracer tracer) implements Filter {
             PrincipalContextHolder.setRequestTime(Moments.formatEpochMillis(timestamp.toEpochMilli()));
             return jti;
         } catch (ParseException e) {
+            log.error("failed to verify", e);
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof");
         } catch (JOSEException e) {
+            log.error("failed to verify", e);
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client PoP Proof JWS");
         }
     }

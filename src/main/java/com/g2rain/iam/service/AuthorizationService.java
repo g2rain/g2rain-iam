@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 
 
 /**
@@ -48,13 +47,14 @@ public class AuthorizationService {
      * @return 生成的授权码
      */
     public String generateAuthorizationCode(SessionDto session, String clientId, String userId, boolean thirdPartyIdpLogin) {
-        return generateAuthorizationCode(session, clientId, userId, thirdPartyIdpLogin, null, null, null);
+        return generateAuthorizationCode(session, clientId, userId, thirdPartyIdpLogin, null, null, null, null);
     }
 
     /**
      * 生成授权码并写入 Redis。
      * <p>
      * 绑定 {@code applicationCode} 时额外写入 {@code applicationId}、{@code organId}，TTL 为 5 分钟；否则 TTL 为 10 分钟。
+     * {@code jkt} 有值时换票须使用同一把客户端密钥。
      * </p>
      */
     public String generateAuthorizationCode(
@@ -64,10 +64,11 @@ public class AuthorizationService {
         boolean thirdPartyIdpLogin,
         String applicationCode,
         Long applicationId,
-        Long organId) {
+        Long organId,
+        String jkt) {
         Duration ttl = Strings.isNotBlank(applicationCode) ? Duration.ofMinutes(5) : Duration.ofMinutes(10);
         return storeAuthorizationCode(
-            session, clientId, userId, thirdPartyIdpLogin, applicationCode, applicationId, organId, ttl);
+            session, clientId, userId, thirdPartyIdpLogin, applicationCode, applicationId, organId, jkt, ttl);
     }
 
     /**
@@ -81,16 +82,16 @@ public class AuthorizationService {
      * 生成匿名授权码并存储在 Redis 中（无 session/user）。
      *
      * @param clientId 客户端 ID（DPoP kid）
-     * @param organId  机构 ID
-     * @param roleIds  角色 ID 列表
+     * @param entryKey 匿名接入码
+     * @param jkt      客户端公钥指纹（RFC 7638）
      * @return 授权码
      */
-    public String generateAnonymousAuthorizationCode(String clientId, Long organId, List<Long> roleIds) {
+    public String generateAnonymousAuthorizationCode(String clientId, String entryKey, String jkt) {
         AuthorizationCodeDto codeDto = new AuthorizationCodeDto();
         codeDto.setClientId(clientId);
         codeDto.setAnonymous(true);
-        codeDto.setOrganId(organId);
-        codeDto.setRoleIds(roleIds);
+        codeDto.setEntryKey(entryKey);
+        codeDto.setJkt(jkt);
 
         String code = IamUtils.generateAuthorizationCode();
         genericRedisHelper.set(
@@ -109,10 +110,12 @@ public class AuthorizationService {
         String applicationCode,
         Long applicationId,
         Long organId,
+        String jkt,
         Duration ttl) {
         AuthorizationCodeDto codeDto = new AuthorizationCodeDto();
         codeDto.setSessionId(session.getSessionId());
         codeDto.setClientId(clientId);
+        codeDto.setJkt(jkt);
         codeDto.setUserId(userId);
         codeDto.setThirdPartyIdpLogin(thirdPartyIdpLogin);
         codeDto.setIdpType(Strings.isBlank(session.getIdpType()) ? null : session.getIdpType().trim());

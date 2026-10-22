@@ -1,17 +1,21 @@
 package com.g2rain.iam.controller;
 
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.g2rain.common.exception.BusinessException;
 import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.dto.AuthorizationTransactionDto;
+import com.g2rain.iam.dto.AuthorizeRequest;
+import com.g2rain.iam.enums.AuthorizationMode;
 import com.g2rain.iam.enums.AuthorizationTransactionStatus;
 import com.g2rain.iam.enums.IamErrorCode;
 import com.g2rain.iam.service.AuthFlowCookieService;
 import com.g2rain.iam.service.AuthorizationFlowService;
 import com.g2rain.iam.service.AuthorizationTransactionService;
 import com.g2rain.iam.service.ModelAndViewService;
-import com.g2rain.iam.utils.AuthorizationState;
 import com.g2rain.iam.utils.Constants;
+import com.g2rain.iam.utils.IamUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.AllArgsConstructor;
@@ -47,6 +51,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 @Controller
 @AllArgsConstructor
 @RequestMapping(value = "/auth")
+@Slf4j
 public class AuthorizeController {
 
     /**
@@ -82,8 +87,11 @@ public class AuthorizeController {
      * @param tid             授权事务 ID（续跑时必填）
      * @param clientId        客户端 ID（首次进入必填）
      * @param redirectUri     授权后重定向 URI（首次进入必填）
-     * @param state           状态参数，通常用于防 CSRF
+     * @param state           状态参数，仅用于回传 CSRF 值
      * @param applicationCode 目标应用编码（可选）
+     * @param mode            授权模式 {@code USER}（默认）/ {@code ANONYMOUS}
+     * @param entryKey        匿名接入码（{@code ANONYMOUS} 必填）
+     * @param publicKey       客户端 DPoP 公钥 JWK（{@code ANONYMOUS} 必填；携带时授权码绑定该公钥）
      * @param userId          预选用户 ID（可选，续跑时可用于直接确认）
      * @return PRG 到仅含 tid 的授权页、流程续跑视图或错误页
      */
@@ -98,6 +106,9 @@ public class AuthorizeController {
         @RequestParam(name = "redirectUri", required = false) String redirectUri,
         @RequestParam(name = "state", required = false) String state,
         @RequestParam(name = "applicationCode", required = false) String applicationCode,
+        @RequestParam(name = "mode", required = false) String mode,
+        @RequestParam(name = "entryKey", required = false) String entryKey,
+        @RequestParam(name = "publicKey", required = false) String publicKey,
         @RequestParam(name = "userId", required = false) String userId) {
 
         if (Strings.isNotBlank(tid)) {
@@ -109,17 +120,25 @@ public class AuthorizeController {
         }
 
         try {
+            AuthorizationMode authorizationMode = AuthorizationMode.of(mode);
+            String jkt = IamUtils.thumbprint(publicKey);
+            if (authorizationMode == AuthorizationMode.ANONYMOUS && (Strings.isBlank(entryKey) || jkt == null)) {
+                throw new BusinessException(IamErrorCode.ANONYMOUS_AUTH_INVALID);
+            }
             String flowHash = authFlowCookieService.ensureAndBind(request, response);
-            AuthorizationTransactionDto txn = transactionService.createOrReuse(
-                clientId, redirectUri, state, applicationCode, flowHash);
+            AuthorizeRequest authorize = new AuthorizeRequest(
+                clientId, redirectUri, state, applicationCode, authorizationMode,
+                authorizationMode == AuthorizationMode.ANONYMOUS ? entryKey : null, jkt);
+            AuthorizationTransactionDto txn = transactionService.createOrReuse(authorize, flowHash);
             String prg = UriComponentsBuilder.fromPath("/auth/authorize")
                 .queryParam(Constants.TID, txn.getTid())
                 .build()
                 .toUriString();
             return new ModelAndView(Constants.REDIRECT + prg);
         } catch (BusinessException ex) {
+            log.error("failed to authorize", ex);
             return modelAndViewService.redirectOAuthError(
-                clientId, redirectUri, AuthorizationState.resolveCallbackState(state), ex.getMessage());
+                clientId, redirectUri, state, ex.getMessage());
         }
     }
 
@@ -159,6 +178,7 @@ public class AuthorizeController {
             }
             return authorizationFlowService.confirm(txn, sessionId, userId, denied);
         } catch (BusinessException ex) {
+            log.error("failed to authorizeSelected", ex);
             return authorizationFlowService.renderFlowError(null, ex.getMessage());
         }
     }
@@ -188,6 +208,7 @@ public class AuthorizeController {
             }
             return authorizationFlowService.continueFlow(txn, sessionId);
         } catch (BusinessException ex) {
+            log.error("failed to continueWithTid", ex);
             return authorizationFlowService.renderFlowError(null, ex.getMessage());
         }
     }

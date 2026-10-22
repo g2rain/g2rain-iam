@@ -1,5 +1,7 @@
 package com.g2rain.iam.wecom;
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.g2rain.basis.enums.IdpBindMode;
 import com.g2rain.basis.enums.IdpType;
 import com.g2rain.common.exception.BusinessException;
@@ -16,6 +18,7 @@ import java.util.HexFormat;
  * 企业微信换票结果（企业微信适配层内部模型）。
  * 出站至认证/会话链路时请转换为 {@link IdpPrincipal}。
  */
+@Slf4j
 public record WeComPrincipal(
     String corpId,
     String userId,
@@ -57,6 +60,7 @@ public record WeComPrincipal(
                 .getBytes(StandardCharsets.UTF_8);
             return HexFormat.of().formatHex(digest.digest(bytes));
         } catch (NoSuchAlgorithmException exception) {
+            log.error("failed to stableSubject", exception);
             throw new BusinessException(IamErrorCode.WECOM_USERINFO_FAILED);
         }
     }

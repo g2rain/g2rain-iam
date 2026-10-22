@@ -8,10 +8,10 @@
 - 目标模式：企业内部自建应用与服务商三方应用双模式
 - 正式上线默认模式：`THIRD_PARTY`
 
-**跨项目主文档**（数据模型、Basis API、登录与 Organ 规则、凭证脱敏）：  
+**跨项目主文档**（数据模型、Basis API、登录与 Organ 规则、凭证脱敏）：
 [`g2rain-basis/docs/design/wechat-work-authorization.md`](../../../g2rain-basis/docs/design/wechat-work-authorization.md)
 
-本文只描述 IAM 侧 OAuth、Adapter、配置与测试；与主文档冲突时**以主文档为准**。  
+本文只描述 IAM 侧 OAuth、Adapter、配置与测试；与主文档冲突时**以主文档为准**。
 HTTP 入口总览：[企业微信能力地图](./wecom-capability-map.md)。
 
 说明：Java 组件名和配置前缀可以继续使用产品英文名 `WeCom`/`WECOM`；凡表示 Basis 身份源枚举或持久化 `idpType` 的字段，必须使用 `WECHAT_WORK`。

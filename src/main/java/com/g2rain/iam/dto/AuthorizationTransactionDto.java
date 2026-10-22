@@ -60,6 +60,16 @@ public class AuthorizationTransactionDto {
     private AuthorizationMode authorizationMode;
 
     /**
+     * 匿名接入码（仅 {@code ANONYMOUS}）。
+     */
+    private String entryKey;
+
+    /**
+     * 授权请求携带的客户端公钥指纹（RFC 7638）；发码时写入授权码，换票时与 DPoP Proof 公钥比对。
+     */
+    private String jkt;
+
+    /**
      * 登录成功后绑定的 IAM 会话 ID。
      */
     private String sessionId;

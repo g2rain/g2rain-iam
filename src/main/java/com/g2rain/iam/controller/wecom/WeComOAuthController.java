@@ -109,6 +109,7 @@ public class WeComOAuthController {
                 bindMode, ctx.clientId(), ctx.redirectUri(), ctx.state(), loginRole,
                 ctx.applicationCode(), ctx.tid()));
         } catch (BusinessException exception) {
+            log.error("failed to authorize", exception);
             return authorizationFlowService.renderFlowError(null, exception.getMessage());
         } catch (Exception exception) {
             log.error("企业微信授权跳转失败 bindMode={}", bindMode, exception);

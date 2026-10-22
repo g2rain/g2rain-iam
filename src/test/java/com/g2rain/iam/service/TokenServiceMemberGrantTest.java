@@ -7,7 +7,6 @@ import com.g2rain.common.exception.SystemErrorCode;
 import com.g2rain.common.model.Result;
 import com.g2rain.common.web.ApplicationScope;
 import com.g2rain.common.web.TokenJWTPayload;
-import com.g2rain.data.redis.GenericRedisHelper;
 import com.g2rain.iam.client.LoginTokenClient;
 import com.g2rain.iam.client.MemberClient;
 import com.g2rain.iam.enums.IamErrorCode;
@@ -36,7 +35,7 @@ class TokenServiceMemberGrantTest {
 
     @BeforeEach
     void setUp() {
-        tokenService = new TokenService(mock(GenericRedisHelper.class), mock(TokenKeyManager.class));
+        tokenService = new TokenService(mock(TokenKeyManager.class));
         memberClient = mock(MemberClient.class);
         loginTokenClient = mock(LoginTokenClient.class);
         ReflectionTestUtils.setField(tokenService, "memberClient", memberClient);
@@ -111,7 +110,50 @@ class TokenServiceMemberGrantTest {
     @Test
     void memberExchangeErrorCodeIsDistinctFromAnonymous() {
         assertEquals("iam.40044", IamErrorCode.MEMBER_EXCHANGE_NOT_ALLOWED.code());
-        assertEquals("iam.40021", IamErrorCode.ANONYMOUS_REFRESH_NOT_ALLOWED.code());
+        assertEquals("iam.40056", IamErrorCode.ANONYMOUS_EXCHANGE_NOT_ALLOWED.code());
+    }
+
+    @Test
+    void refreshAnonymousTokenRejectsWhenEntryIdMissing() {
+        TokenJWTPayload body = anonymousBody();
+        body.setEntryId(null);
+
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+            ReflectionTestUtils.invokeMethod(tokenService, "refreshAnonymousToken", body, "app-cs", "jkt"));
+        assertEquals(SystemErrorCode.PARAM_REQUIRED.code(), ex.getErrorCode());
+        verify(loginTokenClient, never()).fetchAnonymousRefreshContext(anyLong(), anyString(), anyString());
+    }
+
+    @Test
+    void refreshAnonymousTokenRejectsWhenApplicationChanged() {
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+            ReflectionTestUtils.invokeMethod(tokenService, "refreshAnonymousToken", anonymousBody(), "other-app", "jkt"));
+        assertEquals(SystemErrorCode.PARAM_VAL_INVALID.code(), ex.getErrorCode());
+        verify(loginTokenClient, never()).fetchAnonymousRefreshContext(anyLong(), anyString(), anyString());
+    }
+
+    @Test
+    void refreshAnonymousTokenPropagatesBasisRejection() {
+        when(loginTokenClient.fetchAnonymousRefreshContext(5L, "app-cs", "jkt"))
+            .thenReturn(Result.error("basis.40081", "接入码不可用"));
+
+        assertThrows(BusinessException.class, () ->
+            ReflectionTestUtils.invokeMethod(tokenService, "refreshAnonymousToken", anonymousBody(), "app-cs", "jkt"));
+        verify(loginTokenClient).fetchAnonymousRefreshContext(5L, "app-cs", "jkt");
+    }
+
+    private static TokenJWTPayload anonymousBody() {
+        TokenJWTPayload body = new TokenJWTPayload();
+        body.setSessionType(SessionType.ANONYMOUS);
+        body.setUserId(77L);
+        body.setEntryId(5L);
+        body.setOrganId(10001L);
+        body.setOrganType(OrganType.TENANT);
+        body.setClientId("client-1");
+        body.setClientPublicKey("{\"kty\":\"EC\"}");
+        body.setApplicationScopes(List.of(new ApplicationScope(1L, "app-cs", 2L)));
+        body.setRefreshExpireAt(Instant.now().getEpochSecond() + 3600);
+        return body;
     }
 
     private static TokenJWTPayload memberBody() {

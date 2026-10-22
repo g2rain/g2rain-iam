@@ -164,6 +164,7 @@ public class TokenKeyManager {
             this.activeKeyId = newActiveKeyId;
             log.info("TokenKeyManager 初始化完成，当前激活keyId={}", activeKeyId);
         } catch (Exception e) {
+            log.error("failed to reloadKeys", e);
             // 如果密钥加载失败，则抛出业务异常，提示初始化 PEM 错误
             throw new BusinessException(SystemErrorCode.SYSTEM_INTERNAL_ERROR, "初始化PEM错误");
         }

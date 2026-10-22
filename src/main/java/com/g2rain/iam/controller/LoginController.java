@@ -121,6 +121,7 @@ public class LoginController {
             iamSessionCookieService.writeSessionCookie(response, sessionId);
             return authorizationFlowService.afterPasswordLogin(txn, sessionId);
         } catch (BusinessException ex) {
+            log.error("failed to login", ex);
             try {
                 String flowHash = authFlowCookieService.hash(authFlowCookieService.readRaw(request));
                 AuthorizationTransactionDto txn = transactionService.requireReadable(tid.trim(), flowHash);

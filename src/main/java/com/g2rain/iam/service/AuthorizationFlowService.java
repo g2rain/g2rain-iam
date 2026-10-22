@@ -1,5 +1,7 @@
 package com.g2rain.iam.service;
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.g2rain.basis.dto.ApplicationAuthorizationActivateSelfRequest;
 import com.g2rain.basis.dto.ApplicationSelectDto;
 import com.g2rain.basis.dto.OrganIdNameMapSelectDto;
@@ -47,6 +49,7 @@ import java.util.Set;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthorizationFlowService {
 
     private final AuthorizationTransactionService transactionService;
@@ -342,6 +345,7 @@ public class AuthorizationFlowService {
         try {
             parsedUserId = Long.valueOf(selectedUserId);
         } catch (NumberFormatException ex) {
+            log.error("failed to confirmApplication", ex);
             rollbackToConsent(txn.getTid());
             return renderFlowError(txn, SystemErrorCode.PARAM_VAL_INVALID.getMessage("userId"));
         }
@@ -354,6 +358,7 @@ public class AuthorizationFlowService {
         try {
             result = applicationAuthorizationClient.activateSelf(request);
         } catch (Exception ex) {
+            log.error("failed to confirmApplication", ex);
             rollbackToConsent(txn.getTid());
             return renderConsentWithError(transactionService.get(txn.getTid()), session, "开通应用失败，请稍后重试");
         }
@@ -375,7 +380,8 @@ public class AuthorizationFlowService {
             thirdPartyIdpLogin,
             txn.getApplicationCode(),
             activated.getApplicationId(),
-            activated.getOrganId()
+            activated.getOrganId(),
+            txn.getJkt()
         );
         if (!transactionService.compareAndUpdate(
             txn.getTid(),
@@ -509,12 +515,8 @@ public class AuthorizationFlowService {
     }
 
     private ModelAndView completeAnonymous(AuthorizationTransactionDto txn) {
-        IamAccessProperties.AnonymousAuth anonymous = iamAccessProperties.getAnonymous();
-        if (!anonymous.isConfigured()) {
-            return renderFlowError(txn, IamErrorCode.ANONYMOUS_AUTH_DISABLED.getMessage());
-        }
         String code = authorizationService.generateAnonymousAuthorizationCode(
-            txn.getClientId(), anonymous.getOrganId(), anonymous.getRoleIds());
+            txn.getClientId(), txn.getEntryKey(), txn.getJkt());
         if (!transactionService.compareAndUpdate(
             txn.getTid(),
             AuthorizationTransactionStatus.CREATED,
@@ -528,7 +530,7 @@ public class AuthorizationFlowService {
     private ModelAndView completeWithCode(AuthorizationTransactionDto txn, SessionDto session, String userId) {
         boolean thirdPartyIdpLogin = Strings.isNotBlank(session.getIdpType());
         String code = authorizationService.generateAuthorizationCode(
-            session, txn.getClientId(), userId, thirdPartyIdpLogin);
+            session, txn.getClientId(), userId, thirdPartyIdpLogin, null, null, null, txn.getJkt());
         if (!transactionService.compareAndUpdate(
             txn.getTid(),
             txn.getStatus(),
@@ -647,8 +649,10 @@ public class AuthorizationFlowService {
             ApplicationType type = ApplicationType.fromName(application.getApplicationType().trim());
             openPlatform = ApplicationType.nonMicroApp(type);
         } catch (BusinessException ex) {
+            log.error("failed to ensureApplicationConsentResolved", ex);
             return renderFlowError(txn, ex.getMessage() == null ? "应用类型无效" : ex.getMessage());
         } catch (Exception ex) {
+            log.error("failed to ensureApplicationConsentResolved", ex);
             return renderFlowError(txn, "无法加载应用信息，请稍后重试");
         }
 
@@ -694,6 +698,7 @@ public class AuthorizationFlowService {
             preview.setOrganName(resolveOrganName(selectedUser == null ? null : selectedUser.getOrganId()));
             model.addAttribute("preview", preview);
         } catch (Exception ex) {
+            log.error("failed to populatePreview", ex);
             model.addAttribute("previewError", "无法加载应用信息，请稍后重试");
         }
     }

@@ -4,8 +4,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.List;
-
 
 /**
  * 授权码 DTO 类，用于在授权码授权流程中传递会话 ID、客户端 ID 和用户 ID 等信息。
@@ -77,14 +75,19 @@ public class AuthorizationCodeDto {
     private Boolean anonymous;
 
     /**
-     * 匿名发码时的机构 ID；或目标应用确认发码时 Basis 返回的机构 ID。
+     * 目标应用确认发码时 Basis 返回的机构 ID。
      */
     private Long organId;
 
     /**
-     * 匿名发码时 IAM 配置的角色 ID 列表。
+     * 匿名接入码（仅匿名发码）。
      */
-    private List<Long> roleIds;
+    private String entryKey;
+
+    /**
+     * 发起授权的客户端公钥指纹（RFC 7638）；有值时换票须与 Client DPoP Proof 公钥指纹一致。
+     */
+    private String jkt;
 
     /**
      * 目标应用编码；有值时换票须与 Client DPoP {@code acd} 一致，且 Redis 中授权码 TTL 为 5 分钟。
