@@ -76,7 +76,7 @@ chat-shell 要支持未登录访客直接对话：没登录就是访客，左下
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `id` | BIGINT | 主键，即 `entryId` |
-| `organ_id` | BIGINT NOT NULL | 所属机构，必须是租户机构 |
+| `organ_id` | BIGINT NOT NULL | 所属机构；运营机构与租户机构均可 |
 | `application_id` | BIGINT NOT NULL | 适用的应用，如 chat-shell |
 | `entry_name` | VARCHAR(64) NOT NULL | 名称，如"官网客服" |
 | `entry_key` | VARCHAR(40) NOT NULL，`utf8mb4_bin` | 接入码，`ek_` + 22 位 base62 随机串（约 131 bit），区分大小写 |
@@ -85,7 +85,7 @@ chat-shell 要支持未登录访客直接对话：没登录就是访客，左下
 
 - `entry_key` 唯一，采用 [ADR-0004](../../../../docs/architecture/decisions/0004-logical-delete-unique-indexes.md) 的函数索引写法；
 - 一个机构、一个应用下的接入码条数不限；
-- 创建时校验：机构为有效的租户机构、机构已开通该应用；非运营公司只能为本机构创建；
+- 创建时校验：机构有效、已开通该应用；运营机构与租户机构均可开放匿名入口；非运营公司只能为本机构创建；
 - 接入码由服务端生成，状态固定为 `ACTIVE`；更新只允许改名称；启停走 `POST /anonymous_entry/{id}/status`。
 
 ### 4.3 管理
@@ -97,7 +97,7 @@ chat-shell 要支持未登录访客直接对话：没登录就是访客，左下
 ### 4.4 解析：`AnonymousEntryService.resolve` 与 `requireOpenOrgan`
 
 - `resolve(entryKey, applicationId)`（换票）/ `resolve(entryId, applicationId)`（刷新）：接入码存在、为 `ACTIVE`、且属于该应用，否则统一返回"接入码不可用"（`basis.40081`），不区分具体原因；
-- `requireOpenOrgan(organId, applicationId)`：机构为 `ACTIVE` 的租户机构（管理机构不允许开放匿名入口），且已开通该应用（`application_authorization` 为 `ACTIVATED`）。失败时返回已有的具体错误码（`ORGAN_UNAVAILABLE`、`APPLICATION_AUTHORIZATION_MISSING` 等），便于创建接入码时管理员定位原因；接入码本身是公开的，不会多泄露信息；
+- `requireOpenOrgan(organId, applicationId)`：机构为 `ACTIVE`，且已开通该应用（`application_authorization` 为 `ACTIVATED`）。失败时返回已有的具体错误码（`ORGAN_UNAVAILABLE`、`APPLICATION_AUTHORIZATION_MISSING` 等），便于创建接入码时管理员定位原因；接入码本身是公开的，不会多泄露信息；
 - 换票时不单独检查"机构是否已开通 ANONYMOUS 能力"：没开通的访客拿到 token 也调不了任何接口，最终由网关按权限快照拒绝。
 
 ## 5. 授权码绑定公钥与访客身份（IAM + Basis）
@@ -179,11 +179,11 @@ chat-shell 要支持未登录访客直接对话：没登录就是访客，左下
 | 字段 | 取值 |
 | --- | --- |
 | `sessionType` | `ANONYMOUS` |
-| `organId` / `organType` / `organName` | 来自接入码，必须是租户机构 |
+| `organId` / `organType` / `organName` | 来自接入码所属机构（运营机构或租户机构） |
 | `userId` | visitorId，大于 0 |
 | `passportId` / `memberId` | `null` |
 | `roleIds` | 空 |
-| `adminUser` / `adminCompany` | 固定为 `false` |
+| `adminUser` / `adminCompany` | 固定为 `false`；即使访客属于运营机构也是 false。这是匿名的安全边界：访客不享有管理员和运营机构的跨租户特权，网关发现为 true 即拒绝 |
 | `name` | `访客` |
 | `applicationScopes` | 只包含接入码绑定的这一个应用 |
 | `clientId` / `clientPublicKey` | 换票时的 DPoP 公钥 |
@@ -330,7 +330,7 @@ chat-shell 改用专用接口后，员工在 chat-shell 中也只能看到自己
 | 4 | 清空浏览器数据后访问 | 新 `userId`，看不到旧会话 |
 | 5 | 同一浏览器访问 A、B 两个机构的入口 | 两个不同 `userId` |
 | 6 | `entryKey` 不存在、已停用或属于其他应用 | 统一返回"接入码不可用"（`basis.40081`） |
-| 7 | 管理机构创建接入码 | 创建时拒绝；换票时也拒绝 |
+| 7 | 运营机构创建接入码并以访客进入 | 允许；token 中 `adminCompany` 为 false，访客看不到其他租户的数据 |
 | 8 | 用另一把密钥的 Proof 兑换 code（员工与匿名各测一次） | 指纹不匹配，拒绝 |
 | 9 | 员工授权请求不带 `publicKey` | 正常登录，换票不校验指纹 |
 | 10 | 上线时正在进行的员工登录 | 不受影响 |
