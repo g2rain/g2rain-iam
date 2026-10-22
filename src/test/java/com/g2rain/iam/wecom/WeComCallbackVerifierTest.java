@@ -10,6 +10,7 @@ import org.springframework.data.redis.core.ValueOperations;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
@@ -82,7 +83,7 @@ class WeComCallbackVerifierTest {
         RedisTemplate<String, Object> redisTemplate = mock(RedisTemplate.class);
         ValueOperations<String, Object> ops = mock(ValueOperations.class);
         when(redisTemplate.opsForValue()).thenReturn(ops);
-        when(ops.setIfAbsent(anyString(), any(), any())).thenReturn(!replayHit);
+        when(ops.setIfAbsent(anyString(), any(), any(Duration.class))).thenReturn(!replayHit);
         return new WeComCallbackVerifier(properties, redisTemplate);
     }
 

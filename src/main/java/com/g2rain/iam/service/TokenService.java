@@ -16,7 +16,6 @@ import com.g2rain.common.model.Result;
 import com.g2rain.common.utils.Collections;
 import com.g2rain.common.utils.Strings;
 import com.g2rain.common.web.TokenJWTPayload;
-import com.g2rain.data.redis.GenericRedisHelper;
 import com.g2rain.iam.client.ApplicationClient;
 import com.g2rain.iam.client.LoginTokenClient;
 import com.g2rain.iam.client.MemberClient;
@@ -89,11 +88,6 @@ public class TokenService {
     private static final JsonCodec jsonCodec = JsonCodecFactory.instance();
 
     /**
-     * 通用 Redis 工具，用于获取授权码等缓存信息
-     */
-    private final GenericRedisHelper genericRedisHelper;
-
-    /**
      * Token 密钥管理器，用于获取签名密钥
      */
     private final TokenKeyManager tokenKeyManager;
@@ -126,10 +120,11 @@ public class TokenService {
     static {
         DefaultRedisScript<Object> script = new DefaultRedisScript<>();
         script.setScriptText(
-            "local v = redis.call('GET', KEYS[1])\n"
-                + "if v == false then return nil end\n"
-                + "redis.call('DEL', KEYS[1])\n"
-                + "return v"
+            """
+                local v = redis.call('GET', KEYS[1])
+                if v == false then return nil end
+                redis.call('DEL', KEYS[1])
+                return v"""
         );
         script.setResultType(Object.class);
         AUTH_CODE_CONSUME_SCRIPT = script;
@@ -138,11 +133,9 @@ public class TokenService {
     /**
      * 构造方法，注入所需依赖
      *
-     * @param genericRedisHelper Redis 工具
      * @param tokenKeyManager    JWT 密钥管理器
      */
-    public TokenService(GenericRedisHelper genericRedisHelper, TokenKeyManager tokenKeyManager) {
-        this.genericRedisHelper = genericRedisHelper;
+    public TokenService(TokenKeyManager tokenKeyManager) {
         this.tokenKeyManager = tokenKeyManager;
     }
 
@@ -185,6 +178,7 @@ public class TokenService {
         String clientId;
         String applicationCode;
         String publicKeyString;
+        String thumbprint;
         try {
             SignedJWT signedJWT = SignedJWT.parse(clientDPoP);
             JWSHeader header = signedJWT.getHeader();
@@ -196,7 +190,7 @@ public class TokenService {
 
             // 校验 JWK 类型
             JWK jwk = header.getJWK();
-            if (!(jwk instanceof ECKey ecKey)) {
+            if (!(jwk instanceof ECKey ecKey) || !IamUtils.isEs256(header, ecKey)) {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWK");
             }
 
@@ -208,6 +202,7 @@ public class TokenService {
 
             // 获取公钥
             publicKeyString = jwk.toJSONString();
+            thumbprint = IamUtils.thumbprint(ecKey);
 
             // 获取客户端标识
             clientId = header.getKeyID();
@@ -221,8 +216,10 @@ public class TokenService {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Application Code");
             }
         } catch (ParseException e) {
+            log.error("failed to code2token", e);
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof");
         } catch (JOSEException e) {
+            log.error("failed to code2token", e);
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWS");
         }
 
@@ -231,6 +228,10 @@ public class TokenService {
         String boundClientId = Strings.isBlank(codeDto.getClientId()) ? null : codeDto.getClientId().trim();
         if (Strings.isBlank(boundClientId) || !boundClientId.equals(clientId.trim())) {
             throw new BusinessException(IamErrorCode.OAUTH_AUTHORIZATION_CODE_CLIENT_MISMATCH);
+        }
+        // 授权码绑定了发起授权的公钥时，须由同一把密钥换票
+        if (Strings.isNotBlank(codeDto.getJkt()) && !codeDto.getJkt().equals(thumbprint)) {
+            throw new BusinessException(IamErrorCode.OAUTH_AUTHORIZATION_CODE_KEY_MISMATCH);
         }
         String boundApplicationCode = Strings.isBlank(codeDto.getApplicationCode())
             ? null : codeDto.getApplicationCode().trim();
@@ -247,7 +248,7 @@ public class TokenService {
         validateApplicationDPoP(applicationDPoP, applicationResult.getData());
 
         if (Boolean.TRUE.equals(codeDto.getAnonymous())) {
-            return anonymousCode2token(clientId, applicationCode, publicKeyString, codeDto);
+            return anonymousCode2token(clientId, applicationCode, publicKeyString, thumbprint, codeDto);
         }
 
         Long userId = IamUtils.parseLongSafe(codeDto.getUserId(), "userId");
@@ -287,14 +288,17 @@ public class TokenService {
     }
 
     /**
-     * 匿名授权码换 token：跳过 session，由 Basis 构建 ANONYMOUS 载荷。
+     * 匿名授权码换 token：跳过 session，由 Basis 按接入码与公钥指纹构建 ANONYMOUS 载荷。
      */
     private TokenVo anonymousCode2token(String clientId, String applicationCode, String publicKeyString,
-                                        AuthorizationCodeDto codeDto) {
+                                        String thumbprint, AuthorizationCodeDto codeDto) {
+        if (Strings.isBlank(codeDto.getJkt())) {
+            throw new BusinessException(IamErrorCode.OAUTH_AUTHORIZATION_CODE_KEY_MISMATCH);
+        }
         Result<TokenJWTPayload> result = loginTokenClient.fetchAnonymousTokenContext(
-            codeDto.getOrganId(),
+            codeDto.getEntryKey(),
             applicationCode,
-            codeDto.getRoleIds()
+            thumbprint
         );
         if (!result.isSuccess()) {
             throw ExceptionConverter.of(result);
@@ -331,7 +335,7 @@ public class TokenService {
 
             // 校验 JWK 类型
             jwk = header.getJWK();
-            if (!(jwk instanceof ECKey ecKey)) {
+            if (!(jwk instanceof ECKey ecKey) || !IamUtils.isEs256(header, ecKey)) {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWK");
             }
 
@@ -347,8 +351,10 @@ public class TokenService {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Application Code");
             }
         } catch (ParseException e) {
+            log.error("failed to refreshToken", e);
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof");
         } catch (JOSEException e) {
+            log.error("failed to refreshToken", e);
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWS");
         }
 
@@ -372,9 +378,6 @@ public class TokenService {
 
             String payload = signedJWT.getJWTClaimsSet().toString();
             TokenJWTPayload body = jsonCodec.str2obj(payload, TokenJWTPayload.class);
-            if (SessionType.isAnonymous(body.getSessionType())) {
-                throw new BusinessException(IamErrorCode.ANONYMOUS_REFRESH_NOT_ALLOWED);
-            }
             if (!IamUtils.matches(body.getClientPublicKey(), jwk)) {
                 throw new BusinessException(IamErrorCode.TOKEN_DPOP_KEY_MISMATCH);
             }
@@ -387,6 +390,10 @@ public class TokenService {
 
             if (SessionType.isMember(body.getSessionType())) {
                 return refreshMemberToken(body, applicationCode);
+            }
+
+            if (SessionType.isAnonymous(body.getSessionType())) {
+                return refreshAnonymousToken(body, applicationCode, IamUtils.thumbprint(jwk));
             }
 
             ApplicationSelectDto selectDto = new ApplicationSelectDto();
@@ -416,8 +423,39 @@ public class TokenService {
 
             return doGenerateToken(applicationCode, body);
         } catch (JOSEException | ParseException e) {
+            log.error("failed to refreshToken", e);
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "token");
         }
+    }
+
+    /**
+     * 刷新匿名 Token：按旧 Token 中的接入码 ID 由 Basis 复核接入码、机构与应用，并重建载荷。
+     * <p>调用前已校验 Proof 公钥与 Token 绑定公钥一致；刷新不得换应用。</p>
+     */
+    private TokenVo refreshAnonymousToken(TokenJWTPayload body, String applicationCode, String thumbprint) {
+        if (Objects.isNull(body.getEntryId()) || body.getEntryId() <= 0L) {
+            throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "entryId");
+        }
+        boolean acdBound = Collections.isNotEmpty(body.getApplicationScopes())
+            && body.getApplicationScopes().stream()
+            .anyMatch(scope -> Objects.equals(applicationCode, scope.getApplicationCode()));
+        if (!acdBound) {
+            throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "applicationCode");
+        }
+
+        Result<TokenJWTPayload> result = loginTokenClient.fetchAnonymousRefreshContext(
+            body.getEntryId(),
+            applicationCode,
+            thumbprint
+        );
+        if (!result.isSuccess()) {
+            throw ExceptionConverter.of(result);
+        }
+
+        TokenJWTPayload payload = result.getData();
+        payload.setClientId(body.getClientId());
+        payload.setClientPublicKey(body.getClientPublicKey());
+        return doGenerateToken(applicationCode, payload);
     }
 
     /**
@@ -499,7 +537,7 @@ public class TokenService {
 
             // 校验 JWK 类型
             JWK jwk = header.getJWK();
-            if (!(jwk instanceof ECKey ecKey)) {
+            if (!(jwk instanceof ECKey ecKey) || !IamUtils.isEs256(header, ecKey)) {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWK");
             }
 
@@ -544,10 +582,14 @@ public class TokenService {
             String payloadStr = signedJWT.getJWTClaimsSet().toString();
             TokenJWTPayload body = jsonCodec.str2obj(payloadStr, TokenJWTPayload.class);
             if (SessionType.isAnonymous(body.getSessionType())) {
-                throw new BusinessException(IamErrorCode.ANONYMOUS_REFRESH_NOT_ALLOWED);
+                throw new BusinessException(IamErrorCode.ANONYMOUS_EXCHANGE_NOT_ALLOWED);
             }
             if (SessionType.isMember(body.getSessionType())) {
                 throw new BusinessException(IamErrorCode.MEMBER_EXCHANGE_NOT_ALLOWED);
+            }
+            // 与 refresh 一致：Proof 公钥须与旧 Token 绑定的公钥相同，防止盗用 Token 后用自己的密钥换票
+            if (!IamUtils.matches(body.getClientPublicKey(), jwk)) {
+                throw new BusinessException(IamErrorCode.TOKEN_DPOP_KEY_MISMATCH);
             }
             Long refreshExpireAt = body.getRefreshExpireAt();
 
@@ -568,8 +610,10 @@ public class TokenService {
             payload.setClientPublicKey(publicKeyString);
             return doGenerateToken(applicationCode, payload);
         } catch (ParseException e) {
+            log.error("failed to exchangeToken", e);
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof");
         } catch (JOSEException e) {
+            log.error("failed to exchangeToken", e);
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWS");
         }
     }
@@ -602,7 +646,7 @@ public class TokenService {
             }
 
             JWK jwk = header.getJWK();
-            if (!(jwk instanceof ECKey ecKey)) {
+            if (!(jwk instanceof ECKey ecKey) || !IamUtils.isEs256(header, ecKey)) {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWK");
             }
 
@@ -622,8 +666,10 @@ public class TokenService {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Application Code");
             }
         } catch (ParseException e) {
+            log.error("failed to parseAndValidateMemberClientProof", e);
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof");
         } catch (JOSEException e) {
+            log.error("failed to parseAndValidateMemberClientProof", e);
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWS");
         }
 
@@ -786,23 +832,26 @@ public class TokenService {
         }
         String redisKey = RedisKeyRule.AUTHORIZATION_CODE.format(code);
         Object raw = redisTemplate.execute(AUTH_CODE_CONSUME_SCRIPT, List.of(redisKey));
-        if (raw == null) {
-            throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
-        }
-        if (raw instanceof AuthorizationCodeDto dto) {
-            return dto;
-        }
-        if (raw instanceof String s) {
-            if (Strings.isBlank(s)) {
-                throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
+        switch (raw) {
+            case null -> throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
+            case AuthorizationCodeDto dto -> {
+                return dto;
             }
-            try {
-                return jsonCodec.str2obj(s, AuthorizationCodeDto.class);
-            } catch (RuntimeException e) {
-                log.warn("authorization code payload deserialize failed after consume, key={}", redisKey, e);
-                throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
+            case String s -> {
+                if (Strings.isBlank(s)) {
+                    throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
+                }
+                try {
+                    return jsonCodec.str2obj(s, AuthorizationCodeDto.class);
+                } catch (RuntimeException e) {
+                    log.warn("authorization code payload deserialize failed after consume, key={}", redisKey, e);
+                    throw new BusinessException(SystemErrorCode.AUTH_CODE_INVALID, code);
+                }
+            }
+            default -> {
             }
         }
+
         log.warn(
             "authorization code redis value unexpected type {} after consume, key={}",
             raw.getClass().getName(),
@@ -846,8 +895,10 @@ public class TokenService {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Application DPoP Proof JWS");
             }
         } catch (ParseException e) {
+            log.error("failed to validateApplicationDPoP", e);
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Application DPoP Proof");
         } catch (JOSEException | InvalidKeySpecException | NoSuchAlgorithmException e) {
+            log.error("failed to validateApplicationDPoP", e);
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Application DPoP Proof JWS");
         }
     }
@@ -889,6 +940,7 @@ public class TokenService {
             }
             return body;
         } catch (ParseException | JOSEException e) {
+            log.error("failed to requireValidAccessToken", e);
             throw new BusinessException(IamErrorCode.DINGTALK_PASSPORT_BIND_UNAUTHORIZED);
         }
     }

@@ -26,6 +26,7 @@ public interface WeComLoginAdapter {
     /**
      * @deprecated 使用 {@link #buildAuthorizeUrl(String, String, String)}
      */
+    @Deprecated
     default String buildAuthorizeUrl(String state, String callbackUrl) {
         return buildAuthorizeUrl(state, callbackUrl, "member");
     }

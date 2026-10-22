@@ -1,5 +1,7 @@
 package com.g2rain.iam.wecom;
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.g2rain.common.exception.BusinessException;
 import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.config.WeComIamProperties;
@@ -15,6 +17,7 @@ import java.security.SecureRandom;
 import java.util.Base64;
 
 @Component
+@Slf4j
 public class WeComCredentialCipher {
     private static final SecureRandom RANDOM = new SecureRandom();
     private final WeComIamProperties properties;
@@ -44,6 +47,7 @@ public class WeComCredentialCipher {
             System.arraycopy(ciphertext, 0, payload, iv.length, ciphertext.length);
             return "v1:" + Base64.getEncoder().encodeToString(payload);
         } catch (Exception exception) {
+            log.error("failed to encrypt", exception);
             throw new BusinessException(IamErrorCode.WECOM_CREDENTIAL_ENCRYPTION_FAILED);
         }
     }

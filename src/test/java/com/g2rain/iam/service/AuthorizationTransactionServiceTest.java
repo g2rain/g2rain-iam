@@ -5,6 +5,7 @@ import com.g2rain.data.redis.GenericRedisHelper;
 import com.g2rain.iam.config.IamAccessProperties;
 import com.g2rain.iam.dto.AuthPolicySnapshot;
 import com.g2rain.iam.dto.AuthorizationTransactionDto;
+import com.g2rain.iam.dto.AuthorizeRequest;
 import com.g2rain.iam.enums.AuthorizationMode;
 import com.g2rain.iam.enums.AuthorizationTransactionStatus;
 import com.g2rain.iam.enums.RedisKeyRule;
@@ -20,6 +21,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -72,7 +74,7 @@ class AuthorizationTransactionServiceTest {
     @Test
     void createOrReusePersistsCreatedTransaction() {
         AuthorizationTransactionDto txn = service.createOrReuse(
-            "client-1", "https://app/callback", "state-1", null, "flow-hash");
+            userRequest("state-1", null), "flow-hash");
 
         assertEquals(AuthorizationMode.USER, txn.getAuthorizationMode());
         assertEquals(AuthorizationTransactionStatus.CREATED, txn.getStatus());
@@ -86,7 +88,7 @@ class AuthorizationTransactionServiceTest {
     @Test
     void requireActiveRejectsMismatchedFlowCookie() {
         AuthorizationTransactionDto txn = service.createOrReuse(
-            "client-1", "https://app/callback", "state-2", null, "flow-a");
+            userRequest("state-2", null), "flow-a");
         store.put(
             RedisKeyRule.AUTHORIZATION_TRANSACTION.format(txn.getTid()),
             txn);
@@ -99,14 +101,50 @@ class AuthorizationTransactionServiceTest {
     @Test
     void createOrReuseReturnsExistingWhenFlowMatches() {
         AuthorizationTransactionDto first = service.createOrReuse(
-            "client-1", "https://app/callback", "state-3", "app-a", "flow-hash");
+            userRequest("state-3", "app-a"), "flow-hash");
         store.put(RedisKeyRule.AUTHORIZATION_TRANSACTION.format(first.getTid()), first);
         ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
         verify(genericRedisHelper, org.mockito.Mockito.atLeastOnce())
             .set(keyCaptor.capture(), any(), any(Duration.class));
 
         AuthorizationTransactionDto second = service.createOrReuse(
-            "client-1", "https://app/callback", "state-3", "app-a", "flow-hash");
+            userRequest("state-3", "app-a"), "flow-hash");
         assertEquals(first.getTid(), second.getTid());
+    }
+
+    @Test
+    void createOrReuseStoresAnonymousEntryAndKey() {
+        AuthorizationTransactionDto txn = service.createOrReuse(
+            anonymousRequest("ek_a", "jkt-1"), "flow-hash");
+
+        assertEquals(AuthorizationMode.ANONYMOUS, txn.getAuthorizationMode());
+        assertEquals("ek_a", txn.getEntryKey());
+        assertEquals("jkt-1", txn.getJkt());
+        assertEquals("csrf", txn.getState());
+    }
+
+    @Test
+    void createOrReuseDoesNotReuseAcrossEntryOrKey() {
+        AuthorizationTransactionDto first = service.createOrReuse(
+            anonymousRequest("ek_a", "jkt-1"), "flow-hash");
+        store.put(RedisKeyRule.AUTHORIZATION_TRANSACTION.format(first.getTid()), first);
+
+        AuthorizationTransactionDto otherEntry = service.createOrReuse(
+            anonymousRequest("ek_b", "jkt-1"), "flow-hash");
+        AuthorizationTransactionDto otherKey = service.createOrReuse(
+            anonymousRequest("ek_a", "jkt-2"), "flow-hash");
+
+        assertNotEquals(first.getTid(), otherEntry.getTid());
+        assertNotEquals(first.getTid(), otherKey.getTid());
+    }
+
+    private static AuthorizeRequest anonymousRequest(String entryKey, String jkt) {
+        return new AuthorizeRequest("client-1", "https://app/callback", "csrf", null,
+            AuthorizationMode.ANONYMOUS, entryKey, jkt);
+    }
+
+    private static AuthorizeRequest userRequest(String state, String applicationCode) {
+        return new AuthorizeRequest("client-1", "https://app/callback", state, applicationCode,
+            AuthorizationMode.USER, null, null);
     }
 }

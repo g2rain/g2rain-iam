@@ -1,5 +1,6 @@
 package com.g2rain.iam.wecom;
 
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.g2rain.common.exception.BusinessException;
@@ -76,6 +77,7 @@ final class WeComQyApiSupport {
         } catch (BusinessException exception) {
             throw exception;
         } catch (Exception exception) {
+            log.error("failed to parseAndValidate", exception);
             throw new BusinessException(failure);
         }
     }

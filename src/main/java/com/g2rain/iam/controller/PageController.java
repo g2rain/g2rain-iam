@@ -1,6 +1,8 @@
 package com.g2rain.iam.controller;
 
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.config.IamAccessProperties;
 import com.g2rain.iam.dto.AuthorizationTransactionDto;
@@ -36,6 +38,7 @@ import java.util.Optional;
  */
 @Controller
 @AllArgsConstructor
+@Slf4j
 public class PageController {
 
     /**
@@ -133,6 +136,7 @@ public class PageController {
             }
             return authorizationFlowService.renderLogin(txn, null, null, loginMethod);
         } catch (Exception ex) {
+            log.error("failed to loginPage", ex);
             return authorizationFlowService.renderFlowError(null, ex.getMessage());
         }
     }
@@ -152,6 +156,7 @@ public class PageController {
             AuthorizationTransactionDto txn = requireActiveTxn(request, tid);
             return authorizationFlowService.renderRegister(txn);
         } catch (Exception ex) {
+            log.error("failed to registerPage", ex);
             return authorizationFlowService.renderFlowError(null, ex.getMessage());
         }
     }

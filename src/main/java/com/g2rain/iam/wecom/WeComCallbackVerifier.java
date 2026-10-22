@@ -1,5 +1,7 @@
 package com.g2rain.iam.wecom;
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.g2rain.common.exception.BusinessException;
 import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.config.WeComIamProperties;
@@ -24,6 +26,7 @@ import java.util.HexFormat;
  * 企业微信回调通用验签解密器：时间窗、签名、防重放、AES 解密与接收方校验。
  */
 @Component
+@Slf4j
 public class WeComCallbackVerifier {
 
     private static final int MAX_PARAM_LENGTH = 4096;
@@ -73,6 +76,7 @@ public class WeComCallbackVerifier {
         try {
             epochSeconds = Long.parseLong(timestamp.trim());
         } catch (NumberFormatException exception) {
+            log.error("failed to validateTimestamp", exception);
             throw new BusinessException(IamErrorCode.WECOM_CALLBACK_TIMESTAMP_INVALID);
         }
         long skew = Math.max(1L, properties.getCustomerService().getTimestampSkewSeconds());
@@ -94,6 +98,7 @@ public class WeComCallbackVerifier {
         } catch (BusinessException exception) {
             throw exception;
         } catch (Exception exception) {
+            log.error("failed to verifySignature", exception);
             throw new BusinessException(IamErrorCode.WECOM_CALLBACK_INVALID);
         }
     }
@@ -139,6 +144,7 @@ public class WeComCallbackVerifier {
         } catch (BusinessException exception) {
             throw exception;
         } catch (Exception exception) {
+            log.error("failed to decrypt", exception);
             throw new BusinessException(IamErrorCode.WECOM_CALLBACK_INVALID);
         }
     }
@@ -177,6 +183,7 @@ public class WeComCallbackVerifier {
             digest.update(encrypt.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest.digest());
         } catch (Exception exception) {
+            log.error("failed to fingerprint", exception);
             throw new BusinessException(IamErrorCode.WECOM_CALLBACK_INVALID);
         }
     }

@@ -1,5 +1,6 @@
 package com.g2rain.iam.dingtalk;
 
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -147,6 +148,7 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
             byte[] signData = mac.doFinal(canonical.getBytes(StandardCharsets.UTF_8));
             return Base64.getEncoder().encodeToString(signData);
         } catch (Exception e) {
+            log.error("failed to computeSnsSignatureBase64", e);
             throw new BusinessException(IamErrorCode.DINGTALK_USERINFO_FAILED);
         }
     }
@@ -181,6 +183,7 @@ public abstract class AbstractDingTalkLoginAdapter implements DingTalkLoginAdapt
             fields.accept(node);
             return objectMapper.writeValueAsString(node);
         } catch (Exception e) {
+            log.error("failed to jsonBody", e);
             throw new BusinessException(failureCode);
         }
     }

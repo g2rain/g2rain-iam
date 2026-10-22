@@ -78,13 +78,13 @@ class AuthorizationFlowServiceTest {
         when(sessionService.getSession("s1")).thenReturn(session);
         when(userService.listUserVos(session)).thenReturn(List.of(user(7L)));
         stubCompareAndUpdate(txn);
-        when(authorizationService.generateAuthorizationCode(session, "client", "7", false))
+        when(authorizationService.generateAuthorizationCode(session, "client", "7", false, null, null, null, null))
             .thenReturn("legacy-code");
 
         ModelAndView mv = service.continueFlow(txn, "s1");
 
         assertTrue(String.valueOf(mv.getViewName()).contains("code=legacy-code"));
-        verify(authorizationService).generateAuthorizationCode(session, "client", "7", false);
+        verify(authorizationService).generateAuthorizationCode(session, "client", "7", false, null, null, null, null);
         verify(applicationClient, never()).selectList(any());
     }
 
@@ -101,7 +101,7 @@ class AuthorizationFlowServiceTest {
         assertEquals("consent", mv.getViewName());
         assertNull(mv.getModel().get("selectedUserId"));
         assertEquals("", mv.getModel().get("applicationCode"));
-        verify(authorizationService, never()).generateAuthorizationCode(any(), any(), any(), anyBoolean());
+        verify(authorizationService, never()).generateAuthorizationCode(any(), any(), any(), anyBoolean(), any(), any(), any(), any());
         verify(applicationClient, never()).selectList(any());
     }
 
@@ -112,13 +112,13 @@ class AuthorizationFlowServiceTest {
         when(sessionService.getSession("s1")).thenReturn(session);
         when(userService.listUserVos(session)).thenReturn(List.of(user(7L), user(8L)));
         stubCompareAndUpdate(txn);
-        when(authorizationService.generateAuthorizationCode(session, "client", "8", false))
+        when(authorizationService.generateAuthorizationCode(session, "client", "8", false, null, null, null, null))
             .thenReturn("picked-code");
 
         ModelAndView mv = service.confirm(txn, "s1", "8", false);
 
         assertTrue(String.valueOf(mv.getViewName()).contains("code=picked-code"));
-        verify(authorizationService).generateAuthorizationCode(session, "client", "8", false);
+        verify(authorizationService).generateAuthorizationCode(session, "client", "8", false, null, null, null, null);
         verify(applicationClient, never()).selectList(any());
     }
 
@@ -147,7 +147,7 @@ class AuthorizationFlowServiceTest {
         assertEquals("应用说明", preview.getDescription());
         assertEquals("租户甲", preview.getOrganName());
         verify(authorizationService, never()).generateAuthorizationCode(
-            any(), any(), any(), anyBoolean(), any(), any(), any());
+            any(), any(), any(), anyBoolean(), any(), any(), any(), any());
         verify(applicationAuthorizationClient, never()).activateSelf(any());
     }
 
@@ -160,7 +160,7 @@ class AuthorizationFlowServiceTest {
         stubCompareAndUpdate(txn);
         when(applicationClient.selectList(any()))
             .thenReturn(Result.success(List.of(application("页面应用", "说明", ApplicationType.SYSTEM.name()))));
-        when(authorizationService.generateAuthorizationCode(session, "client", "7", false))
+        when(authorizationService.generateAuthorizationCode(session, "client", "7", false, null, null, null, null))
             .thenReturn("page-code");
 
         ModelAndView mv = service.continueFlow(txn, "s1");
@@ -168,7 +168,7 @@ class AuthorizationFlowServiceTest {
         assertTrue(String.valueOf(mv.getViewName()).contains("code=page-code"));
         assertFalse(Boolean.TRUE.equals(txn.getOpenPlatformConsent()));
         assertEquals(Boolean.FALSE, txn.getOpenPlatformConsent());
-        verify(authorizationService).generateAuthorizationCode(session, "client", "7", false);
+        verify(authorizationService).generateAuthorizationCode(session, "client", "7", false, null, null, null, null);
         verify(applicationAuthorizationClient, never()).activateSelf(any());
     }
 
@@ -181,7 +181,7 @@ class AuthorizationFlowServiceTest {
         stubCompareAndUpdate(txn);
         when(applicationClient.selectList(any()))
             .thenReturn(Result.success(List.of(application("支撑应用", "说明", ApplicationType.SUPPORT.name()))));
-        when(authorizationService.generateAuthorizationCode(session, "client", "7", false))
+        when(authorizationService.generateAuthorizationCode(session, "client", "7", false, null, null, null, null))
             .thenReturn("support-code");
 
         ModelAndView mv = service.continueFlow(txn, "s1");
@@ -201,7 +201,7 @@ class AuthorizationFlowServiceTest {
         ModelAndView mv = service.continueFlow(txn, "s1");
 
         assertEquals("error", mv.getViewName());
-        verify(authorizationService, never()).generateAuthorizationCode(any(), any(), any(), anyBoolean());
+        verify(authorizationService, never()).generateAuthorizationCode(any(), any(), any(), anyBoolean(), any(), any(), any(), any());
         verify(applicationAuthorizationClient, never()).activateSelf(any());
     }
 
@@ -215,7 +215,7 @@ class AuthorizationFlowServiceTest {
         ModelAndView mv = service.continueFlow(txn, "s1");
 
         assertEquals("error", mv.getViewName());
-        verify(authorizationService, never()).generateAuthorizationCode(any(), any(), any(), anyBoolean());
+        verify(authorizationService, never()).generateAuthorizationCode(any(), any(), any(), anyBoolean(), any(), any(), any(), any());
     }
 
     @Test
@@ -228,7 +228,7 @@ class AuthorizationFlowServiceTest {
         assertTrue(String.valueOf(mv.getViewName()).contains("access_denied")
             || String.valueOf(mv.getViewName()).contains("redirect:"));
         verify(authorizationService, never()).generateAuthorizationCode(
-            any(), any(), any(), anyBoolean(), any(), any(), any());
+            any(), any(), any(), anyBoolean(), any(), any(), any(), any());
         verify(applicationAuthorizationClient, never()).activateSelf(any());
     }
 

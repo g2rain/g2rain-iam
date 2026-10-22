@@ -96,16 +96,6 @@ public enum IamErrorCode implements ErrorCode {
     DINGTALK_PASSPORT_BIND_FAILED("iam.40019", "绑定失败，请稍后重试"),
 
     /**
-     * 匿名 OAuth 授权未启用或配置不完整
-     */
-    ANONYMOUS_AUTH_DISABLED("iam.40020", "匿名授权未启用或配置不完整"),
-
-    /**
-     * 匿名 token 不允许 refresh
-     */
-    ANONYMOUS_REFRESH_NOT_ALLOWED("iam.40021", "匿名令牌不允许刷新"),
-
-    /**
      * 钉钉通讯录 access token 获取失败
      */
     DINGTALK_CONTACT_ACCESS_TOKEN_FAILED("iam.50220", "钉钉通讯录 access token 获取失败"),
@@ -213,7 +203,27 @@ public enum IamErrorCode implements ErrorCode {
     /**
      * 当前冻结策略不允许注册
      */
-    AUTH_POLICY_REGISTER_DENIED("iam.40052", "当前应用不允许注册");
+    AUTH_POLICY_REGISTER_DENIED("iam.40052", "当前应用不允许注册"),
+
+    /**
+     * 授权码与当前客户端 DPoP 公钥不匹配
+     */
+    OAUTH_AUTHORIZATION_CODE_KEY_MISMATCH("iam.40053", "授权码与当前客户端密钥不匹配"),
+
+    /**
+     * 匿名授权缺少接入码或客户端公钥
+     */
+    ANONYMOUS_AUTH_INVALID("iam.40054", "匿名授权须携带接入码与客户端公钥"),
+
+    /**
+     * 客户端公钥无效：仅支持 ES256（EC P-256）
+     */
+    CLIENT_PUBLIC_KEY_INVALID("iam.40055", "客户端公钥无效，仅支持 ES256（P-256）"),
+
+    /**
+     * 匿名 Token 不允许通过 exchange_token 换取员工会话
+     */
+    ANONYMOUS_EXCHANGE_NOT_ALLOWED("iam.40056", "匿名令牌不允许交换为员工令牌");
 
     private final String code;
 

@@ -1,12 +1,17 @@
 package com.g2rain.iam.utils;
 
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.g2rain.basis.enums.BasisErrorCode;
 import com.g2rain.common.exception.BusinessException;
 import com.g2rain.common.exception.SystemErrorCode;
 import com.g2rain.common.utils.Strings;
 import com.g2rain.iam.enums.ESAlgorithm;
+import com.g2rain.iam.enums.IamErrorCode;
 import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.jwk.Curve;
 import com.nimbusds.jose.jwk.ECKey;
 import com.nimbusds.jose.jwk.JWK;
@@ -43,6 +48,7 @@ import java.util.regex.Pattern;
  * @author alpha
  * @since 2025/10/11
  */
+@Slf4j
 public class IamUtils {
     private static final int DEFAULT_LENGTH = 32; // 32字节 = 256bit
     private static final SecureRandom secureRandom = new SecureRandom();
@@ -157,6 +163,47 @@ public class IamUtils {
     }
 
     /**
+     * DPoP Proof 是否为 ES256 签名且公钥为 P-256 曲线（客户端只生成 ES256 密钥）。
+     */
+    public static boolean isEs256(JWSHeader header, ECKey key) {
+        return JWSAlgorithm.ES256.equals(header.getAlgorithm()) && Curve.P_256.equals(key.getCurve());
+    }
+
+    /**
+     * 计算公钥的 RFC 7638 指纹（SHA-256，base64url）。
+     */
+    public static String thumbprint(JWK jwk) {
+        try {
+            return jwk.toPublicJWK().computeThumbprint().toString();
+        } catch (JOSEException e) {
+            log.error("failed to thumbprint", e);
+            throw new BusinessException(IamErrorCode.CLIENT_PUBLIC_KEY_INVALID);
+        }
+    }
+
+    /**
+     * 解析授权请求携带的客户端公钥并计算指纹；仅接受 EC P-256。
+     *
+     * @param publicKey JWK JSON
+     * @return 指纹；{@code publicKey} 为空时返回 {@code null}
+     * @throws BusinessException 公钥无法解析或不是 P-256 时抛出
+     */
+    public static String thumbprint(String publicKey) {
+        if (Strings.isBlank(publicKey)) {
+            return null;
+        }
+        try {
+            if (JWK.parse(publicKey) instanceof ECKey ecKey && Curve.P_256.equals(ecKey.getCurve())) {
+                return thumbprint(ecKey);
+            }
+        } catch (ParseException e) {
+            log.error("failed to thumbprint", e);
+            // 统一按无效公钥处理
+        }
+        throw new BusinessException(IamErrorCode.CLIENT_PUBLIC_KEY_INVALID);
+    }
+
+    /**
      * 判断 Token 绑定的 {@code clientPublicKey} 与 DPoP Proof 头 JWK 是否同一公钥（RFC 7638 Thumbprint）。
      */
     public static boolean matches(String clientPublicKey, JWK proofJwk) {
@@ -169,6 +216,7 @@ public class IamUtils {
             return stored.toPublicJWK().computeThumbprint()
                 .equals(proofJwk.toPublicJWK().computeThumbprint());
         } catch (ParseException | JOSEException e) {
+            log.error("failed to matches", e);
             return false;
         }
     }
@@ -254,6 +302,7 @@ public class IamUtils {
         try {
             return pemToDerInternal(pem);
         } catch (IllegalArgumentException e) {
+            log.error("failed to toDer", e);
             throw new BusinessException(BasisErrorCode.PUB_KEY_INVALID_KEY);
         }
     }

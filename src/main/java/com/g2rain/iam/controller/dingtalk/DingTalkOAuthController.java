@@ -150,6 +150,7 @@ public class DingTalkOAuthController {
                 ctx.applicationCode(), ctx.tid());
             return new ModelAndView(Constants.REDIRECT + url);
         } catch (BusinessException ex) {
+            log.error("failed to authorize", ex);
             return authorizationFlowService.renderFlowError(null, ex.getMessage());
         } catch (Exception e) {
             log.error("钉钉授权跳转失败 bindMode={} message={}", bindMode, e.getMessage(), e);
@@ -207,6 +208,7 @@ public class DingTalkOAuthController {
                         payload.getTransactionId(), flowHash);
                     return authorizationFlowService.renderLogin(txn, errorMessage, null);
                 } catch (BusinessException ex) {
+                    log.error("failed to handle dingtalk callback", ex);
                     return authorizationFlowService.renderFlowError(null, errorMessage);
                 }
             }

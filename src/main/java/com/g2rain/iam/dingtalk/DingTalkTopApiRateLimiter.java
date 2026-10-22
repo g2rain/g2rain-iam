@@ -1,8 +1,11 @@
 package com.g2rain.iam.dingtalk;
 
+
+import lombok.extern.slf4j.Slf4j;
 /**
  * 轻量 QPS 限流器（单线程同步调用场景）。
  */
+@Slf4j
 final class DingTalkTopApiRateLimiter {
 
     private final long intervalNanos;
@@ -20,6 +23,7 @@ final class DingTalkTopApiRateLimiter {
             try {
                 Thread.sleep(waitNanos / 1_000_000L, (int) (waitNanos % 1_000_000L));
             } catch (InterruptedException ex) {
+                log.error("failed to acquire", ex);
                 Thread.currentThread().interrupt();
             }
             now = System.nanoTime();

@@ -98,7 +98,7 @@ IAM 过程中除本次「首次全参数建事务」外，**所有页面只接�
 | `redirectUri` | 首次请求提供的回调地址；本阶段不做强校验，后续不可改写 |
 | `state` | 原样保存，仅从事务回传，不再信任表单值 |
 | `flowCookieHash` | 浏览器流程 Cookie 的哈希，禁止跨浏览器续跑 |
-| `authorizationMode` | `USER` 或 `ANONYMOUS`；可由首次全参数中的既有 `state=anonymous` 约定解析 |
+| `authorizationMode` | `USER` 或 `ANONYMOUS`；由首次全参数中的 `mode` 参数决定（不传为 `USER`），见 [匿名访客接入方案](anonymous-visitor-access.md) |
 | `sessionId` | 登录完成后绑定，用于防止跨会话确认 |
 | `selectedUserId` | 用户选择完成后绑定并校验归属 |
 | `activationOperationId` / `activationLeaseUntil` | SELF 开通的幂等操作标识和短租约 |
@@ -187,9 +187,9 @@ Basis 不保存 `tid`，不为动态 `clientId` 登记回调。本阶段不以 `
 
 页面表单不得提交 `redirectUri` / `state` / `applicationCode` 参与回调。IdP 另用 `idp_state`，映射到 `tid`，不得覆盖业务 `state`。
 
-双轨期可继续兼容空 `state` 与 `state=anonymous|...`；创建时解析为 `authorizationMode` 与实际业务 state。新页面链路禁止再让业务 `state` 表达模式以外的 IAM 控制语义。
+业务 `state` 只用于回传 CSRF 值，不承载任何 IAM 控制语义；授权模式由 `mode` 参数表达，已不再兼容 `state=anonymous|...`。
 
-同一有效期内，同一 `authorizationMode + applicationCode + clientId + state` 建议仅一个未完成事务；重复全参数进入可返回已有 `tid`（须 flow Cookie 匹配）或明确拒绝——实施时选定一种并固定。
+同一有效期内，同一 `authorizationMode + applicationCode + clientId + state + jkt + entryKey` 仅一个未完成事务（`jkt` 为客户端公钥指纹，`entryKey` 仅匿名）；重复全参数进入可返回已有 `tid`（须 flow Cookie 匹配）或明确拒绝——实施时选定一种并固定。
 
 规则摘要：
 

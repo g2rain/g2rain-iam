@@ -1,5 +1,6 @@
 package com.g2rain.iam.service.idp.sync;
 
+
 import com.g2rain.basis.enums.IdpBindMode;
 import com.g2rain.basis.enums.IdpType;
 import com.g2rain.basis.idp.sync.dto.IdpDepartmentNode;
@@ -246,6 +247,7 @@ public class DingTalkContactSyncServiceImpl implements IdpContactSyncService {
         try {
             return IdpBindMode.valueOf(bindMode.trim());
         } catch (IllegalArgumentException e) {
+            log.error("failed to resolveBindMode", e);
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "bindMode");
         }
     }
