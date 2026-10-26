@@ -103,7 +103,7 @@ public record ClientDPoPAuthFilter(Tracer tracer) implements Filter {
             JWSHeader header = signedJWT.getHeader();
 
             // 校验 typ
-            if (!"dpop+jwt".equalsIgnoreCase(header.getType().toString())) {
+            if (!IamUtils.isDPoPType(header)) {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof typ");
             }
 

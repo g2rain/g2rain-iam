@@ -163,6 +163,14 @@ public class IamUtils {
     }
 
     /**
+     * DPoP Proof 头部 typ 是否为 {@code dpop+jwt}；缺少 typ 视为不合法。
+     */
+    public static boolean isDPoPType(JWSHeader header) {
+        return Objects.nonNull(header.getType())
+            && Constants.DPoP_HEADER_TYPE.equalsIgnoreCase(header.getType().toString());
+    }
+
+    /**
      * DPoP Proof 是否为 ES256 签名且公钥为 P-256 曲线（客户端只生成 ES256 密钥）。
      */
     public static boolean isEs256(JWSHeader header, ECKey key) {

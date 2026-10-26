@@ -168,7 +168,7 @@ chat-shell 要支持未登录访客直接对话：没登录就是访客，左下
 - 生效接口 = 应用授权 ∩ 机构已开通 ∩ 已发布的 ANONYMOUS 控制单元，与 `ResourceApiDao` 中 MEMBER 的口径一致；
 - `getSessionApiPermissions(ANONYMOUS, organId)` 按机构返回，并附带该机构启用中的接入码 ID（见 §7）；
 - 通用的会话 list / delete 接口**不得**放入 ANONYMOUS 控制单元；
-- chat-shell 访客至少需要：`/harness/v1/chat/completions`、`/harness/chat/conversation/list`、`/harness/chat/message/list`、`DELETE /harness/chat/conversation/{id}`；如需访客切换语言，再加入语言列表与国际化文案接口（不加时前端只打警告，不影响对话）；
+- chat-shell 访客至少需要：`/harness/v1/chat/completions`、`/harness/chat/conversation/list`、`/harness/chat/message/list`、`DELETE /harness/chat/conversation/{conversationId}`；如需访客切换语言，再加入语言列表与国际化文案接口（不加时前端只打警告，不影响对话）；
 - 删除 `resolveAnonymousRoleIds` 及 ADMIN 回退；删除 IAM 配置 `g2rain.iam.anonymous.*`；
 - 以下变化都发出 `ANONYMOUS_PERM`（载荷为 organId）：接入码启停或删除、ANONYMOUS 能力开关、ANONYMOUS 控制单元及其接口变化。
 
