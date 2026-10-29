@@ -26,7 +26,6 @@ import com.g2rain.iam.enums.ESAlgorithm;
 import com.g2rain.iam.enums.IamErrorCode;
 import com.g2rain.iam.enums.RedisKeyRule;
 import com.g2rain.iam.enums.TokenGrantType;
-import com.g2rain.iam.utils.Constants;
 import com.g2rain.iam.utils.IamUtils;
 import com.g2rain.iam.vo.TokenVo;
 import com.g2rain.member.vo.MemberVo;
@@ -184,7 +183,7 @@ public class TokenService {
             JWSHeader header = signedJWT.getHeader();
 
             // 校验 typ
-            if (!Constants.DPoP_HEADER_TYPE.equalsIgnoreCase(header.getType().toString())) {
+            if (!IamUtils.isDPoPType(header)) {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof typ");
             }
 
@@ -329,7 +328,7 @@ public class TokenService {
             JWSHeader header = signedJWT.getHeader();
 
             // 校验 typ
-            if (!Constants.DPoP_HEADER_TYPE.equalsIgnoreCase(header.getType().toString())) {
+            if (!IamUtils.isDPoPType(header)) {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof typ");
             }
 
@@ -396,6 +395,9 @@ public class TokenService {
                 return refreshAnonymousToken(body, applicationCode, IamUtils.thumbprint(jwk));
             }
 
+            // 刷新不得换应用
+            requireBoundApplication(body, applicationCode);
+
             ApplicationSelectDto selectDto = new ApplicationSelectDto();
             selectDto.setApplicationCode(applicationCode);
             Result<List<ApplicationVo>> result = applicationClient.selectList(selectDto);
@@ -436,12 +438,7 @@ public class TokenService {
         if (Objects.isNull(body.getEntryId()) || body.getEntryId() <= 0L) {
             throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "entryId");
         }
-        boolean acdBound = Collections.isNotEmpty(body.getApplicationScopes())
-            && body.getApplicationScopes().stream()
-            .anyMatch(scope -> Objects.equals(applicationCode, scope.getApplicationCode()));
-        if (!acdBound) {
-            throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "applicationCode");
-        }
+        requireBoundApplication(body, applicationCode);
 
         Result<TokenJWTPayload> result = loginTokenClient.fetchAnonymousRefreshContext(
             body.getEntryId(),
@@ -480,12 +477,8 @@ public class TokenService {
         if (Collections.isEmpty(body.getApplicationScopes())) {
             throw new BusinessException(SystemErrorCode.PARAM_REQUIRED, "applicationScopes");
         }
-        // 刷新不得换应用：Client DPoP acd 须等于原 Token 已签名绑定的 applicationCode
-        boolean acdBound = body.getApplicationScopes().stream()
-            .anyMatch(scope -> Objects.equals(applicationCode, scope.getApplicationCode()));
-        if (!acdBound) {
-            throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "applicationCode");
-        }
+        // 刷新不得换应用
+        requireBoundApplication(body, applicationCode);
 
         Result<MemberVo> eligibilityResult =
             memberClient.requireActiveForToken(body.getOrganId(), body.getMemberId());
@@ -531,7 +524,7 @@ public class TokenService {
             JWSHeader header = signedJWT.getHeader();
 
             // 校验 typ
-            if (!Constants.DPoP_HEADER_TYPE.equalsIgnoreCase(header.getType().toString())) {
+            if (!IamUtils.isDPoPType(header)) {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof typ");
             }
 
@@ -549,12 +542,6 @@ public class TokenService {
 
             // 获取公钥
             String publicKeyString = jwk.toJSONString();
-
-            // 获取客户端标识
-            String clientId = header.getKeyID();
-            if (Strings.isBlank(clientId)) {
-                throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof kid");
-            }
 
             // 获取客户端应用编码
             String applicationCode = signedJWT.getJWTClaimsSet().getStringClaim("acd");
@@ -598,6 +585,9 @@ public class TokenService {
                 throw new BusinessException(IamErrorCode.REFRESH_TOKEN_EXPIRED);
             }
 
+            // 换票只换身份，不得换应用
+            requireBoundApplication(body, applicationCode);
+
             Result<TokenJWTPayload> result = loginTokenClient.fetchTokenContext(
                 body.getPassportId(), userId, applicationCode, null, null, null, null, null);
             if (!result.isSuccess()) {
@@ -606,7 +596,8 @@ public class TokenService {
 
             TokenJWTPayload payload = result.getData();
             payload.setPassportId(body.getPassportId());
-            payload.setClientId(clientId);
+            // 客户端标识沿用旧 Token，不取 Proof 头部可随意填写的 kid
+            payload.setClientId(body.getClientId());
             payload.setClientPublicKey(publicKeyString);
             return doGenerateToken(applicationCode, payload);
         } catch (ParseException e) {
@@ -615,6 +606,22 @@ public class TokenService {
         } catch (JOSEException e) {
             log.error("failed to exchangeToken", e);
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWS");
+        }
+    }
+
+    /**
+     * Client DPoP acd 须在原 Token 的应用作用域内：刷新、换票不得换到作用域外的应用。
+     *
+     * @param body            原 Token 载荷
+     * @param applicationCode Client DPoP 中的应用编码
+     * @throws BusinessException acd 不在原 Token 的应用作用域内
+     */
+    private static void requireBoundApplication(TokenJWTPayload body, String applicationCode) {
+        boolean bound = Collections.isNotEmpty(body.getApplicationScopes())
+            && body.getApplicationScopes().stream()
+            .anyMatch(scope -> Objects.equals(applicationCode, scope.getApplicationCode()));
+        if (!bound) {
+            throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "applicationCode");
         }
     }
 
@@ -641,7 +648,7 @@ public class TokenService {
             SignedJWT signedJWT = SignedJWT.parse(clientDPoP);
             JWSHeader header = signedJWT.getHeader();
 
-            if (!Constants.DPoP_HEADER_TYPE.equalsIgnoreCase(header.getType().toString())) {
+            if (!IamUtils.isDPoPType(header)) {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof typ");
             }
 
@@ -883,7 +890,7 @@ public class TokenService {
             JWSHeader header = signedJWT.getHeader();
 
             // 校验 typ
-            if (!Constants.DPoP_HEADER_TYPE.equalsIgnoreCase(header.getType().toString())) {
+            if (!IamUtils.isDPoPType(header)) {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Application DPoP Proof typ");
             }
 
