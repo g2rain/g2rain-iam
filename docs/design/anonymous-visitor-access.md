@@ -1,9 +1,9 @@
 # 匿名访客接入方案（接入码 + 密钥派生访客身份）
 
-状态：**已实施，待联调验收**  
-日期：2026-10-22（实施后按实际代码同步）  
-范围：`g2rain-common`、`g2rain-spring-boot-starter`、`g2rain-iam`、`g2rain-basis`、`g2rain-gateway-webflux` / `g2rain-gateway-webmvc`、`g2rain-mcp-registry`、`g2rain-agent-runtime`、`g2rain-web/g2rain-chat-shell`、`g2rain-web/g2rain-manager-app`  
-替代：[Token 签发双模式对齐](./member-token-issuance-alignment.md) 中"匿名会话仍禁止 refresh"的约定（见 §8）；MEMBER 其余设计不变  
+状态：**已实施，待联调验收**
+日期：2026-10-22（实施后按实际代码同步）
+范围：`g2rain-common`、`g2rain-spring-boot-starter`、`g2rain-iam`、`g2rain-basis`、`g2rain-gateway-webflux` / `g2rain-gateway-webmvc`、`g2rain-mcp-registry`、`g2rain-agent-runtime`、`g2rain-web/g2rain-chat-shell`、`g2rain-web/g2rain-manager-app`
+替代：[Token 签发双模式对齐](./member-token-issuance-alignment.md) 中"匿名会话仍禁止 refresh"的约定（见 §8）；MEMBER 其余设计不变
 相关：[IAM 页面与授权流程解耦](./iam-page-flow-upgrade.md)
 
 ## 1. 背景
