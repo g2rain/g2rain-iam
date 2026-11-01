@@ -18,6 +18,16 @@
 
     <name>G2rain IAM</name>
 
+    <!-- 项目主页与 SCM 元数据必须始终指向本组件，而不是平台或公共库。 -->
+    <url>https://github.com/g2rain/g2rain-iam</url>
+
+    <scm>
+        <url>https://github.com/g2rain/g2rain-iam</url>
+        <connection>scm:git:https://github.com/g2rain/g2rain-iam.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/g2rain/g2rain-iam.git</developerConnection>
+        <tag>HEAD</tag>
+    </scm>
+
     <description>
         G2Rain IAM Service — Provides unified identity authentication, authorization, single sign-on (SSO),
         and access control capabilities. Supports JWT token issuance and verification, serving as the
@@ -361,16 +371,26 @@
                     <from>
                         <image>docker://eclipse-temurin:25.0.4.1_1-jre</image>
                     </from>
-                    <!-- 目标镜像名称 -->
+                    <!-- GHCR 是本项目的默认发布目标；本地 Docker 构建也复用此配置。 -->
                     <to>
-                        <image>g2rain/g2rain-iam:${project.version}</image>
+                        <image>ghcr.io/g2rain/g2rain-iam</image>
+                        <tags>
+                            <tag>${project.version}</tag>
+                        </tags>
                     </to>
                     <!-- 容器运行配置 -->
                     <container>
                         <mainClass>com.g2rain.iam.Application</mainClass>
                         <ports>
-                            <port>8080</port>
+                            <port>8082</port>
                         </ports>
+                        <labels>
+                            <org.opencontainers.image.source>https://github.com/g2rain/g2rain-iam</org.opencontainers.image.source>
+                            <org.opencontainers.image.licenses>Apache-2.0</org.opencontainers.image.licenses>
+                            <org.opencontainers.image.title>g2rain-iam</org.opencontainers.image.title>
+                            <org.opencontainers.image.version>${project.version}</org.opencontainers.image.version>
+                            <org.opencontainers.image.description>G2rain IAM identity, authorization, token, session, and IdP orchestration service.</org.opencontainers.image.description>
+                        </labels>
                     </container>
                 </configuration>
             </plugin>

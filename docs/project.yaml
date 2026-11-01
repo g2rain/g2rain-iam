@@ -36,8 +36,8 @@ ownership:
 toolchain:
   java: "25"
   build: Maven
-  framework: Spring Boot 4.0.5
-  springCloud: 2025.1.1
+  framework: Spring Boot 4.1.2
+  springCloud: 2025.1.4
   discoveryAndConfig: Nacos
   cacheAndSession: Redis
   token: Nimbus JOSE JWT
@@ -46,7 +46,7 @@ toolchain:
 runtime:
   applicationName: g2rain-iam
   defaultPort: 8082
-  containerExposedPort: 8080
+  containerExposedPort: 8082
   defaultProfile: dev
   dependencies:
     - Redis
