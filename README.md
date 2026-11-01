@@ -342,7 +342,7 @@ flowchart TD
 
 ## 12. 使用建议
 
-本项目基于 [Apache 2.0许可证](https://github.com/g2rain/g2rain-common/blob/main/LICENSE) 开源。
+本项目基于 [Apache License 2.0](LICENSE) 开源。
 
 ## 工程文档
 
