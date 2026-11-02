@@ -137,6 +137,11 @@
                                class="btn btn-outline btn-lg">注册账号</a>
                         </div>
                     </form>
+                    <a th:if="${hasWeCom}"
+                       class="btn btn-outline btn-lg btn-block"
+                       th:href="@{/auth/wecom/authorize(bindMode=${weComBindMode},clientId=${clientId},redirectUri=${redirectUri},state=${state != null ? state : ''})}">
+                        企业微信扫码登录
+                    </a>
                 </div>
 
                 <div id="login-workspace-dingtalk"
