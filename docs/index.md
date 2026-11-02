@@ -16,6 +16,7 @@
 - [完成定义](development/definition-of-done.md)
 - [配置](operations/configuration.md)
 - [部署](operations/deployment.md)
+- [发布说明](releases/v1.0.0.md)
 - [排障](operations/troubleshooting.md)
 - [安全边界](security/security-boundaries.md)
 - [网关接入手册](gateway-integration-guide.md)
