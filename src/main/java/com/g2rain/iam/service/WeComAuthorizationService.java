@@ -25,6 +25,9 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.LocalDateTime;
 
+/**
+ * 企业微信第三方应用授权事件处理：suite_ticket、安装/变更授权与取消授权。
+ */
 @Service
 @RequiredArgsConstructor
 public class WeComAuthorizationService {
@@ -34,6 +37,11 @@ public class WeComAuthorizationService {
     private final WeComCredentialCipher credentialCipher;
     private final IdpEnterpriseApplicationAuthorizationClient authorizationClient;
 
+    /**
+     * 处理已解密的授权事件 XML（suite_ticket / create_auth / change_auth / cancel_auth）。
+     *
+     * @param xml 解密后的明文 XML
+     */
     public void handleDecryptedEvent(String xml) {
         String infoType = WeComCallbackCrypto.xmlValue(xml, "InfoType");
         switch (infoType) {
@@ -60,6 +68,11 @@ public class WeComAuthorizationService {
         }
     }
 
+    /**
+     * 使用 auth_code 换取 permanent_code，并向 Basis 写入 ACTIVE 授权记录。
+     *
+     * @param authCode 企业微信安装/变更授权码
+     */
     public void activate(String authCode) {
         if (Strings.isBlank(authCode)) {
             throw new BusinessException(
@@ -95,6 +108,11 @@ public class WeComAuthorizationService {
         }
     }
 
+    /**
+     * 取消企业授权：通知 Basis 撤销对应企业的第三方应用授权。
+     *
+     * @param corpId 企业 corpId
+     */
     public void revoke(String corpId) {
         if (Strings.isBlank(corpId)) {
             throw new BusinessException(IamErrorCode.WECOM_CALLBACK_INVALID);

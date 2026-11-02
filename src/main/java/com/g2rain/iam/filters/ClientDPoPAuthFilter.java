@@ -1,6 +1,9 @@
 package com.g2rain.iam.filters;
 
 
+
+import lombok.extern.slf4j.Slf4j;
+import com.g2rain.iam.utils.IamUtils;
 import com.g2rain.common.exception.BusinessException;
 import com.g2rain.common.exception.SystemErrorCode;
 import com.g2rain.common.utils.Moments;
@@ -42,14 +45,15 @@ import java.util.UUID;
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 180)
+@Slf4j
 public record ClientDPoPAuthFilter(Tracer tracer) implements Filter {
 
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
         HttpServletRequest req = (HttpServletRequest) request;
 
-        // 下游继续执行
-        if (!"/auth/token".equalsIgnoreCase(req.getRequestURI())) {
+        // 仅令牌换票端点要求 Client DPoP（员工 /auth/token 与会员 /auth/member/token）
+        if (!isClientDPoPTokenEndpoint(req.getRequestURI())) {
             String requestId = UUID.randomUUID().toString();
             PrincipalContextHolder.setTraceId(resolveTraceId());
             PrincipalContextHolder.setRequestId(requestId);
@@ -78,6 +82,11 @@ public record ClientDPoPAuthFilter(Tracer tracer) implements Filter {
         }
     }
 
+    private static boolean isClientDPoPTokenEndpoint(String requestUri) {
+        return "/auth/token".equalsIgnoreCase(requestUri)
+            || "/auth/member/token".equalsIgnoreCase(requestUri);
+    }
+
     /**
      * 校验 JWT
      * <p>
@@ -94,13 +103,13 @@ public record ClientDPoPAuthFilter(Tracer tracer) implements Filter {
             JWSHeader header = signedJWT.getHeader();
 
             // 校验 typ
-            if (!"dpop+jwt".equalsIgnoreCase(header.getType().toString())) {
+            if (!IamUtils.isDPoPType(header)) {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof typ");
             }
 
             // 校验 JWK 类型
             JWK jwk = header.getJWK();
-            if (!(jwk instanceof ECKey ecKey)) {
+            if (!(jwk instanceof ECKey ecKey) || !IamUtils.isEs256(header, ecKey)) {
                 throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof JWK");
             }
 
@@ -158,8 +167,10 @@ public record ClientDPoPAuthFilter(Tracer tracer) implements Filter {
             PrincipalContextHolder.setRequestTime(Moments.formatEpochMillis(timestamp.toEpochMilli()));
             return jti;
         } catch (ParseException e) {
+            log.error("failed to verify", e);
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client DPoP Proof");
         } catch (JOSEException e) {
+            log.error("failed to verify", e);
             throw new BusinessException(SystemErrorCode.PARAM_VAL_INVALID, "Client PoP Proof JWS");
         }
     }

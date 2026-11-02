@@ -51,6 +51,26 @@ public enum IamErrorCode implements ErrorCode {
     OAUTH_AUTHORIZATION_CODE_CLIENT_MISMATCH("iam.40015", "授权码与当前客户端不匹配"),
 
     /**
+     * 授权码绑定的应用与 Client DPoP acd 不匹配
+     */
+    OAUTH_AUTHORIZATION_CODE_APPLICATION_MISMATCH("iam.40046", "授权码与当前应用不匹配"),
+
+    /**
+     * 授权确认会话无效或跨会话篡改
+     */
+    OAUTH_CONSENT_SESSION_INVALID("iam.40047", "授权确认会话无效或已过期"),
+
+    /**
+     * 授权事务无效、过期或流程 Cookie 不匹配
+     */
+    AUTH_TRANSACTION_INVALID("iam.40048", "授权流程无效或已过期，请从业务侧重新发起"),
+
+    /**
+     * 授权事务状态不允许当前操作
+     */
+    AUTH_TRANSACTION_STATE_INVALID("iam.40049", "授权流程状态不正确，请刷新后重试"),
+
+    /**
      * 通行证绑定钉钉 state 无效或已过期
      */
     DINGTALK_PASSPORT_BIND_INVALID_STATE("iam.40016", "绑定会话已失效，请重新发起绑定"),
@@ -74,16 +94,6 @@ public enum IamErrorCode implements ErrorCode {
      * 通行证绑定钉钉失败（未分类或系统异常）
      */
     DINGTALK_PASSPORT_BIND_FAILED("iam.40019", "绑定失败，请稍后重试"),
-
-    /**
-     * 匿名 OAuth 授权未启用或配置不完整
-     */
-    ANONYMOUS_AUTH_DISABLED("iam.40020", "匿名授权未启用或配置不完整"),
-
-    /**
-     * 匿名 token 不允许 refresh
-     */
-    ANONYMOUS_REFRESH_NOT_ALLOWED("iam.40021", "匿名令牌不允许刷新"),
 
     /**
      * 钉钉通讯录 access token 获取失败
@@ -142,7 +152,78 @@ public enum IamErrorCode implements ErrorCode {
     WECOM_AUTHORIZATION_EXCHANGE_FAILED("iam.50232", "企业微信安装授权换取永久授权码失败"),
 
     WECOM_CREDENTIAL_ENCRYPTION_FAILED("iam.50233", "企业微信永久授权凭证加密失败"),
-    DINGTALK_CONTACT_CORP_MISMATCH("iam.40024", "钉钉通讯录企业标识与 IAM 配置不一致");
+
+    WECOM_CALLBACK_TIMESTAMP_INVALID("iam.40036", "企业微信回调时间戳超出允许偏差"),
+
+    WECOM_CALLBACK_REPLAY("iam.40037", "企业微信回调请求疑似重放"),
+
+    WECOM_CS_BINDING_NOT_FOUND("iam.40038", "企业微信客服回调绑定未配置或未启用"),
+
+    WECOM_CS_ORGAN_RESOLVE_FAILED("iam.40039", "无法解析企业微信客服回调对应的平台租户"),
+
+    MEMBER_RESOLVE_CODE_INVALID("iam.40040", "会员解析授权码无效或已过期"),
+
+    MEMBER_TOKEN_ISSUE_DENIED("iam.40041", "当前会员状态不允许签发访问令牌"),
+
+    /**
+     * MEMBER Token 不允许通过 exchange_token 换取员工会话
+     */
+    MEMBER_EXCHANGE_NOT_ALLOWED("iam.40044", "会员令牌不允许交换为员工令牌"),
+
+    /**
+     * 普通员工扫码时企业尚未映射到平台机构
+     */
+    IDP_ENTERPRISE_ORGAN_NOT_READY("iam.40042", "企业尚未在平台初始化，请联系管理员开通租户"),
+
+    /**
+     * 非钉钉/企微管理员尝试开通租户
+     */
+    TENANT_PROVISION_ADMIN_REQUIRED("iam.40043", "仅钉钉或企业微信管理员可初始化租户"),
+
+    /**
+     * IdP 管理员断言失败
+     */
+    IDP_ADMIN_ASSERTION_FAILED("iam.40044", "无法确认当前账号为企业管理员"),
+
+    /**
+     * 企业微信登录用户类型与请求意图不匹配
+     */
+    WECOM_USER_TYPE_INVALID("iam.40045", "企业微信登录用户类型与请求不匹配"),
+
+    /**
+     * 求交后无可用登录方式
+     */
+    AUTH_POLICY_NO_LOGIN_METHOD("iam.40050", "该应用未配置可用登录方式"),
+
+    /**
+     * 当前冻结策略不允许该登录方式
+     */
+    AUTH_POLICY_METHOD_DENIED("iam.40051", "当前应用不允许此登录方式"),
+
+    /**
+     * 当前冻结策略不允许注册
+     */
+    AUTH_POLICY_REGISTER_DENIED("iam.40052", "当前应用不允许注册"),
+
+    /**
+     * 授权码与当前客户端 DPoP 公钥不匹配
+     */
+    OAUTH_AUTHORIZATION_CODE_KEY_MISMATCH("iam.40053", "授权码与当前客户端密钥不匹配"),
+
+    /**
+     * 匿名授权缺少接入码或客户端公钥
+     */
+    ANONYMOUS_AUTH_INVALID("iam.40054", "匿名授权须携带接入码与客户端公钥"),
+
+    /**
+     * 客户端公钥无效：仅支持 ES256（EC P-256）
+     */
+    CLIENT_PUBLIC_KEY_INVALID("iam.40055", "客户端公钥无效，仅支持 ES256（P-256）"),
+
+    /**
+     * 匿名 Token 不允许通过 exchange_token 换取员工会话
+     */
+    ANONYMOUS_EXCHANGE_NOT_ALLOWED("iam.40056", "匿名令牌不允许交换为员工令牌");
 
     private final String code;
 

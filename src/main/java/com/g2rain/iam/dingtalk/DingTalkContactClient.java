@@ -1,5 +1,6 @@
 package com.g2rain.iam.dingtalk;
 
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -346,6 +347,7 @@ public class DingTalkContactClient {
                 log.error("dingtalk topapi http failed url={} status={}", url, e.getStatusCode().value(), e);
                 throw new BusinessException(IamErrorCode.DINGTALK_CONTACT_FETCH_FAILED);
             } catch (RestClientException e) {
+                log.error("failed to postTopApi", e);
                 lastTransportError = e;
                 if (attempt < maxAttempts) {
                     retryCount++;
@@ -374,6 +376,7 @@ public class DingTalkContactClient {
         try {
             Thread.sleep(DingTalkTopApiSupport.computeRetryBackoffMs(baseMs, attempt));
         } catch (InterruptedException ex) {
+            log.error("failed to sleepBackoff", ex);
             Thread.currentThread().interrupt();
         }
     }

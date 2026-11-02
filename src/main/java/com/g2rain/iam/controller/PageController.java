@@ -1,32 +1,36 @@
 package com.g2rain.iam.controller;
 
 
+
+import lombok.extern.slf4j.Slf4j;
 import com.g2rain.common.utils.Strings;
-import com.g2rain.iam.config.DingTalkIamProperties;
 import com.g2rain.iam.config.IamAccessProperties;
-import com.g2rain.iam.config.WeComIamProperties;
+import com.g2rain.iam.dto.AuthorizationTransactionDto;
+import com.g2rain.iam.dto.SessionDto;
+import com.g2rain.iam.service.AuthFlowCookieService;
+import com.g2rain.iam.service.AuthorizationFlowService;
+import com.g2rain.iam.service.AuthorizationTransactionService;
+import com.g2rain.iam.service.ModelAndViewService;
+import com.g2rain.iam.service.SessionService;
+import com.g2rain.iam.utils.Constants;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.ModelAndView;
 
+import java.util.Optional;
+
 
 /**
- * 页面控制器，负责渲染登录和授权同意页面。
+ * IAM 站内 HTML 入口：授权事务页（login / register）与非授权页（index / platform）分开映射。
  * <p>
- * 该控制器用于处理客户端的登录和授权请求，渲染登录页面和授权同意页面，并在需要时处理用户会话。
- * </p>
- * <p>
- * 使用示例：
- * <pre>{@code
- * // 通过 GET 请求跳转到登录页
- * /auth/login?clientId=client123&redirectUri=http://example.com/callback
- * }</pre>
+ * 登录与注册须绑定有效 {@code tid} 与流程 Cookie；consent 不提供公开 GET，由编排直接渲染。
+ * 无客户端上下文时不接受直接登录，统一回到业务侧再进 {@code /auth/authorize}。
  * </p>
  *
  * @author alpha
@@ -34,12 +38,8 @@ import org.springframework.web.servlet.ModelAndView;
  */
 @Controller
 @AllArgsConstructor
+@Slf4j
 public class PageController {
-
-    /**
-     * 资源加载器，用于检查模板文件是否存在。
-     */
-    private ResourceLoader resourceLoader;
 
     /**
      * IAM / 平台对外地址，用于首页「立即登录」绝对跳转。
@@ -47,120 +47,129 @@ public class PageController {
     private IamAccessProperties iamAccessProperties;
 
     /**
-     * 登录页钉钉入口使用的 {@code bindMode} 等配置。
+     * 会话服务，用于首页登录态展示。
      */
-    private DingTalkIamProperties dingTalkIamProperties;
+    private SessionService sessionService;
 
     /**
-     * 登录页企业微信入口配置。
+     * 处理平台入口等重定向。
      */
-    private WeComIamProperties weComIamProperties;
+    private ModelAndViewService modelAndViewService;
 
     /**
-     * 注册页面渲染方法，处理 /auth/register.html 路径。
+     * 授权事务 Redis 存储与状态迁移。
+     */
+    private AuthorizationTransactionService transactionService;
+
+    /**
+     * 授权流程 Cookie，用于绑定 {@code tid} 与当前浏览器。
+     */
+    private AuthFlowCookieService authFlowCookieService;
+
+    /**
+     * 基于 tid 的授权流程编排。
+     */
+    private AuthorizationFlowService authorizationFlowService;
+
+    /**
+     * 跳转至默认业务侧入口。
      * <p>
-     * 该方法专门用于渲染注册页面，接收 OAuth 授权流程中的参数（clientId、redirectUri、state），
-     * 并将这些参数传递给模板，以便在注册完成后能够正确跳转回登录页面。
+     * 页面不直接拼接业务平台地址，统一由服务端根据
+     * {@code g2rain.iam.platform-base-url} 生成跳转目标。业务侧负责生成
+     * Client DPoP 上下文（包括 {@code clientId}），再携带完整 OAuth 参数回到
+     * {@code /auth/authorize}，IAM 不接受无客户端上下文的直接登录。
      * </p>
+     */
+    @GetMapping(value = "/auth/platform")
+    public ModelAndView redirectToPlatform() {
+        return modelAndViewService.redirectPlatformMainHome();
+    }
+
+    /**
+     * IAM 首页：只认会话，不走授权事务。
      * <p>
-     * 使用示例：
-     * <pre>{@code
-     * // 通过 GET 请求跳转到注册页
-     * /auth/register.html?clientId=client123&redirectUri=http://example.com/callback&state=xyz
-     * }</pre>
+     * 已登录展示账号摘要；{@code from=logout} 展示游客页；否则回业务控制台。
+     * 授权必须从业务侧进入 {@code /auth/authorize}，本页不接收 OAuth 查询串。
      * </p>
-     *
-     * @param clientId    客户端 ID（可选）
-     * @param redirectUri 登录后重定向的 URI（可选）
-     * @param state       请求的状态参数，通常用于防止 CSRF 攻击（可选）
-     * @param model       用于向视图传递数据的模型
-     * @return {@link ModelAndView}，包含注册页面视图
+     */
+    @GetMapping(value = "/auth/index.html")
+    public ModelAndView indexPage(
+        @RequestParam(name = "redirectUri", required = false) String redirectUri,
+        @RequestParam(name = "from", required = false) String from,
+        @CookieValue(name = Constants.SESSION_NAME, required = false) String sessionId,
+        HttpServletRequest request,
+        Model model) {
+        Optional<SessionDto> activeSession = resolveActiveSession(sessionId, request);
+        if (activeSession.isPresent()) {
+            applyLoggedInIndexModel(model, activeSession.get());
+            return new ModelAndView("index", model.asMap());
+        }
+        if ("logout".equals(from)) {
+            applyGuestIndexModel(model, redirectUri);
+            return new ModelAndView("index", model.asMap());
+        }
+        return modelAndViewService.redirectPlatformMainHome();
+    }
+
+    /**
+     * 登录页：须有效授权事务 {@code tid}（与注册页相同）。
+     * <p>
+     * 已登录则按事务继续编排；未登录渲染登录页。可选 {@code loginMethod} 只选择卡片，不是授权上下文。
+     * 无 tid 不渲染登录表单。
+     * </p>
+     */
+    @GetMapping(value = "/auth/login.html")
+    public ModelAndView loginPage(
+        HttpServletRequest request,
+        @RequestParam(name = Constants.TID, required = false) String tid,
+        @RequestParam(name = "loginMethod", required = false) String loginMethod,
+        @CookieValue(name = Constants.SESSION_NAME, required = false) String sessionId) {
+        if (Strings.isBlank(tid)) {
+            return authorizationFlowService.renderFlowError(
+                null, "请从业务侧重新发起授权后再登录");
+        }
+        try {
+            AuthorizationTransactionDto txn = requireActiveTxn(request, tid);
+            Optional<SessionDto> activeSession = resolveActiveSession(sessionId, request);
+            if (activeSession.isPresent()) {
+                return authorizationFlowService.continueFlow(txn, activeSession.get().getSessionId());
+            }
+            return authorizationFlowService.renderLogin(txn, null, null, loginMethod);
+        } catch (Exception ex) {
+            log.error("failed to loginPage", ex);
+            return authorizationFlowService.renderFlowError(null, ex.getMessage());
+        }
+    }
+
+    /**
+     * 注册页：须携带有效授权事务 {@code tid}。
      */
     @GetMapping(value = "/auth/register.html")
-    public ModelAndView registerPage(@RequestParam(name = "clientId", required = false) String clientId,
-                                    @RequestParam(name = "redirectUri", required = false) String redirectUri,
-                                    @RequestParam(name = "state", required = false) String state,
-                                    Model model) {
-        // 将 URL 参数传递到视图，供注册表单使用
-        model.addAttribute("clientId", clientId);
-        model.addAttribute("redirectUri", redirectUri);
-        model.addAttribute("state", state);
-        return new ModelAndView("register");
-    }
-
-    /**
-     * 通用页面渲染方法，处理 /auth/*.html 路径。
-     * <p>
-     * 该方法会根据路径中的文件名查找对应的模板文件。如果模板存在，则渲染该模板；
-     * 如果模板不存在，则返回错误页面并提示路径不存在。
-     * </p>
-     * <p>
-     * 使用示例：
-     * <pre>{@code
-     * // 访问 /auth/index.html 会渲染 templates/index.html
-     * // 访问 /auth/test.html 如果模板不存在，会显示错误页面
-     * }</pre>
-     * </p>
-     *
-     * @param filename 模板文件名（不包含 .html 后缀）
-     * @param model    用于向视图传递数据的模型
-     * @return {@link ModelAndView}，包含模板视图或错误页面视图
-     */
-    @GetMapping(value = "/auth/{filename}.html")
-    public ModelAndView dynamicPage(@PathVariable(name = "filename") String filename,
-                                    @RequestParam(name = "redirectUri", required = false) String redirectUri,
-                                    @RequestParam(name = "clientId", required = false) String clientId,
-                                    @RequestParam(name = "state", required = false) String state,
-                                    Model model) {
-        // 防止路径遍历攻击，确保文件名只包含合法字符
-        if (filename == null || filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
-            model.addAttribute("error", "非法的路径参数");
-            model.addAttribute("redirectUri", "");
-            return new ModelAndView("error");
+    public ModelAndView registerPage(
+        HttpServletRequest request,
+        @RequestParam(name = Constants.TID, required = false) String tid) {
+        if (Strings.isBlank(tid)) {
+            return authorizationFlowService.renderFlowError(
+                null, "请从业务侧重新发起授权后再注册");
         }
-
-        // 检查模板文件是否存在
-        String templatePath = "classpath:/templates/" + filename + ".html";
-        Resource resource = resourceLoader.getResource(templatePath);
-
-        if (resource.exists() && resource.isReadable()) {
-            // 模板存在，返回对应的视图
-            if ("index".equals(filename)) {
-                applyIndexLoginRedirect(model, redirectUri);
-            }
-            if ("login".equals(filename)) {
-                model.addAttribute("clientId", clientId != null ? clientId : "");
-                model.addAttribute("redirectUri", redirectUri != null ? redirectUri : "");
-                model.addAttribute("state", state != null ? state : "");
-                String m = dingTalkIamProperties.getLoginPageBindMode();
-                if (Strings.isNotBlank(m)) {
-                    model.addAttribute("dingTalkBindMode", m.trim());
-                }
-                String weComMode = weComIamProperties.getLoginPageBindMode();
-                if (Strings.isNotBlank(weComMode)) {
-                    model.addAttribute("weComBindMode", weComMode.trim());
-                }
-            }
-            return new ModelAndView(filename);
-        } else {
-            // 模板不存在，返回错误页面
-            String requestPath = "/auth/" + filename + ".html";
-            model.addAttribute("error", "请求的页面不存在: " + requestPath);
-            model.addAttribute("redirectUri", "");
-            return new ModelAndView("error");
+        try {
+            AuthorizationTransactionDto txn = requireActiveTxn(request, tid);
+            return authorizationFlowService.renderRegister(txn);
+        } catch (Exception ex) {
+            log.error("failed to registerPage", ex);
+            return authorizationFlowService.renderFlowError(null, ex.getMessage());
         }
     }
 
-    /**
-     * 首页「立即登录」跳转目标：
-     * <ul>
-     *     <li>若请求参数 {@code redirectUri} 非空且通过校验：跳转到该地址（由对方页面再重定向回 {@code /auth/authorize?...}）</li>
-     *     <li>若 {@code redirectUri} 为空或非法：由模板将 {@code platformBaseUrl} 与 {@code /main/home} 拼成绝对链接跳转</li>
-     * </ul>
-     */
-    private void applyIndexLoginRedirect(Model model, String redirectUri) {
+    private AuthorizationTransactionDto requireActiveTxn(HttpServletRequest request, String tid) {
+        String flowHash = authFlowCookieService.hash(authFlowCookieService.readRaw(request));
+        return transactionService.requireActive(tid.trim(), flowHash);
+    }
+
+    private void applyGuestIndexModel(Model model, String redirectUri) {
+        model.addAttribute("loggedIn", false);
         model.addAttribute("platformBaseUrl", resolvePlatformBaseUrl());
-        String resolved = resolveIndexLoginRedirectUri(redirectUri);
+        String resolved = resolveGuestLoginRedirectUri(redirectUri);
         if (resolved == null) {
             model.addAttribute("loginViaRedirectUri", false);
         } else {
@@ -170,29 +179,99 @@ public class PageController {
     }
 
     /**
-     * 控制台对外根 URL（无尾斜杠）：{@code platform-base-url}，未配置时回退为 IAM {@code base-url}。
-     */
-    private String resolvePlatformBaseUrl() {
-        return iamAccessProperties.resolvedPlatformBaseUrl();
-    }
-
-    /**
      * @return 合法跳转地址；若应使用默认控制台则返回 null
      */
-    private String resolveIndexLoginRedirectUri(String redirectUri) {
+    private static String resolveGuestLoginRedirectUri(String redirectUri) {
         if (Strings.isBlank(redirectUri)) {
             return null;
         }
         String trimmed = redirectUri.trim();
-        // 站内相对路径：必须以单个 / 开头，禁止 // 开头的协议相对 URL
         if (trimmed.startsWith("/") && !trimmed.startsWith("//")) {
             return trimmed;
         }
-        // 绝对地址：仅允许 http(s)，禁止 javascript:、data: 等
         String lower = trimmed.toLowerCase();
         if (lower.startsWith("https://") || lower.startsWith("http://")) {
             return trimmed;
         }
         return null;
+    }
+
+    private void applyLoggedInIndexModel(Model model, SessionDto session) {
+        model.addAttribute("loggedIn", true);
+        model.addAttribute("platformBaseUrl", resolvePlatformBaseUrl());
+        String accountName = resolveAccountDisplayName(session);
+        model.addAttribute("accountName", accountName);
+        model.addAttribute("passportId", resolvePassportDisplay(session.getPassportId()));
+        model.addAttribute("loginMethod", resolveLoginMethod(session.getIdpType()));
+        String bindModeLabel = resolveIdpBindModeLabel(session.getIdpBindMode());
+        if (Strings.isNotBlank(bindModeLabel)) {
+            model.addAttribute("idpBindModeLabel", bindModeLabel);
+        }
+    }
+
+    private static String resolveAccountDisplayName(SessionDto session) {
+        if (Strings.isNotBlank(session.getName())) {
+            return session.getName().trim();
+        }
+        if (Strings.isNotBlank(session.getPassportId())) {
+            return "通行证 " + session.getPassportId().trim();
+        }
+        if (Strings.isNotBlank(session.getIdpSubject())) {
+            return session.getIdpSubject().trim();
+        }
+        return "当前用户";
+    }
+
+    private static String resolvePassportDisplay(String passportId) {
+        return Strings.isNotBlank(passportId) ? passportId.trim() : "—";
+    }
+
+    Optional<SessionDto> resolveActiveSession(String cookieSessionId, HttpServletRequest request) {
+        String resolvedSessionId = cookieSessionId;
+        if (Strings.isBlank(resolvedSessionId) && request != null) {
+            Cookie[] cookies = request.getCookies();
+            if (cookies != null) {
+                for (Cookie cookie : cookies) {
+                    if (Constants.SESSION_NAME.equals(cookie.getName())) {
+                        resolvedSessionId = cookie.getValue();
+                        break;
+                    }
+                }
+            }
+        }
+        if (Strings.isBlank(resolvedSessionId)) {
+            return Optional.empty();
+        }
+        SessionDto session = sessionService.getSession(resolvedSessionId.trim());
+        return session == null ? Optional.empty() : Optional.of(session);
+    }
+
+    private static String resolveLoginMethod(String idpType) {
+        if (Strings.isBlank(idpType)) {
+            return "账号密码";
+        }
+        return switch (idpType.trim()) {
+            case "DINGTALK" -> "钉钉";
+            case "WECHAT_WORK" -> "企业微信";
+            default -> idpType.trim();
+        };
+    }
+
+    private static String resolveIdpBindModeLabel(String bindMode) {
+        if (Strings.isBlank(bindMode)) {
+            return "";
+        }
+        return switch (bindMode.trim()) {
+            case "INTERNAL" -> "企业内部应用";
+            case "THIRD_PARTY" -> "第三方企业应用";
+            default -> bindMode.trim();
+        };
+    }
+
+    /**
+     * 控制台对外根 URL（无尾斜杠）：{@code platform-base-url}，未配置时回退为 IAM {@code base-url}。
+     */
+    private String resolvePlatformBaseUrl() {
+        return iamAccessProperties.resolvedPlatformBaseUrl();
     }
 }

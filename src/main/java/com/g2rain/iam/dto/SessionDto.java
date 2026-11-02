@@ -77,4 +77,14 @@ public class SessionDto {
      * IdP 企业内用户标识（如钉钉 userid）；可选，用于 resolve 次级 lookup
      */
     private String idpUserId;
+
+    /**
+     * IdP 登录意图：USER / ADMIN（见 {@link com.g2rain.iam.enums.IdpLoginRole}）
+     */
+    private String idpLoginRole;
+
+    /**
+     * 当前会话是否已断言为钉钉/企微企业管理员（用于租户开通校验）
+     */
+    private Boolean idpAdmin;
 }

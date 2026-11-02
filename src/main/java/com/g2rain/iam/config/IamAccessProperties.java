@@ -6,12 +6,8 @@ import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
-import com.g2rain.common.utils.Collections;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 
 /**
  * IAM 自身对外可访问地址（部署时由环境变量 / Nacos 注入），用于拼 OAuth 回调、文档链接等。
@@ -46,10 +42,10 @@ public class IamAccessProperties {
     private final SessionCookie sessionCookie = new SessionCookie();
 
     /**
-     * 匿名 OAuth 授权（{@code state=anonymous}）配置。
+     * 授权事务（tid）配置。
      */
     @NestedConfigurationProperty
-    private final AnonymousAuth anonymous = new AnonymousAuth();
+    private final AuthorizationTransaction authorizationTransaction = new AuthorizationTransaction();
 
     /**
      * {@link #baseUrl} 已 trim、去尾斜杠。
@@ -130,30 +126,16 @@ public class IamAccessProperties {
 
     @Getter
     @Setter
-    public static class AnonymousAuth {
+    public static class AuthorizationTransaction {
 
         /**
-         * 是否启用 {@code state=anonymous} 匿名授权发码。
+         * 授权事务 TTL（秒），默认 10 分钟。
          */
-        private boolean enabled = false;
+        private int ttlSeconds = 10 * 60;
 
         /**
-         * 匿名会话所属机构 ID。
+         * SELF 开通租约（秒）。
          */
-        private Long organId;
-
-        /**
-         * 匿名会话绑定的角色 ID 列表。
-         */
-        private List<Long> roleIds = new ArrayList<>();
-
-        /**
-         * 配置是否可用于匿名发码：已启用且 organId、roleIds 非空。
-         */
-        public boolean isConfigured() {
-            return enabled
-                && Objects.nonNull(organId)
-                && Collections.isNotEmpty(roleIds);
-        }
+        private int activationLeaseSeconds = 60;
     }
 }

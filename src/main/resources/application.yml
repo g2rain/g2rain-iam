@@ -1,5 +1,7 @@
 server:
   port: ${SERVER_PORT:8082}
+  # 认反代传入的 X-Forwarded-Proto / Host，避免 302 Location 变成 http://
+  forward-headers-strategy: framework
 
 spring:
   threads:
@@ -100,11 +102,6 @@ g2rain:
     platform-base-url: ${PLATFORM_BASE_URL:}
     # IAM 页面品牌展示名（header/footer/首页标题）；可在 Nacos g2rain-iam.yml 中按环境覆盖
     brand-name: ${IAM_BRAND_NAME:G2Rain IAM}
-    # 匿名 OAuth：GET /auth/authorize?state=anonymous 跳过登录直接发码（默认关闭）
-    anonymous:
-      enabled: ${IAM_ANONYMOUS_ENABLED:false}
-      organ-id: ${IAM_ANONYMOUS_ORGAN_ID:}
-      role-ids: ${IAM_ANONYMOUS_ROLE_IDS:}
     dingtalk:
       callback-path: /auth/dingtalk/callback
       # 登录页「钉钉登录」的 bindMode（INTERNAL / THIRD_PARTY）；留空则不展示钉钉入口
@@ -135,3 +132,20 @@ g2rain:
       credential:
         encryption-key: ${WECOM_CREDENTIAL_ENCRYPTION_KEY:}
         key-id: ${WECOM_CREDENTIAL_KEY_ID:default}
+    auth-policy:
+      default:
+        login-methods:
+          - PASSWORD
+        allow-register: true
+      applications:
+        g2rain-main-shell:
+          login-methods:
+            - PASSWORD
+            - WECOM
+          we-com-bind-mode: INTERNAL
+          allow-register: false
+        g2rain-admin-shell:
+          login-methods:
+            - WECOM
+          we-com-bind-mode: INTERNAL
+          allow-register: false

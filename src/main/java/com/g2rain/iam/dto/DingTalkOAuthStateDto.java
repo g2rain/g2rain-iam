@@ -36,7 +36,22 @@ public class DingTalkOAuthStateDto {
     private String state;
 
     /**
+     * 开放平台目标应用编码
+     */
+    private String applicationCode;
+
+    /**
+     * 授权事务 ID
+     */
+    private String transactionId;
+
+    /**
      * 是否内嵌扫码登录[true:方式二 sns_authorize, false:方式一浏览器 OAuth]
      */
     private Boolean qrEmbedded;
+
+    /**
+     * 登录意图：USER（员工）或 ADMIN（企业管理员开通租户）
+     */
+    private String loginRole;
 }

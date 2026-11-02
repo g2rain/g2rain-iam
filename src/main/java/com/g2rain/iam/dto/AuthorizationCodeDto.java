@@ -1,19 +1,18 @@
 package com.g2rain.iam.dto;
 
-
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+
 /**
- * 授权码 DTO 类，用于在授权码授权流程中传递会话 ID、客户端 ID 和用户 ID 信息。
+ * 授权码 DTO 类，用于在授权码授权流程中传递会话 ID、客户端 ID 和用户 ID 等信息。
  * <p>
- * 该类用于存储与授权码相关的关键数据，例如会话 ID、客户端 ID 和用户 ID，这些信息将用于验证授权码请求。
+ * 存储与授权码相关的关键数据，供换票时校验 session、IdP 上下文及可选的目标应用绑定（{@code applicationCode}）。
  * </p>
  * <p>
  * 使用示例：
  * <pre>{@code
- * // 创建一个新的授权码 DTO
  * AuthorizationCodeDto dto = new AuthorizationCodeDto();
  * dto.setSessionId("session123");
  * dto.setClientId("client123");
@@ -76,12 +75,37 @@ public class AuthorizationCodeDto {
     private Boolean anonymous;
 
     /**
-     * 匿名发码时 IAM 配置的机构 ID。
+     * 目标应用确认发码时 Basis 返回的机构 ID。
      */
     private Long organId;
 
     /**
-     * 匿名发码时 IAM 配置的角色 ID 列表。
+     * 匿名接入码（仅匿名发码）。
      */
-    private List<Long> roleIds;
+    private String entryKey;
+
+    /**
+     * 发起授权的客户端公钥指纹（RFC 7638）；有值时换票须与 Client DPoP Proof 公钥指纹一致。
+     */
+    private String jkt;
+
+    /**
+     * 目标应用编码；有值时换票须与 Client DPoP {@code acd} 一致，且 Redis 中授权码 TTL 为 5 分钟。
+     */
+    private String applicationCode;
+
+    /**
+     * 目标应用 ID（用户确认并 {@code activate_self} 后写入）。
+     */
+    private Long applicationId;
+
+    /**
+     * 授权码签发时间（Unix 秒）。
+     */
+    private Long issuedAt;
+
+    /**
+     * 授权码过期时间（Unix 秒）。
+     */
+    private Long expiresAt;
 }

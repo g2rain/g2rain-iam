@@ -4,13 +4,15 @@
 
 # g2rain-iam
 
+# g2rain-iam
+
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-25-437291?logo=openjdk&logoColor=white)](https://openjdk.org/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.0.5-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
-[![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-2025.1.1-586069?logo=spring&logoColor=white)](https://spring.io/projects/spring-cloud)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.2-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-2025.1.4-586069?logo=spring&logoColor=white)](https://spring.io/projects/spring-cloud)
 [![Maven](https://img.shields.io/badge/build-Maven-C71A36?logo=apachemaven&logoColor=white)](https://maven.apache.org/)
 
-下一代AI软件开发范式，AI原生Agent平台，开源的企业级SaaS底座。
+G2rain 是面向企业的开源智能体平台：现有 SaaS 基座、知识库、智能体平台和应用开发/部署能力均已开源；商业化能力仍在规划。`g2rain-iam` 只是其中的统一身份入口、授权服务与 Token 中心，不代表平台整体能力。
 
 统一身份认证与授权微服务，在浏览器侧提供登录、注册与授权确认等页面交互；在协议侧提供授权码换令牌与访问令牌发放能力，并结合 DPoP 执行令牌请求校验；通过 OpenFeign 调用 g2rain-basis-api 完成通行证、用户、应用等域数据协同
 
@@ -51,6 +53,8 @@
 ## 平台定位
 
 该仓库位于 g2rain 后端平台链路中，是统一认证与授权服务。 它与 g2rain-basis、g2rain-basis-api、g2rain-common、g2rain-gateway-webflux、g2rain-gateway-webmvc 在主数据访问与平台集成方面协同工作。 在协议层面，它负责签发授权码与访问令牌，而不只是一个页面级登录模块。 它还协调第三方身份提供方的接入与绑定流程。
+
+本项目已在中央架构库登记为 `identity-security-service` 类型的 `platform-singleton`，是 G2rain 唯一统一身份安全服务；当前不创建空泛的通用 Profile。项目事实见 [docs/project.yaml](docs/project.yaml)，完整文档入口见 [docs/index.md](docs/index.md)。
 
 ## 业务域说明
 
@@ -124,18 +128,18 @@ flowchart TD
 ```
 
 - 语言与运行时：`Java 25`
-- 后端框架：`Spring Boot 4.0.5`、`Spring Cloud 2025.1.1`
+- 后端框架：`Spring Boot 4.1.2`、`Spring Cloud 2025.1.4`
 - 服务治理：`Nacos Discovery`、`Nacos Config`
 - 数据与缓存：`Redis`
 - 服务调用：`OpenFeign`、`LoadBalancer`
 - 安全与签名：`Nimbus JOSE JWT`、ECDSA、DPoP
 - 页面渲染：`Thymeleaf`
 - 可观测：`Actuator`、`OpenTelemetry`、`Micrometer Tracing`
-- 构建与交付：`Maven`、`Jib`、`Dockerfile`、`build.sh`
+- 构建与交付：`Maven`、`Jib`（GHCR 发布路径）与兼容 Dockerfile
 
 | 类别 | 说明 |
 | --- | --- |
-| 运行时 | Java 25、Spring Boot 4.0.5、Spring Cloud 2025.1.1 |
+| 运行时 | Java 25、Spring Boot 4.1.2、Spring Cloud 2025.1.4 |
 | Web 视图 | Thymeleaf、thymeleaf-layout-dialect |
 | 安全与令牌 | Nimbus JOSE JWT、g2rain-starter-aegis-core |
 | 基础设施 | Redis、Nacos、OpenFeign、Spring Cloud LoadBalancer |
@@ -161,6 +165,15 @@ flowchart TD
 | 验证服务 | `GET /actuator/health` | 服务启动后可通过健康检查确认运行状态。 |
 
 版本号以项目构建配置为准，当前识别为 `1.0.0`。
+
+## GHCR 镜像发布
+
+- 镜像地址：`ghcr.io/g2rain/g2rain-iam`
+- 标签：稳定版为 `1.0.0` 这类项目版本；同一镜像同时提供 `sha-<完整提交 SHA>`。不发布 `latest`。
+- 拉取（包公开后）：`docker pull ghcr.io/g2rain/g2rain-iam:1.0.0`
+- 触发条件：仅当 `main` 历史中的 `vX.Y.Z` Git tag 推送，且该 tag 提交包含同名、非空的 `docs/releases/vX.Y.Z.md`，并与 Maven 项目版本一致时发布。普通分支、PR 和手动运行均不发布。
+
+本地 Maven 构建、CI 构建/测试、Jib 容器构建、GHCR 推送、匿名拉取、在线演示和实际部署验证是相互独立的活动；完整权限、首次公开与部署说明见[部署文档](docs/operations/deployment.md)。
 
 ## 配置说明
 
@@ -203,9 +216,8 @@ flowchart TD
 | --- | --- | --- | --- |
 | 可执行 Jar | `mvn clean package` | `g2rain-iam-1.0.0.jar` | 执行 Maven 标准构建，生成服务可执行产物。 |
 | 本地运行 | `mvn spring-boot:run` | 本地 Spring Boot 进程 | 使用当前 profile 启动服务，便于本地联调。 |
-| 容器镜像 | `mvn compile jib:dockerBuild` | 本地 Docker 镜像 | 通过 Jib 构建容器镜像，无需手写镜像构建流程。 |
-| Dockerfile 镜像 | `docker build .` | 自定义 Docker 镜像 | 仓库提供 Dockerfile，可按组织镜像规范封装部署。 |
-| 构建脚本 | `./build.sh` | 脚本定义的构建结果 | 仓库提供 build.sh，可承载组织内约定的镜像或发布流程。 |
+| 本地容器镜像 | `mvn compile jib:dockerBuild` | 本地 `ghcr.io/g2rain/g2rain-iam:1.0.0` 镜像 | Jib 是本地与 CI 共用的容器配置；使用 JRE 25 基础镜像、`com.g2rain.iam.Application` 和端口 8082。 |
+| CI 发布 | tag 推送后工作流执行 | GHCR 镜像 | CI 先执行 `mvn clean verify`，再以 Jib 推送版本与完整 SHA 标签；不发布 `latest`。 |
 
 - 客户端调用 `POST /auth/token` 时，`ClientDPoPAuthFilter` 会先校验客户端 `DPoP`。
 - `TokenService` 再解析客户端身份、原子消费授权码，并读取登录上下文。
@@ -330,7 +342,16 @@ flowchart TD
 
 ## 12. 使用建议
 
-本项目基于 [Apache 2.0许可证](https://github.com/g2rain/g2rain-common/blob/main/LICENSE) 开源。
+本项目基于 [Apache License 2.0](LICENSE) 开源。
+
+## 工程文档
+
+- [文档导航](docs/index.md)
+- [项目元数据](docs/project.yaml)
+- [架构偏差](docs/architecture/deviations.md)
+- [配置与部署](docs/operations/configuration.md)
+- [安全边界](docs/security/security-boundaries.md)
+- [需求入口](docs/requirements/README.md)
 
 ## 联系我们
 
