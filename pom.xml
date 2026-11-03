@@ -369,7 +369,7 @@
                 <configuration>
                     <!-- 基础镜像，根据实际 JDK 版本选择 -->
                     <from>
-                        <image>docker://eclipse-temurin:25.0.4.1_1-jre</image>
+                        <image>eclipse-temurin:25.0.4.1_1-jre</image>
                     </from>
                     <!-- GHCR 是本项目的默认发布目标；本地 Docker 构建也复用此配置。 -->
                     <to>

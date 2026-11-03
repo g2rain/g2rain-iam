@@ -4,7 +4,7 @@
 
 # g2rain-iam
 
-# g2rain-iam
+## 1. 徽标与状态标识
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-25-437291?logo=openjdk&logoColor=white)](https://openjdk.org/)
@@ -217,7 +217,7 @@ flowchart TD
 | 可执行 Jar | `mvn clean package` | `g2rain-iam-1.0.0.jar` | 执行 Maven 标准构建，生成服务可执行产物。 |
 | 本地运行 | `mvn spring-boot:run` | 本地 Spring Boot 进程 | 使用当前 profile 启动服务，便于本地联调。 |
 | 本地容器镜像 | `mvn compile jib:dockerBuild` | 本地 `ghcr.io/g2rain/g2rain-iam:1.0.0` 镜像 | Jib 是本地与 CI 共用的容器配置；使用 JRE 25 基础镜像、`com.g2rain.iam.Application` 和端口 8082。 |
-| CI 发布 | tag 推送后工作流执行 | GHCR 镜像 | CI 先执行 `mvn clean verify`，再以 Jib 推送版本与完整 SHA 标签；不发布 `latest`。 |
+| CI 发布 | tag 推送后工作流执行 | GHCR 镜像 | CI 先执行 `mvn clean install`，再以 Jib 推送版本与完整 SHA 标签；不发布 `latest`。本仓没有独立 API 模块，不发布 Maven API 制品。 |
 
 - 客户端调用 `POST /auth/token` 时，`ClientDPoPAuthFilter` 会先校验客户端 `DPoP`。
 - `TokenService` 再解析客户端身份、原子消费授权码，并读取登录上下文。
