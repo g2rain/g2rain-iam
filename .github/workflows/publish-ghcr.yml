@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       IMAGE: ghcr.io/g2rain/g2rain-iam
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       # actions/checkout v5.0.0
       - name: Check out the tagged commit
@@ -39,28 +40,30 @@ jobs:
             echo "Only stable vX.Y.Z tags may publish; got ${tag}." >&2
             exit 1
           }
-          git merge-base --is-ancestor "${GITHUB_SHA}" origin/main || {
-            echo "${GITHUB_SHA} is not contained in origin/main; publish tags must be created after merge to main." >&2
+          release_commit="$(git rev-list -n 1 "${GITHUB_REF}")"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "${release_commit}" origin/main || {
+            echo "${release_commit} is not contained in origin/main; publish tags must be created after merge to main." >&2
             exit 1
           }
           release_note="docs/releases/${tag}.md"
-          git cat-file -e "${GITHUB_SHA}:${release_note}" || {
+          git cat-file -e "${release_commit}:${release_note}" || {
             echo "Missing ${release_note} at the tagged commit." >&2
             exit 1
           }
-          test -n "$(git show "${GITHUB_SHA}:${release_note}" | tr -d '[:space:]')" || {
+          test -n "$(git show "${release_commit}:${release_note}" | tr -d '[:space:]')" || {
             echo "${release_note} is empty." >&2
             exit 1
           }
-          version="$(mvn -B -q -DforceStdout help:evaluate -Dexpression=project.version)"
-          version="$(printf '%s' "${version}" | tail -n 1)"
+          version="$(mvn --batch-mode --quiet -Dstyle.color=never -DforceStdout help:evaluate -Dexpression=project.version)"
           test "v${version}" = "${tag}" || {
             echo "Tag ${tag} does not match Maven project version ${version}." >&2
             exit 1
           }
+          echo "RELEASE_COMMIT=${release_commit}" >> "${GITHUB_ENV}"
 
       - name: Build and test
-        run: mvn -B --no-transfer-progress clean verify
+        run: mvn -B --no-transfer-progress clean install
 
       # docker/login-action v3.4.0
       - name: Log in to GHCR
@@ -74,9 +77,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mvn -B --no-transfer-progress jib:build \
-            -Djib.to.image="${IMAGE}" \
-            -Djib.to.tags="${GITHUB_REF_NAME},sha-${GITHUB_SHA}"
+          mvn -B --no-transfer-progress -DskipTests=true compile jib:build \
+            -Djib.to.image="${IMAGE}:${GITHUB_REF_NAME#v}" \
+            -Djib.to.tags="sha-${RELEASE_COMMIT}"
 
       - name: Report completed publication
         if: success()
@@ -85,6 +88,6 @@ jobs:
           {
             echo '## GHCR publication complete'
             echo
-            echo "- Image: \`${IMAGE}\`"
-            echo "- Tags: \`${GITHUB_REF_NAME}\`, \`sha-${GITHUB_SHA}\`"
+            echo "- \`${IMAGE}:${GITHUB_REF_NAME#v}\`"
+            echo "- \`${IMAGE}:sha-${RELEASE_COMMIT}\`"
           } >> "${GITHUB_STEP_SUMMARY}"
