@@ -31,6 +31,37 @@ jobs:
           java-version: '25'
           cache: maven
 
+      - name: Configure GitHub Maven dependency repositories
+        shell: bash
+        run: |
+          set -euo pipefail
+          settings_path="${RUNNER_TEMP}/g2rain-maven-settings.xml"
+          python3 - "$settings_path" <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          root = ET.Element('settings', xmlns='http://maven.apache.org/SETTINGS/1.0.0')
+          servers = ET.SubElement(root, 'servers')
+          profile = ET.SubElement(ET.SubElement(root, 'profiles'), 'profile')
+          ET.SubElement(profile, 'id').text = 'g2rain-packages'
+          repositories = ET.SubElement(profile, 'repositories')
+          for name in ('g2rain-basis', 'g2rain-member'):
+              server = ET.SubElement(servers, 'server')
+              ET.SubElement(server, 'id').text = name
+              ET.SubElement(server, 'username').text = '${env.GITHUB_ACTOR}'
+              ET.SubElement(server, 'password').text = '${env.GITHUB_TOKEN}'
+              repository = ET.SubElement(repositories, 'repository')
+              ET.SubElement(repository, 'id').text = name
+              ET.SubElement(repository, 'url').text = 'https://maven.pkg.github.com/g2rain/' + name
+              ET.SubElement(ET.SubElement(repository, 'releases'), 'enabled').text = 'true'
+              ET.SubElement(ET.SubElement(repository, 'snapshots'), 'enabled').text = 'false'
+          ET.SubElement(ET.SubElement(root, 'activeProfiles'), 'activeProfile').text = 'g2rain-packages'
+          ET.ElementTree(root).write(sys.argv[1], encoding='utf-8', xml_declaration=True)
+          PY
+          chmod 600 "$settings_path"
+          echo "MAVEN_SETTINGS=$settings_path" >> "$GITHUB_ENV"
+          echo 'Configured g2rain-basis and g2rain-member Maven repositories.'
+
       - name: Verify release tag, branch membership, release notes, and version
         shell: bash
         run: |
@@ -55,7 +86,7 @@ jobs:
             echo "${release_note} is empty." >&2
             exit 1
           }
-          version="$(mvn --batch-mode --quiet -Dstyle.color=never -DforceStdout help:evaluate -Dexpression=project.version)"
+          version="$(mvn --settings "$MAVEN_SETTINGS" --batch-mode --quiet -Dstyle.color=never -DforceStdout help:evaluate -Dexpression=project.version)"
           test "v${version}" = "${tag}" || {
             echo "Tag ${tag} does not match Maven project version ${version}." >&2
             exit 1
@@ -63,7 +94,7 @@ jobs:
           echo "RELEASE_COMMIT=${release_commit}" >> "${GITHUB_ENV}"
 
       - name: Build and test
-        run: mvn -B --no-transfer-progress clean install
+        run: mvn --settings "$MAVEN_SETTINGS" -B --no-transfer-progress -U clean install
 
       # docker/login-action v3.4.0
       - name: Log in to GHCR
@@ -77,7 +108,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mvn -B --no-transfer-progress -DskipTests=true compile jib:build \
+          mvn --settings "$MAVEN_SETTINGS" -B --no-transfer-progress -DskipTests=true compile jib:build \
             -Djib.to.image="${IMAGE}:${GITHUB_REF_NAME#v}" \
             -Djib.to.tags="sha-${RELEASE_COMMIT}"
 
