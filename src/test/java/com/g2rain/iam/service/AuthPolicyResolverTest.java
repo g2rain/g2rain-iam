@@ -97,4 +97,30 @@ class AuthPolicyResolverTest {
         BusinessException ex = assertThrows(BusinessException.class, () -> resolver.resolve("shell-x"));
         assertEquals(IamErrorCode.AUTH_POLICY_NO_LOGIN_METHOD.code(), ex.getErrorCode());
     }
+
+    @Test
+    void applicationCodeIsTrimmedBeforeDedicatedEntryLookup() {
+        AuthPolicyEntry entry = new AuthPolicyEntry();
+        entry.setLoginMethods(List.of(LoginMethod.PASSWORD));
+        entry.setAllowRegister(false);
+        properties.getApplications().put("shell-x", entry);
+
+        AuthPolicySnapshot snapshot = resolver.resolve("  shell-x  ");
+
+        assertEquals(AuthPolicySource.APPLICATION, snapshot.getSource());
+        assertFalse(snapshot.isAllowRegister());
+    }
+
+    @Test
+    void weComBindModeIsNormalizedAndUsesConfiguredCredentials() {
+        AuthPolicyEntry entry = new AuthPolicyEntry();
+        entry.setLoginMethods(List.of(LoginMethod.WECOM));
+        entry.setWeComBindMode(" internal ");
+        properties.getApplications().put("shell-x", entry);
+
+        AuthPolicySnapshot snapshot = resolver.resolve("shell-x");
+
+        assertEquals(EnumSet.of(LoginMethod.WECOM), snapshot.getLoginMethods());
+        assertEquals("INTERNAL", snapshot.getWeComBindMode());
+    }
 }

@@ -40,6 +40,16 @@ class AuthPolicyGuardTest {
         assertEquals(IamErrorCode.AUTH_POLICY_METHOD_DENIED.code(), ex.getErrorCode());
     }
 
+    @Test
+    void missingFrozenPolicyFailsClosed() {
+        AuthorizationTransactionDto txn = new AuthorizationTransactionDto();
+
+        BusinessException ex = assertThrows(
+            BusinessException.class, () -> guard.requirePassword(txn));
+
+        assertEquals(IamErrorCode.AUTH_POLICY_NO_LOGIN_METHOD.code(), ex.getErrorCode());
+    }
+
     private static AuthorizationTransactionDto txn(EnumSet<LoginMethod> methods, boolean allowRegister) {
         AuthPolicySnapshot snapshot = new AuthPolicySnapshot();
         snapshot.setLoginMethods(methods);
