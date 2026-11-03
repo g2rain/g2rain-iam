@@ -6,6 +6,8 @@
 
 GHCR 镜像为 `ghcr.io/g2rain/g2rain-iam`。CI 只会在 `main` 历史中的稳定标签（`vX.Y.Z`）触发，执行 Maven 构建与测试后以 Jib 推送 `<版本>` 与 `sha-<完整提交 SHA>`；不推送 `latest`、不创建 GitHub Release、也不部署。OCI 标签包含 source、Apache-2.0 license、title、version 和 description。
 
+本仓库是单模块可执行服务，没有独立 API JAR、Startup 模块或 Reactor 父 POM，因此不发布 `g2rain-iam` API 到 GitHub Maven Packages，也不配置 `publish-maven.yml`。`mvn -pl <API模块> -am` 在本仓没有有效模块可选。构建依赖 `g2rain-common:1.0.9`、`g2rain-basis-api:1.0.0`、`g2rain-member-api:1.0.0` 及若干 g2rain starter；维护者需逐一确认这些外部坐标及其父 POM 是否在干净 CI 可访问的仓库发布。仅有本地 Maven 缓存不代表 CI 可解析，`packages: write` 也不授予跨仓库读取。若依赖来自 GitHub Packages，应在镜像工作流配置准确的仓库 URL、匹配 server ID 和读取权限；当前仓库 POM 未声明其来源，发布前必须确定来源并补齐。
+
 首次成功推送后，在 GitHub Packages 的 **Package settings → Change visibility → Public** 将包设为公开；若组织管理员禁止修改，请联系管理员。已有同名 GHCR 包出现 `denied` 时，先检查 **Package settings → Actions access** 是否已授予 `g2rain/g2rain-iam` 写权限，以及组织 Packages 策略；`packages: write` 本身不能绕过这些设置。
 
 匿名拉取仅在包已公开后可用：`docker pull ghcr.io/g2rain/g2rain-iam:1.0.0`。这不是在线演示，也不代表实际部署验证通过。
